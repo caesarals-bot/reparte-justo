@@ -106,6 +106,14 @@ const NavBar = () => {
                     >
                         Cierres
                     </Link>
+                    <Link
+                        to="/dashboard"
+                        className="text-sm font-medium text-muted-foreground transition hover:text-primary"
+                        aria-label="Ir al dashboard"
+                        tabIndex={0}
+                    >
+                        Dashboard
+                    </Link>
                     <div className="flex items-center gap-3">
                         <Button variant="ghost" className="px-4" asChild>
                             <Link to="/auth/login" aria-label="Ir a iniciar sesión" tabIndex={0}>
@@ -169,6 +177,16 @@ const NavBar = () => {
                                     onClick={handleCloseMenu}
                                 >
                                     Cierres
+                                </Link>
+                            </Button>
+                            <Button variant="ghost" className="justify-start px-4" asChild>
+                                <Link
+                                    to="/dashboard"
+                                    aria-label="Ir al dashboard"
+                                    tabIndex={0}
+                                    onClick={handleCloseMenu}
+                                >
+                                    Dashboard
                                 </Link>
                             </Button>
                             <Button variant="ghost" className="justify-start px-4" asChild>

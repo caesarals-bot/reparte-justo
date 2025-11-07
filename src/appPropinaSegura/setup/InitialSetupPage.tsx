@@ -382,26 +382,7 @@ const InitialSetupPage = () => {
                                             </div>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="space-y-4 rounded-lg border bg-background/80 p-5">
-                                        <h4 className="text-lg font-semibold">Configuración de Venta Directa</h4>
-                                        <div className="space-y-2 sm:max-w-sm">
-                                            <Label htmlFor="direct-percentage">Porcentaje directo al Garzón (%)</Label>
-                                            <input
-                                                id="direct-percentage"
-                                                type="number"
-                                                inputMode="decimal"
-                                                value={directConfig.directWaiterPercentage}
-                                                onChange={handleDirectConfigChange}
-                                                className={percentageInputClassName}
-                                                tabIndex={0}
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                El resto se distribuirá al Pocillo Secundario.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
+                                ) : null}
                             </CardContent>
                         </Card>
                     </TabsContent>

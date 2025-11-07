@@ -3,8 +3,9 @@ import LayoutPage from "../appPropinaSegura/home/layout/LayoutPage"
 import LandingPage from "../appPropinaSegura/home/LandingPage"
 import LoginPage from "@/auth/LoginPage"
 import RegisterPage from "@/auth/RegisterPage"
-import InitialSetupPage from "@/appPropinaSegura/setup/InitialSetupPage"
+import InitialSetupPage from "../appPropinaSegura/setup/InitialSetupPage"
 import CierreDiarioPage from "@/appPropinaSegura/cierre/CierreDiarioPage"
+import DashboardPage from "@/appPropinaSegura/dashboard/DashboardPage"
 
 
 const AppRouter = createBrowserRouter([
@@ -23,6 +24,10 @@ const AppRouter = createBrowserRouter([
             {
                 path: "cierre",
                 element: <CierreDiarioPage />,
+            },
+            {
+                path: "dashboard",
+                element: <DashboardPage />,
             },
         ],
     },
