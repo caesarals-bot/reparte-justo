@@ -1,12 +1,15 @@
 import { RouterProvider } from "react-router"
 import AppRouter from "./router/AppRouter"
-  
+import { AuthProvider } from "@/context/AuthContext"
+
 function AppPropina() {
 
 
   return (
     <>
-      <RouterProvider router={AppRouter} />
+      <AuthProvider>
+        <RouterProvider router={AppRouter} />
+      </AuthProvider>
     </>
   )
 }

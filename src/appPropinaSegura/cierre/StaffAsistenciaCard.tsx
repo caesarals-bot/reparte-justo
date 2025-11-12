@@ -32,9 +32,17 @@ interface StaffAsistenciaCardProps {
     name: StaffArrayField
     showPonderacion?: boolean
     showMontoIndividual?: boolean
+    assignedAmount?: string
 }
 
-const StaffAsistenciaCard = ({ field, index, name, showPonderacion, showMontoIndividual }: StaffAsistenciaCardProps) => {
+const StaffAsistenciaCard = ({
+    field,
+    index,
+    name,
+    showPonderacion,
+    showMontoIndividual,
+    assignedAmount,
+}: StaffAsistenciaCardProps) => {
     const { control } = useFormContext<CierreFormValues>()
     const baseName = `${name}.${index}` as const
 
@@ -87,20 +95,29 @@ const StaffAsistenciaCard = ({ field, index, name, showPonderacion, showMontoInd
 
     return (
         <Sheet>
-            <div className="flex items-start gap-3 rounded-lg border p-3">
+            <div className="flex items-start gap-4 rounded-xl border p-4 shadow-sm">
                 <Checkbox
                     checked={Boolean(presenteField.value)}
                     onCheckedChange={(checked) => presenteField.onChange(checked === true)}
                     aria-label={`Presente ${field.nombre}`}
                 />
 
-                <div className="flex-1 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-1">
-                            <p className="font-semibold">{field.nombre}</p>
-                            {showPonderacion && field.ponderacion ? (
-                                <p className="text-sm text-muted-foreground">{field.ponderacion}</p>
-                            ) : null}
+                            <p className="text-base font-semibold leading-tight">{field.nombre}</p>
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                {showPonderacion && field.ponderacion ? (
+                                    <span className="rounded-md bg-muted/60 px-2 py-0.5 font-medium">
+                                        {field.ponderacion}
+                                    </span>
+                                ) : null}
+                                {assignedAmount ? (
+                                    <span className="rounded-md bg-primary/10 px-2 py-0.5 font-medium text-primary">
+                                        {assignedAmount}
+                                    </span>
+                                ) : null}
+                            </div>
                         </div>
 
                         <div className="flex items-center gap-3">

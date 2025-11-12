@@ -6,7 +6,10 @@ import RegisterPage from "@/auth/RegisterPage"
 import InitialSetupPage from "../appPropinaSegura/setup/InitialSetupPage"
 import CierreDiarioPage from "@/appPropinaSegura/cierre/CierreDiarioPage"
 import DashboardPage from "@/appPropinaSegura/dashboard/DashboardPage"
-
+import AdminLayout from "@/appPropinaSegura/admin/components/AdminLayout"
+import AdminOverviewPage from "@/appPropinaSegura/admin/pages/AdminOverviewPage"
+import AdminRestaurantsPage from "@/appPropinaSegura/admin/pages/AdminRestaurantsPage"
+import AdminUsersPage from "@/appPropinaSegura/admin/pages/AdminUsersPage"
 
 const AppRouter = createBrowserRouter([
     {
@@ -28,6 +31,28 @@ const AppRouter = createBrowserRouter([
             {
                 path: "dashboard",
                 element: <DashboardPage />,
+            },
+        ],
+    },
+    {
+        path: "/admin",
+        element: <AdminLayout />,
+        children: [
+            {
+                index: true,
+                element: <AdminOverviewPage />,
+            },
+            {
+                path: "overview",
+                element: <AdminOverviewPage />,
+            },
+            {
+                path: "restaurants",
+                element: <AdminRestaurantsPage />,
+            },
+            {
+                path: "users",
+                element: <AdminUsersPage />,
             },
         ],
     },

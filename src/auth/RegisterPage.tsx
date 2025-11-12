@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useState } from "react"
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Card,
@@ -9,7 +9,11 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
+import { doc, serverTimestamp, setDoc } from "firebase/firestore"
+import { auth, db } from "@/firebase/config"
+import { useAuth } from "@/context/AuthContext"
 
 type RegisterFormValues = {
     name: string
@@ -29,6 +33,15 @@ const RegisterPage = () => {
     })
     const [fieldErrors, setFieldErrors] = useState<RegisterFieldErrors>({})
     const [formMessage, setFormMessage] = useState<string | null>(null)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const navigate = useNavigate()
+    const { isAuthenticated, isLoading } = useAuth()
+
+    useEffect(() => {
+        if (!isLoading && isAuthenticated) {
+            navigate("/admin/overview", { replace: true })
+        }
+    }, [isAuthenticated, isLoading, navigate])
 
     const handleInputChange = (field: keyof RegisterFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
         const { value } = event.target
@@ -51,7 +64,7 @@ const RegisterPage = () => {
         setFormMessage(null)
     }
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
 
         const trimmedName = formValues.name.trim()
@@ -90,12 +103,46 @@ const RegisterPage = () => {
         }
 
         setFieldErrors({})
-        setFormMessage("Registro simulado correctamente. Continúa integrando la API cuando esté lista.")
-        console.info("Register submitted", {
-            name: trimmedName,
-            email: trimmedEmail,
-            passwordLength: trimmedPassword.length,
-        })
+        setIsSubmitting(true)
+        setFormMessage(null)
+
+        try {
+            const credentials = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPassword)
+
+            if (trimmedName) {
+                await updateProfile(credentials.user, { displayName: trimmedName })
+            }
+
+            const userDocument = doc(db, "adminUsers", credentials.user.uid)
+            await setDoc(userDocument, {
+                uid: credentials.user.uid,
+                name: trimmedName || null,
+                email: trimmedEmail,
+                status: "activo",
+                role: "operador",
+                createdAt: serverTimestamp(),
+            })
+
+            setFormMessage("Registro exitoso. Redirigiendo al panel…")
+            navigate("/admin/overview", { replace: true })
+        } catch (error) {
+            const firebaseError = error as { code?: string }
+
+            if (firebaseError.code === "auth/email-already-in-use") {
+                setFieldErrors({ email: "Ya existe una cuenta con este correo." })
+                return
+            }
+
+            if (firebaseError.code === "auth/weak-password") {
+                setFieldErrors({ password: "La contraseña debe ser más segura (mínimo 6 caracteres)." })
+                return
+            }
+
+            setFormMessage("No se pudo completar el registro. Inténtalo nuevamente más tarde.")
+            console.error("Register error", firebaseError)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const nameErrorId = fieldErrors.name ? "register-name-error" : undefined
@@ -215,8 +262,13 @@ const RegisterPage = () => {
                             )}
                         </div>
 
-                        <Button type="submit" className="w-full py-3 text-base" tabIndex={0}>
-                            Crear cuenta
+                        <Button
+                            type="submit"
+                            className="w-full py-3 text-base"
+                            tabIndex={0}
+                            disabled={isSubmitting || isLoading}
+                        >
+                            {isSubmitting || isLoading ? "Creando cuenta..." : "Crear cuenta"}
                         </Button>
                     </form>
                 </CardContent>

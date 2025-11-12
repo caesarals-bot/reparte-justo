@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useState } from "react"
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Card,
@@ -9,7 +9,10 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/firebase/config"
+import { useAuth } from "@/context/AuthContext"
 
 type LoginFormValues = {
     email: string
@@ -22,6 +25,15 @@ const LoginPage = () => {
     const [formValues, setFormValues] = useState<LoginFormValues>({ email: "", password: "" })
     const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({})
     const [formMessage, setFormMessage] = useState<string | null>(null)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const navigate = useNavigate()
+    const { isAuthenticated, isLoading } = useAuth()
+
+    useEffect(() => {
+        if (!isLoading && isAuthenticated) {
+            navigate("/admin/overview", { replace: true })
+        }
+    }, [isAuthenticated, isLoading, navigate])
 
     const handleInputChange = (field: keyof LoginFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
         const { value } = event.target
@@ -44,7 +56,7 @@ const LoginPage = () => {
         setFormMessage(null)
     }
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
         const trimmedEmail = formValues.email.trim()
         const trimmedPassword = formValues.password.trim()
@@ -68,11 +80,35 @@ const LoginPage = () => {
         }
 
         setFieldErrors({})
-        setFormMessage("Inicio de sesión simulado correctamente. Puedes continuar con el flujo de desarrollo.")
-        console.info("Login submitted", {
-            email: trimmedEmail,
-            passwordLength: trimmedPassword.length,
-        })
+        setIsSubmitting(true)
+        setFormMessage(null)
+
+        try {
+            await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword)
+            navigate("/admin/overview", { replace: true })
+        } catch (error) {
+            const firebaseError = error as { code?: string }
+
+            if (firebaseError.code === "auth/invalid-credential") {
+                setFieldErrors({ password: "Credenciales inválidas. Revisa correo y contraseña." })
+                return
+            }
+
+            if (firebaseError.code === "auth/user-not-found") {
+                setFieldErrors({ email: "No existe una cuenta con este correo." })
+                return
+            }
+
+            if (firebaseError.code === "auth/wrong-password") {
+                setFieldErrors({ password: "Contraseña incorrecta." })
+                return
+            }
+
+            setFormMessage("No se pudo iniciar sesión. Inténtalo nuevamente más tarde.")
+            console.error("Login error", firebaseError)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const emailErrorId = fieldErrors.email ? "login-email-error" : undefined
@@ -144,8 +180,13 @@ const LoginPage = () => {
                             )}
                         </div>
 
-                        <Button type="submit" className="w-full py-3 text-base" tabIndex={0}>
-                            Ingresar
+                        <Button
+                            type="submit"
+                            className="w-full py-3 text-base"
+                            tabIndex={0}
+                            disabled={isSubmitting || isLoading}
+                        >
+                            {isSubmitting || isLoading ? "Ingresando..." : "Ingresar"}
                         </Button>
                     </form>
                 </CardContent>
