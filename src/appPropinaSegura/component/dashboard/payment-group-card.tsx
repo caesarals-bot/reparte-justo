@@ -1,3 +1,4 @@
+import { Link } from "react-router"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -35,17 +36,17 @@ export function PaymentGroupCard({ group }: PaymentGroupCardProps) {
           {group.breakdown.map((member, index) => (
             <div key={member.id}>
               {index > 0 && <Separator className="my-2.5" />}
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-pretty">{member.name}</div>
                   {member.totalDescuentos > 0 && (
                     <div className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                      <AlertCircleIcon className="h-3 w-3 flex-shrink-0" />
+                      <AlertCircleIcon className="h-3 w-3 shrink-0" />
                       <span>Descuentos: ${member.totalDescuentos.toLocaleString("es-CL")}</span>
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-0.5">
+                <div className="flex flex-col items-end gap-1">
                   <Badge variant="secondary" className="font-mono text-xs">
                     ${member.amount.toLocaleString("es-CL")}
                   </Badge>
@@ -54,6 +55,14 @@ export function PaymentGroupCard({ group }: PaymentGroupCardProps) {
                       (bruto: ${(member.amount + member.totalDescuentos).toLocaleString("es-CL")})
                     </span>
                   )}
+                  {member.link ? (
+                    <Link
+                      to={member.link}
+                      className="text-[11px] font-medium text-primary transition hover:text-primary/80"
+                    >
+                      Ver detalles
+                    </Link>
+                  ) : null}
                 </div>
               </div>
             </div>

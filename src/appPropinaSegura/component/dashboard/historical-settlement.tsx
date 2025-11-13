@@ -1,5 +1,6 @@
 "use client"
 
+import { useNavigate } from "react-router"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CalendarIcon, EyeIcon, AlertCircleIcon } from "lucide-react"
@@ -10,9 +11,15 @@ type HistoricalSettlementProps = {
 }
 
 export function HistoricalSettlement({ settlement }: HistoricalSettlementProps) {
+  const navigate = useNavigate()
+
   const handleViewDetails = () => {
+    if (settlement.link) {
+      navigate(settlement.link)
+      return
+    }
+
     console.log("Ver detalles de liquidación:", settlement.id)
-    // Aquí iría la lógica para ver detalles
   }
 
   return (
@@ -42,7 +49,13 @@ export function HistoricalSettlement({ settlement }: HistoricalSettlementProps) 
             )}
           </div>
 
-          <Button variant="outline" size="sm" className="w-full gap-2 bg-transparent" onClick={handleViewDetails}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2 bg-transparent"
+            onClick={handleViewDetails}
+            disabled={!settlement.link}
+          >
             <EyeIcon className="h-4 w-4" />
             Ver Detalles
           </Button>

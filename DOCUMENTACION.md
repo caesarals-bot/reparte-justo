@@ -50,3 +50,62 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 2. Persistir configuraciones dinámicas (descuentos, staff) en almacenamiento remoto.
 3. Añadir mensajes de validación y *toast* de confirmación (Shadcn `sonner`).
 4. Incorporar pruebas unitarias para componentes clave y flujos críticos.
+
+## Ajustes paralelos en cierres diarios
+
+### Modelo de datos
+- Los ajustes se almacenan en la subcolección `restaurants/{restaurantId}/registros_diarios/{closureId}/ajustes`.
+- Cada documento sigue la forma:
+  ```ts
+  type ClosureAdjustment = {
+    id: string
+    staffId?: string
+    staffName?: string
+    amount: number
+    type: "incremento" | "descuento"
+    motivo?: string
+    createdAt?: Timestamp | null
+    createdBy?: string
+  }
+  ```
+- `type` determina el signo: `descuento` resta del neto y `incremento` lo suma.
+- `staffId` puede omitirse para ajustes generales; se obtiene el identificador mediante `buildMemberIdentifier`.
+
+### Hook `useClosuresDashboard`
+- Archivo: `src/appPropinaSegura/dashboard/hooks/useClosuresDashboard.ts`.
+- Nuevas utilidades exportadas:
+  - `fetchClosureAdjustments(restaurantId, closureId)` para leer la subcolección con `orderBy("createdAt", "desc")`.
+  - `createClosureAdjustment({ restaurantId, closureId, adjustment })` para registrar un nuevo ajuste con `serverTimestamp()`.
+  - `mapSnapshotToClosure` ahora acepta ajustes precargados y los expone en `ClosureDocument.adjustments`.
+- El hook agrega `totalAjustes` a los agregados por colaborador (`StaffAggregate`) sumando o restando según el tipo de ajuste.
+- `refresh` recarga cierres y ajustes para mantener el dashboard sincronizado tras crear un ajuste desde otras vistas.
+
+### Página `ClosureDetailPage`
+- Archivo: `src/appPropinaSegura/dashboard/ClosureDetailPage.tsx`.
+- Se incorporó un `Dialog` para registrar ajustes con los campos:
+  - Integrante (selector de presentes + opción "Aplicar ajuste general").
+  - Tipo (`descuento` o `incremento`).
+  - Monto numérico positivo.
+  - Motivo opcional.
+- Los handlers controlan validaciones básicas, muestran feedback y llaman a `createClosureAdjustment`.
+- Tras guardar, se refresca la lista de ajustes con `refreshClosureAdjustments()` y se dispara `useClosuresDashboard().refresh()`.
+- El resumen financiero ahora incluye:
+  - Total de ajustes registrados (formato con signo).
+  - Neto ajustado (`totals.netAfterDeductions + totalAdjustments`).
+- Se agregó una tarjeta "Historial de ajustes" con orden descendente por `createdAt`, mostrando motivo y autor.
+- Cada integrante del cierre muestra:
+  - Neto original (snapshot).
+  - Total de ajustes aplicados.
+  - Neto ajustado final.
+
+### Consideraciones de UX
+- El modal se cierra al guardar o cancelar y resetea el formulario.
+- Se muestran alertas de éxito/error sobre la tarjeta de resumen para contextualizar el estado del último envío.
+- Los badges permiten distinguir rápidamente ajustes positivos vs negativos.
+
+### Verificación manual
+1. Navegar al dashboard, abrir un cierre y pulsar "Registrar ajuste".
+2. Registrar un descuento a un integrante específico y confirmar que el historial y los totales reflejan el nuevo valor.
+3. Registrar un ajuste general positivo y validar que el resumen financiero actualiza el "Total neto ajustado".
+4. Recargar la página y verificar que los ajustes persisten (lectura desde Firestore).
+5. Ejecutar `npm run build` para garantizar que no existan errores de tipo.

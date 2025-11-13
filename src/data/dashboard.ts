@@ -3,6 +3,8 @@ export type DashboardMember = {
   name: string
   amount: number
   totalDescuentos: number
+  link?: string
+  totalAjustes?: number
 }
 
 export type DashboardPaymentGroup = {
@@ -17,6 +19,7 @@ export type DashboardSettlement = {
   dateRange: string
   totalRepartido: number
   totalDescuentos: number
+  link?: string
 }
 
 export const mockDashboardRestaurantName = "Restaurante La Transparencia"

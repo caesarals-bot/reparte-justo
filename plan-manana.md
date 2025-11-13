@@ -5,11 +5,14 @@
 - Modelar colección `registros_diarios` con snapshot completo (montos por persona, descuentos, estado `pendiente`).
 - Implementar lógica de cálculo segura en el backend (aplicar deducciones, separar cocina/garzones, reparto individual según asistencia y ponderaciones).
 - Actualizar los acumulados del restaurante tras guardar el registro (totales no liquidados, días registrados).
+- Incluir en el snapshot porcentajes y montos de cada deducción, destacando Transbank para conciliación.
+- Retornar identificador del registro, totales acumulados actualizados y errores de validación estandarizados.
 
 ## 2. Frontend: Integración con la nueva API
 - Ajustar formulario de Cierre Diario para enviar datos crudos (montos, deducciones, presentes/ausentes, modo).
 - Manejar respuesta del backend: confirmar guardado, mostrar errores y refrescar totales del dashboard.
 - Añadir botón "Guardar" (estado pendiente) además del flujo "Pagar".
+- Validar responsive y accesibilidad de las tarjetas de resumen, incluyendo la tarjeta de Transbank.
 
 ## 3. Dashboard de Liquidación (Fase 3)
 - Diseñar card de "Total No Liquidado" y tabla/desglose por miembro.

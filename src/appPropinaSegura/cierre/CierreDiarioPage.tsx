@@ -1,330 +1,154 @@
-import { useEffect, useMemo, useState } from "react"
-import { FormProvider, useFieldArray, useForm, useWatch } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
+import { useEffect, useState } from "react"
+import { FormProvider } from "react-hook-form"
 import { Card, CardContent } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
-import { differenceInCalendarDays, format } from "date-fns"
-import { es } from "date-fns/locale"
 import { CalendarIcon } from "lucide-react"
 import StaffAsistenciaCard from "./StaffAsistenciaCard"
 import { amountInputClassName } from "./constants"
-import { cierreSchema, type CierreFormValues, type StaffEntry } from "./schema"
 import { useAuth } from "@/context/AuthContext"
-import { db } from "@/firebase/config"
-import { doc, getDoc } from "firebase/firestore"
 import { useNavigate } from "react-router"
-
-type StoredStaffMember = {
-    id: string
-    name: string
-    email?: string
-    role?: "garzon" | "cocinero" | "ayudante"
-    weight?: number | string
-}
-
-type RestaurantConfigurationSnapshot = {
-    serviceStaff?: StoredStaffMember[]
-    supportStaff?: StoredStaffMember[]
-    settlementMode?: "pool" | "directa"
-    poolConfig?: {
-        kitchenPercentage?: number
-        transbankPercentage?: number
-    }
-    additionalDeductions?: { percentage?: number }[]
-}
-
-const formatWeight = (weight?: number | string) => {
-    if (weight === undefined || weight === null) {
-        return undefined
-    }
-
-    if (typeof weight === "string" && weight.trim().length > 0) {
-        return weight
-    }
-
-    if (typeof weight === "number" && Number.isFinite(weight)) {
-        return weight % 1 === 0 ? `${weight}` : weight.toFixed(2)
-    }
-
-    return undefined
-}
-
-const parseWeightValue = (value?: string) => {
-    if (!value) {
-        return 0
-    }
-
-    const sanitized = value.toString().replace(/[^0-9.,-]/g, "").replace(/,/g, ".")
-    const parsed = Number.parseFloat(sanitized)
-
-    return Number.isFinite(parsed) ? parsed : 0
-}
-
-const mapStaffMemberToEntry = (member: StoredStaffMember): StaffEntry => ({
-    id: member.id,
-    nombre: member.name,
-    ponderacion: formatWeight(member.weight),
-    presente: true,
-    penalizacion_pct: 0,
-    deduccion_valor: 0,
-    email: member.email,
-    role: member.role,
-})
-
-const mapStaffMemberToDirectEntry = (member: StoredStaffMember): StaffEntry => ({
-    ...mapStaffMemberToEntry(member),
-    montoIndividual: 0,
-    porcentajeVenta: 0,
-    totalVenta: 0,
-})
-
-const defaultCierreValues: CierreFormValues = {
-    asistenciaServicio: [],
-    asistenciaCocina: [],
-    ventaDirecta: [],
-    pocilloSecundario: [],
-}
+import { useCierreDiario } from "./hooks/useCierreDiario"
+import { db } from "@/firebase/config"
+import { addDoc, collection, getDocs, limit, query, serverTimestamp, where } from "firebase/firestore"
 
 const CierreDiarioPage = () => {
     const { uid } = useAuth()
     const navigate = useNavigate()
-    const [poolDate, setPoolDate] = useState<Date | undefined>(new Date())
-    const [directDate, setDirectDate] = useState<Date | undefined>(new Date())
-    const [isLoadingConfig, setIsLoadingConfig] = useState(true)
-    const [loadError, setLoadError] = useState<string | null>(null)
-    const [poolTotalInput, setPoolTotalInput] = useState("")
-    const [settlementModeConfig, setSettlementModeConfig] = useState<"pool" | "directa" | null>(null)
-    const [poolPercentages, setPoolPercentages] = useState({ kitchen: 0, transbank: 0 })
-    const [additionalDeductionPercents, setAdditionalDeductionPercents] = useState<number[]>([])
-
-    const formMethods = useForm<CierreFormValues>({
-        resolver: zodResolver(cierreSchema),
-        defaultValues: defaultCierreValues,
-        mode: "onChange",
-    })
-
-    const { control, reset } = formMethods
-
-    const asistenciaServicio = useFieldArray({ control, name: "asistenciaServicio" })
-    const asistenciaCocina = useFieldArray({ control, name: "asistenciaCocina" })
-    const ventaDirecta = useFieldArray({ control, name: "ventaDirecta" })
-    const pocilloSecundario = useFieldArray({ control, name: "pocilloSecundario" })
-
-    const ventaDirectaValues = useWatch({ control, name: "ventaDirecta" }) ?? []
-    const asistenciaServicioValues = useWatch({ control, name: "asistenciaServicio" }) ?? []
-    const asistenciaCocinaValues = useWatch({ control, name: "asistenciaCocina" }) ?? []
-
-    const poolTotalAmount = (() => {
-        const normalized = poolTotalInput.replace(",", ".")
-        const parsed = Number.parseFloat(normalized)
-        return Number.isFinite(parsed) ? parsed : 0
-    })()
-
-    const totalDirectSales = ventaDirectaValues.reduce<number>((sum, entry) => {
-        const current = Number(entry?.totalVenta ?? 0)
-        return sum + (Number.isFinite(current) ? current : 0)
-    }, 0)
-
-    const totalPropinasGeneradas = poolTotalAmount + totalDirectSales
-
-    const referenceDate = settlementModeConfig === "directa" ? directDate : poolDate
-
-    const daysWithoutSettlement = (() => {
-        if (!referenceDate) {
-            return 0
-        }
-
-        const difference = differenceInCalendarDays(new Date(), referenceDate)
-        return Math.max(difference, 0)
-    })()
-
-    const currencyFormatter = useMemo(
-        () =>
-            new Intl.NumberFormat("es-CL", {
-                style: "currency",
-                currency: "CLP",
-                minimumFractionDigits: 0,
-            }),
-        [],
-    )
-
-    const formattedTotalPropinas = currencyFormatter.format(totalPropinasGeneradas)
-    const formattedDirectSales = currencyFormatter.format(totalDirectSales)
-
-    const totalDeductionsPercentage = useMemo(() => {
-        const extras = additionalDeductionPercents.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0)
-        const transbank = settlementModeConfig === "pool" ? poolPercentages.transbank : 0
-
-        return extras + transbank
-    }, [additionalDeductionPercents, poolPercentages.transbank, settlementModeConfig])
-
-    const deductionsAmount = totalPropinasGeneradas * (totalDeductionsPercentage / 100)
-    const netAfterDeductions = Math.max(totalPropinasGeneradas - deductionsAmount, 0)
-
-    const totalKitchenShare = settlementModeConfig === "pool" ? netAfterDeductions * (poolPercentages.kitchen / 100) : 0
-    const totalGarzonShare = Math.max(netAfterDeductions - totalKitchenShare, 0)
-    const formattedKitchenShare = currencyFormatter.format(totalKitchenShare)
-    const formattedGarzonShare = currencyFormatter.format(totalGarzonShare)
-
-    const summaryItems = useMemo(() => {
-        const items: { key: string; label: string; value: string }[] = [
-            { key: "propinas", label: "Propinas", value: formattedTotalPropinas },
-        ]
-
-        if (settlementModeConfig === "directa") {
-            items.push({ key: "directa", label: "Venta directa", value: formattedDirectSales })
-        } else {
-            items.push({ key: "cocina", label: "Propina cocina", value: formattedKitchenShare })
-            items.push({ key: "garzones", label: "Propina garzones", value: formattedGarzonShare })
-        }
-
-        items.push({ key: "dias", label: "Días sin liquidar", value: daysWithoutSettlement.toString() })
-
-        return items
-    }, [
+    const {
+        formMethods,
+        fieldArrays,
+        poolDate,
+        setPoolDate,
+        directDate,
+        setDirectDate,
+        poolDateLabel,
+        directDateLabel,
+        poolTotalInput,
+        handlePoolTotalChange,
+        currencyFormatter,
         formattedDirectSales,
-        formattedTotalPropinas,
-        formattedKitchenShare,
-        formattedGarzonShare,
-        daysWithoutSettlement,
+        summaryItems,
+        serviceAssignedAmounts,
+        supportAssignedAmounts,
+        directAssignedAmounts,
+        isLoadingConfig,
+        loadError,
         settlementModeConfig,
-    ])
+        buildClosureSnapshotPayload,
+        isSavingClosure,
+        setIsSavingClosure,
+        saveError,
+        setSaveError,
+        saveSuccessMessage,
+        setSaveSuccessMessage,
+        resetAfterSave,
+        ineligibleStaffNames,
+    } = useCierreDiario({ uid })
 
-    const { serviceAssignedAmounts, supportAssignedAmounts } = useMemo(() => {
-        if (settlementModeConfig === "directa" || (totalGarzonShare <= 0 && totalKitchenShare <= 0)) {
-            return {
-                serviceAssignedAmounts: asistenciaServicioValues.map(() => 0),
-                supportAssignedAmounts: asistenciaCocinaValues.map(() => 0),
-            }
-        }
-
-        const serviceWeightTotal = asistenciaServicioValues.reduce((sum, entry) => {
-            const baseWeight = parseWeightValue(entry?.ponderacion)
-            return entry?.presente === false ? sum : sum + baseWeight
-        }, 0)
-
-        const supportWeightTotal = asistenciaCocinaValues.reduce((sum, entry) => {
-            const baseWeight = parseWeightValue(entry?.ponderacion)
-            return entry?.presente === false ? sum : sum + baseWeight
-        }, 0)
-
-        return {
-            serviceAssignedAmounts: asistenciaServicioValues.map((entry) => {
-                if (entry?.presente === false || serviceWeightTotal <= 0) {
-                    return 0
-                }
-
-                return totalGarzonShare * (parseWeightValue(entry?.ponderacion) / serviceWeightTotal)
-            }),
-            supportAssignedAmounts: asistenciaCocinaValues.map((entry) => {
-                if (entry?.presente === false || supportWeightTotal <= 0) {
-                    return 0
-                }
-
-                return totalKitchenShare * (parseWeightValue(entry?.ponderacion) / supportWeightTotal)
-            }),
-        }
-    }, [
-        asistenciaServicioValues,
-        asistenciaCocinaValues,
-        totalGarzonShare,
-        totalKitchenShare,
-        settlementModeConfig,
-    ])
-
-    const directAssignedAmounts = useMemo(
-        () =>
-            ventaDirectaValues.map((entry) => {
-                const baseAmount = Number(entry?.totalVenta ?? entry?.montoIndividual ?? 0)
-                return Number.isFinite(baseAmount) ? baseAmount : 0
-            }),
-        [ventaDirectaValues],
-    )
-
-    const handlePoolTotalChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setPoolTotalInput(event.target.value)
-    }
+    const { asistenciaServicio, asistenciaCocina, ventaDirecta, pocilloSecundario } = fieldArrays
+    const [hasSavedPendingClosure, setHasSavedPendingClosure] = useState(false)
 
     useEffect(() => {
-        if (!uid) {
-            setLoadError("No se encontró una sesión activa. Inicia sesión para registrar cierres.")
-            setIsLoadingConfig(false)
-            reset(defaultCierreValues)
+        if (!formMethods.formState.isDirty) {
             return
         }
 
-        const handleLoadConfiguration = async () => {
-            try {
-                setIsLoadingConfig(true)
-                const restaurantReference = doc(db, "restaurants", uid)
-                const snapshot = await getDoc(restaurantReference)
+        setHasSavedPendingClosure(false)
+        setSaveSuccessMessage(null)
+    }, [formMethods.formState.isDirty, setSaveSuccessMessage])
 
-                if (!snapshot.exists()) {
-                    setLoadError(
-                        "Aún no completas la configuración inicial. Configúrala para poder registrar cierres.",
-                    )
-                    reset(defaultCierreValues)
-                    return
-                }
+    const handleSaveClosure = async () => {
+        if (isSavingClosure) {
+            return
+        }
 
-                const data = snapshot.data() as RestaurantConfigurationSnapshot
-                const serviceStaff = data.serviceStaff ?? []
-                const supportStaff = data.supportStaff ?? []
-                const mode = data.settlementMode ?? "pool"
-                const kitchenPercentage = Number(data.poolConfig?.kitchenPercentage ?? 0)
-                const transbankPercentage = Number(data.poolConfig?.transbankPercentage ?? 0)
-                const deductions = (data.additionalDeductions ?? []).map((item) =>
-                    Number(item?.percentage ?? 0),
-                )
+        setSaveError(null)
+        setSaveSuccessMessage(null)
 
-                reset({
-                    asistenciaServicio: serviceStaff.map(mapStaffMemberToEntry),
-                    asistenciaCocina: supportStaff.map(mapStaffMemberToEntry),
-                    ventaDirecta:
-                        mode === "directa"
-                            ? serviceStaff.map(mapStaffMemberToDirectEntry)
-                            : [],
-                    pocilloSecundario: supportStaff.map(mapStaffMemberToEntry),
-                })
+        if (!uid) {
+            setSaveError("No se encontró una sesión activa. Inicia sesión para guardar el cierre.")
+            return
+        }
 
-                setPoolPercentages({ kitchen: kitchenPercentage, transbank: transbankPercentage })
-                setAdditionalDeductionPercents(deductions)
-                setSettlementModeConfig(mode)
-                setLoadError(null)
-            } catch (error) {
-                console.error("Error al cargar la configuración del cierre", error)
-                setLoadError("No pudimos obtener la configuración guardada. Intenta nuevamente en unos segundos.")
-                setSettlementModeConfig(null)
-                setPoolPercentages({ kitchen: 0, transbank: 0 })
-                setAdditionalDeductionPercents([])
-                reset(defaultCierreValues)
-            } finally {
-                setIsLoadingConfig(false)
+        try {
+            setIsSavingClosure(true)
+            const snapshotPayload = buildClosureSnapshotPayload()
+            const closureCollection = collection(db, "restaurants", uid, "registros_diarios")
+
+            const referenceDateKey = snapshotPayload.metadata.referenceDateKey
+
+            if (!referenceDateKey) {
+                setSaveError("Selecciona una fecha válida antes de guardar el cierre.")
+                setIsSavingClosure(false)
+                return
             }
+
+            const duplicateQuery = query(
+                closureCollection,
+                where("metadata.referenceDateKey", "==", referenceDateKey),
+                limit(1),
+            )
+
+            const existingSnapshot = await getDocs(duplicateQuery)
+
+            if (!existingSnapshot.empty) {
+                setSaveError("Esa fecha ya tiene un cierre guardado. Usa la vista de historial para editarlo.")
+                setSaveSuccessMessage(null)
+                setHasSavedPendingClosure(false)
+                setIsSavingClosure(false)
+                return
+            }
+
+            const legacyDuplicateQuery = query(
+                closureCollection,
+                where("snapshot.metadata.referenceDateKey", "==", referenceDateKey),
+                limit(1),
+            )
+
+            const existingLegacySnapshot = await getDocs(legacyDuplicateQuery)
+
+            if (!existingLegacySnapshot.empty) {
+                setSaveError("Esa fecha ya tiene un cierre guardado. Usa la vista de historial para editarlo.")
+                setSaveSuccessMessage(null)
+                setHasSavedPendingClosure(false)
+                setIsSavingClosure(false)
+                return
+            }
+
+            await addDoc(closureCollection, {
+                estado: "pendiente",
+                snapshot: snapshotPayload,
+                restaurantId: uid,
+                metadata: snapshotPayload.metadata,
+                totals: snapshotPayload.totals,
+                // createdAt es la fecha/hora del registro; metadata.referenceDateKey corresponde al día de la propina.
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            })
+
+            setSaveSuccessMessage("Cierre guardado como pendiente. Podrás liquidarlo cuando el backend esté listo.")
+            setHasSavedPendingClosure(true)
+            resetAfterSave()
+        } catch (error) {
+            console.error("Error al guardar el cierre", error)
+            setSaveError("No pudimos guardar el cierre. Intenta nuevamente en unos segundos.")
+        } finally {
+            setIsSavingClosure(false)
         }
+    }
 
-        void handleLoadConfiguration()
-    }, [uid, reset])
+    const handlePayClosure = () => {
+        setSaveError(null)
+        setSaveSuccessMessage("La liquidación general se habilitará cuando se conecte la Cloud Function de pago.")
+    }
 
-    const poolDateLabel = useMemo(() => {
-        if (!poolDate) {
-            return "Seleccionar fecha"
-        }
-
-        return format(poolDate, "PPP", { locale: es })
-    }, [poolDate])
-
-    const directDateLabel = useMemo(() => {
-        if (!directDate) {
-            return "Seleccionar fecha"
-        }
-
-        return format(directDate, "PPP", { locale: es })
-    }, [directDate])
+    const showPayButton = hasSavedPendingClosure && !isSavingClosure
+    const hasIneligibleStaff = ineligibleStaffNames.length > 0
+    const referenceDateLabel = settlementModeConfig === "directa" ? directDateLabel : poolDateLabel
 
     if (isLoadingConfig) {
         return (
@@ -366,13 +190,74 @@ const CierreDiarioPage = () => {
         <FormProvider {...formMethods}>
             <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-muted/30 px-4 py-12">
                 <section className="w-full max-w-4xl space-y-6">
-                    <div className="space-y-2 text-center">
-                        <p className="text-xs font-semibold uppercase tracking-widest text-primary">Reparte Justo</p>
-                        <h1 className="text-2xl font-semibold sm:text-3xl">Registrar Cierre del Día</h1>
-                        <p className="text-sm text-muted-foreground">Propinas claras, equipo justo.</p>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-2 text-center sm:text-left">
+                            <p className="text-xs font-semibold uppercase tracking-widest text-primary">Reparte Justo</p>
+                            <h1 className="text-2xl font-semibold sm:text-3xl">Registrar Cierre del Día</h1>
+                            <p className="text-sm text-muted-foreground">Propinas claras, equipo justo.</p>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handleSaveClosure}
+                                disabled={isSavingClosure}
+                                aria-disabled={isSavingClosure}
+                                className="w-full sm:w-auto"
+                            >
+                                {isSavingClosure ? "Guardando..." : "Guardar"}
+                            </Button>
+                            {showPayButton ? (
+                                <Button
+                                    type="button"
+                                    onClick={handlePayClosure}
+                                    variant="outline"
+                                    className="w-full sm:w-auto"
+                                >
+                                    Pagar general
+                                </Button>
+                            ) : null}
+                        </div>
                     </div>
 
-                    <div className="flex flex-wrap items-stretch gap-2 overflow-x-auto pb-2 sm:flex-nowrap">
+                    {saveError ? (
+                        <div
+                            role="alert"
+                            className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+                        >
+                            {saveError}
+                        </div>
+                    ) : null}
+
+                    {saveSuccessMessage ? (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className="rounded-md border border-primary/30 bg-primary/5 px-4 py-2 text-sm text-primary"
+                        >
+                            {saveSuccessMessage}
+                        </div>
+                    ) : null}
+
+                    {hasIneligibleStaff ? (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700"
+                        >
+                            <p className="font-medium">
+                                Excluimos automáticamente del cierre a quienes ingresaron después de la fecha seleccionada
+                                ({referenceDateLabel}).
+                            </p>
+                            <p className="mt-1 text-xs">
+                                Revisa las fechas de ingreso o ajusta la fecha del cierre para incluir nuevamente a:
+                                <span className="ml-1 font-semibold">{ineligibleStaffNames.join(", ")}</span>.
+                            </p>
+                        </div>
+                    ) : null}
+
+                    <div className="grid grid-cols-2 gap-3 pb-2 sm:grid-cols-3 lg:grid-cols-5">
                         {summaryItems.map((item) => (
                             <div
                                 key={item.key}
@@ -392,11 +277,6 @@ const CierreDiarioPage = () => {
                                 <article className="space-y-6">
                                     <header className="flex flex-col gap-3 text-left sm:flex-row sm:items-center sm:justify-between">
                                         <h3 className="text-xl font-semibold">Registro de Pocillo</h3>
-                                        {poolTotalAmount > 0 ? (
-                                            <Button type="button" className="w-full sm:w-auto">
-                                                Pagar general
-                                            </Button>
-                                        ) : null}
                                     </header>
 
                                     <div className="grid gap-4 md:grid-cols-2">
@@ -485,11 +365,6 @@ const CierreDiarioPage = () => {
                                 <article className="space-y-6">
                                     <header className="flex flex-col gap-3 text-left sm:flex-row sm:items-center sm:justify-between">
                                         <h3 className="text-xl font-semibold">Registro de Venta Directa</h3>
-                                        {totalDirectSales > 0 ? (
-                                            <Button type="button" className="w-full sm:w-auto">
-                                                Pagar general
-                                            </Button>
-                                        ) : null}
                                     </header>
 
                                     <div className="grid gap-4 md:grid-cols-2">
