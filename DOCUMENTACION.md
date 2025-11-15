@@ -109,3 +109,64 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 3. Registrar un ajuste general positivo y validar que el resumen financiero actualiza el "Total neto ajustado".
 4. Recargar la página y verificar que los ajustes persisten (lectura desde Firestore).
 5. Ejecutar `npm run build` para garantizar que no existan errores de tipo.
+
+## Reglas de negocio: ponderaciones y ajustes
+
+### Ponderaciones base
+- Cada integrante (garzón o cocina) tiene una **ponderación base** definida en la configuración de staff.
+- Regla general: la ponderación base **no puede ser mayor a 1.0**.
+- Cambios permanentes de ponderación (por antigüedad o cambio de rol) se deben registrar explícitamente en la configuración, no como ajustes diarios.
+
+### Ajustes diarios sobre ponderación / desempeño
+- Casos típicos: un integrante con ponderación `0.5` que trabajó más en un día concreto puede recibir un ajuste que refleje un "salto" temporal hacia `0.75`.
+- Ese tipo de reconocimiento se modela como **ajuste de porcentaje o monto** en el cierre del día, **no** modificando la ponderación base.
+- En cierres futuros, si se decide subir la ponderación base (por ejemplo, de 0.5 a 0.75 de forma permanente), debe quedar documentada la fecha y el motivo en la configuración, y no mezclarse con los ajustes diarios.
+
+### Suma cero dentro del grupo
+- Para cada cierre y grupo (servicio, cocina, venta directa):
+  - Descuentos porcentuales reducen el neto del integrante sancionado.
+  - El monto descontado se redistribuye al resto del grupo **sin penalizaciones** y sin ajustes porcentuales propios.
+  - La redistribución es proporcional al neto base de cada integrante elegible.
+- Propiedad: la suma de los `netAmountAdjusted` de un grupo es igual a la suma de los `netAmount` originales del grupo (no queda dinero "volando").
+
+### Card "Ajustes registrados" en el dashboard
+- El dashboard muestra una tarjeta compacta de **"Ajustes registrados"** para los cierres pendientes.
+- Esta card resume únicamente **descuentos efectivos en CLP** (monto + porcentaje), por integrante o ajustes generales.
+- Ajustes que solo incrementan propina (bonos) **no se suman** en el total de la card, aunque sí se reflejan en el neto ajustado y en los pools de distribución.
+- Cada fila de la card incluye:
+  - Nombre del integrante (o "Ajuste general").
+  - Monto del descuento en pesos.
+  - Etiqueta corta con porcentaje (si lo hay) y primeras palabras del motivo.
+
+## Flujo propuesto: Liquidar y Generar Reporte
+
+> Estado actual: el botón "Liquidar y Generar Reporte" aún no ejecuta lógica de negocio real; este apartado define el comportamiento esperado para una futura implementación.
+
+### Selección de rango a liquidar
+- Al pulsar **"Liquidar y Generar Reporte"** se abrirá un flujo guiado con calendario:
+  - El calendario mostrará en un color destacado (ej. verde) los días con **cierres pendientes de liquidación**.
+  - El usuario podrá seleccionar un rango continuo de fechas (desde `fechaInicio` hasta `fechaFin`).
+  - Solo se permitirán rangos que incluyan cierres en estado `pendiente`.
+
+### Cálculo previo a la liquidación
+- Una vez elegido el rango:
+  - Se muestran los totales agregados del período:
+    - **Total a liquidar** (suma de netos ajustados para todos los integrantes en el rango).
+    - **Total de descuentos** (Transbank + ajustes negativos).
+    - **Total por grupo** (Pool Garzones, Pool Cocina) y número de integrantes.
+  - El usuario podrá revisar un resumen por integrante (tipo tabla) con:
+    - Neto acumulado en el período.
+    - Ajustes y descuentos aplicados.
+
+### Confirmación y efectos de la liquidación
+- Al confirmar la liquidación:
+  - Los cierres seleccionados se marcan como `liquidado` / `pagado` en Firestore.
+  - Dejan de aparecer en la sección de "pendientes" del dashboard.
+  - Si quedan cierres posteriores sin liquidar, estos serán el inicio del **nuevo ciclo**.
+  - Se genera un **reporte descargable** (ej. PDF/CSV) con el detalle de distribución por integrante y grupo.
+
+### Consideraciones futuras
+- En iteraciones posteriores se deberá definir:
+  - Integración con medios de pago o registro manual de que la propina fue efectivamente entregada.
+  - Notificaciones opcionales al staff (email o canal interno) una vez ejecutada la liquidación.
+  - Reglas de auditoría para modificaciones posteriores a una liquidación (ej. cierres reajustados).

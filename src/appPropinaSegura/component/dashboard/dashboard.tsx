@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -21,20 +22,20 @@ type DashboardProps = {
 }
 
 export function Dashboard({ restaurantName, liquidacionMode, pendingData, historicalData }: DashboardProps) {
+  const navigate = useNavigate()
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
   })
 
-  const totalPending = pendingData.reduce((sum, group) => sum + group.totalAmount, 0)
-  const totalDescuentos = pendingData.reduce(
-    (sum, group) => sum + group.breakdown.reduce((s, member) => s + member.totalDescuentos, 0),
-    0,
-  )
+  const distributionGroups = pendingData.filter((group) => group.category !== "deduction")
+  const deductionGroups = pendingData.filter((group) => group.category === "deduction")
+
+  const totalPending = distributionGroups.reduce((sum, group) => sum + group.totalAmount, 0)
+  const totalDescuentos = deductionGroups.reduce((sum, group) => sum + group.totalAmount, 0)
 
   const handleSettlement = () => {
-    console.log("Generar liquidación y reporte")
-    // Aquí iría la lógica para liquidar y generar reporte
+    navigate("/dashboard/liquidacion")
   }
 
   return (
@@ -82,10 +83,18 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, histor
 
             {/* Payment Groups */}
             <div className="grid gap-6 md:grid-cols-2">
-              {pendingData.map((group) => (
+              {distributionGroups.map((group) => (
                 <PaymentGroupCard key={group.groupName} group={group} />
               ))}
             </div>
+
+            {deductionGroups.length ? (
+              <div className="mt-6 flex flex-wrap items-start gap-6">
+                {deductionGroups.map((group) => (
+                  <PaymentGroupCard key={group.groupName} group={group} variant="compact" />
+                ))}
+              </div>
+            ) : null}
 
             {/* Settlement Button */}
             <div className="mt-6 flex justify-center">

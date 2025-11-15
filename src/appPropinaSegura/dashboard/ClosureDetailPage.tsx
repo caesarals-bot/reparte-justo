@@ -29,6 +29,7 @@ import {
     type ClosureDocument,
     type StaffAssignment,
     type ClosureAdjustment,
+    type ClosureAdjustmentVariant,
     createClosureAdjustment,
     fetchClosureAdjustments,
     mapSnapshotToClosure,
@@ -90,7 +91,9 @@ const ClosureDetailPage = () => {
     const [adjustmentForm, setAdjustmentForm] = useState({
         staffKey: "",
         type: "descuento" as "incremento" | "descuento",
+        variant: "monto" as ClosureAdjustmentVariant,
         amount: "",
+        percentage: "",
         motivo: "",
     })
     const [adjustmentFormError, setAdjustmentFormError] = useState<string | null>(null)
@@ -160,7 +163,9 @@ const ClosureDetailPage = () => {
             setAdjustmentForm({
                 staffKey: "",
                 type: "descuento",
+                variant: "monto",
                 amount: "",
+                percentage: "",
                 motivo: "",
             })
             setAdjustmentFormError(null)
@@ -177,8 +182,21 @@ const ClosureDetailPage = () => {
         setAdjustmentFormError(null)
     }
 
+    const handleAdjustmentVariantChange = (value: ClosureAdjustmentVariant) => {
+        setAdjustmentForm((previous) => ({
+            ...previous,
+            variant: value,
+        }))
+        setAdjustmentFormError(null)
+    }
+
     const handleAdjustmentAmountChange = (event: ChangeEvent<HTMLInputElement>) => {
         setAdjustmentForm((previous) => ({ ...previous, amount: event.target.value }))
+        setAdjustmentFormError(null)
+    }
+
+    const handleAdjustmentPercentageChange = (event: ChangeEvent<HTMLInputElement>) => {
+        setAdjustmentForm((previous) => ({ ...previous, percentage: event.target.value }))
         setAdjustmentFormError(null)
     }
 
@@ -194,11 +212,37 @@ const ClosureDetailPage = () => {
             return
         }
 
-        const amountNumber = Number.parseInt(adjustmentForm.amount, 10)
+        const isPercentageVariant = adjustmentForm.variant === "porcentaje"
+        const amountNumber = isPercentageVariant ? 0 : Number.parseInt(adjustmentForm.amount, 10)
+        const percentageNumber = isPercentageVariant
+            ? Number.parseFloat(adjustmentForm.percentage.replace(",", "."))
+            : undefined
 
-        if (!amountNumber || amountNumber <= 0) {
+        if (!isPercentageVariant && (!amountNumber || amountNumber <= 0)) {
             setAdjustmentFormError("Ingresa un monto mayor a 0.")
             return
+        }
+
+        if (isPercentageVariant) {
+            if (!adjustmentForm.staffKey || adjustmentForm.staffKey === generalAdjustmentKey) {
+                setAdjustmentFormError("Selecciona un integrante específico para ajustar porcentaje.")
+                return
+            }
+
+            if (percentageNumber === undefined || Number.isNaN(percentageNumber)) {
+                setAdjustmentFormError("Ingresa un porcentaje válido.")
+                return
+            }
+
+            if (percentageNumber === 0) {
+                setAdjustmentFormError("El porcentaje debe ser distinto de 0.")
+                return
+            }
+
+            if (percentageNumber < -100 || percentageNumber > 100) {
+                setAdjustmentFormError("El porcentaje debe estar entre -100 y 100.")
+                return
+            }
         }
 
         const isGeneralAdjustment = adjustmentForm.staffKey === generalAdjustmentKey
@@ -206,6 +250,11 @@ const ClosureDetailPage = () => {
 
         if (!isGeneralAdjustment && !staffData) {
             setAdjustmentFormError("Selecciona el integrante al que aplicarás el ajuste.")
+            return
+        }
+
+        if (isGeneralAdjustment && isPercentageVariant) {
+            setAdjustmentFormError("Los ajustes porcentuales deben aplicarse a un integrante específico.")
             return
         }
 
@@ -219,6 +268,8 @@ const ClosureDetailPage = () => {
                     staffName: isGeneralAdjustment ? "Ajuste general" : staffData?.name ?? "Integrante",
                     amount: amountNumber,
                     type: adjustmentForm.type,
+                    variant: adjustmentForm.variant,
+                    percentage: isPercentageVariant ? percentageNumber : undefined,
                     motivo: adjustmentForm.motivo.trim() ? adjustmentForm.motivo.trim() : undefined,
                     createdBy: displayName ?? email ?? "Usuario",
                 },
@@ -232,7 +283,9 @@ const ClosureDetailPage = () => {
             setAdjustmentForm({
                 staffKey: "",
                 type: "descuento",
+                variant: "monto",
                 amount: "",
+                percentage: "",
                 motivo: "",
             })
             setAdjustmentFormError(null)
@@ -272,7 +325,6 @@ const ClosureDetailPage = () => {
             { key: "servicio", title: "Staff de servicio", data: closure.assignments.servicio },
             { key: "cocina", title: "Staff de cocina", data: closure.assignments.cocina },
             { key: "ventaDirecta", title: "Venta directa", data: closure.assignments.ventaDirecta },
-            { key: "pocilloSecundario", title: "Pocillo secundario", data: closure.assignments.pocilloSecundario },
         ].filter((section) => section.data.length)
     }, [closure])
 
@@ -309,24 +361,40 @@ const ClosureDetailPage = () => {
         pushMembers(closure.assignments.servicio)
         pushMembers(closure.assignments.cocina)
         pushMembers(closure.assignments.ventaDirecta)
-        pushMembers(closure.assignments.pocilloSecundario)
 
         return Array.from(map.values())
     }, [closure])
 
     const adjustmentsByIdentifier = useMemo(() => {
-        const map = new Map<string, { total: number; items: ClosureAdjustment[] }>()
+        const map = new Map<
+            string,
+            { amountTotal: number; percentageTotal: number; items: ClosureAdjustment[] }
+        >()
 
         closure?.adjustments?.forEach((adjustment) => {
             const identifier = buildMemberIdentifier(adjustment.staffId, adjustment.staffName)
-            const signedAmount = adjustment.type === "descuento" ? -adjustment.amount : adjustment.amount
+            const signedAmount =
+                adjustment.variant === "porcentaje"
+                    ? 0
+                    : adjustment.type === "descuento"
+                      ? -adjustment.amount
+                      : adjustment.amount
+            const signedPercentage =
+                adjustment.variant === "porcentaje"
+                    ? (adjustment.type === "descuento" ? -1 : 1) * (adjustment.percentage ?? 0)
+                    : 0
 
             if (map.has(identifier)) {
                 const entry = map.get(identifier)!
-                entry.total += signedAmount
+                entry.amountTotal += signedAmount
+                entry.percentageTotal += signedPercentage
                 entry.items.push(adjustment)
             } else {
-                map.set(identifier, { total: signedAmount, items: [adjustment] })
+                map.set(identifier, {
+                    amountTotal: signedAmount,
+                    percentageTotal: signedPercentage,
+                    items: [adjustment],
+                })
             }
         })
 
@@ -336,6 +404,10 @@ const ClosureDetailPage = () => {
     const totalAdjustments = useMemo(
         () =>
             closure?.adjustments?.reduce((accumulator, adjustment) => {
+                if (adjustment.variant === "porcentaje") {
+                    return accumulator
+                }
+
                 const signedAmount = adjustment.type === "descuento" ? -adjustment.amount : adjustment.amount
                 return accumulator + signedAmount
             }, 0) ?? 0,
@@ -473,6 +545,21 @@ const ClosureDetailPage = () => {
                                         </div>
 
                                         <div className="space-y-2">
+                                            <Label>Modalidad</Label>
+                                            <Select value={adjustmentForm.variant} onValueChange={handleAdjustmentVariantChange}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="monto">Monto fijo</SelectItem>
+                                                    <SelectItem value="porcentaje">Porcentaje</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {adjustmentForm.variant === "monto" ? (
+                                        <div className="space-y-2">
                                             <Label htmlFor="adjustment-amount">Monto ($)</Label>
                                             <input
                                                 id="adjustment-amount"
@@ -484,7 +571,25 @@ const ClosureDetailPage = () => {
                                                 placeholder="Ej: 10000"
                                             />
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="adjustment-percentage">Porcentaje (%)</Label>
+                                            <input
+                                                id="adjustment-percentage"
+                                                type="number"
+                                                step="0.5"
+                                                min={-100}
+                                                max={100}
+                                                className={fieldInputClassName}
+                                                value={adjustmentForm.percentage}
+                                                onChange={handleAdjustmentPercentageChange}
+                                                placeholder="Ej: 50"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Usa valores negativos para restar porcentaje y positivos para incrementar.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-2">
                                         <Label htmlFor="adjustment-motivo">Motivo</Label>
@@ -562,7 +667,15 @@ const ClosureDetailPage = () => {
                             <div className="space-y-4">
                                 {sortedAdjustments.map((adjustment) => {
                                     const signedAmount =
-                                        adjustment.type === "descuento" ? -adjustment.amount : adjustment.amount
+                                        adjustment.variant === "porcentaje"
+                                            ? 0
+                                            : adjustment.type === "descuento"
+                                              ? -adjustment.amount
+                                              : adjustment.amount
+                                    const signedPercentage =
+                                        adjustment.variant === "porcentaje"
+                                            ? (adjustment.type === "descuento" ? -1 : 1) * (adjustment.percentage ?? 0)
+                                            : 0
 
                                     return (
                                         <div
@@ -583,9 +696,28 @@ const ClosureDetailPage = () => {
                                                         {formatAdjustmentTimestamp(adjustment.createdAt)}
                                                     </p>
                                                 </div>
-                                                <Badge variant={adjustment.type === "descuento" ? "destructive" : "secondary"}>
-                                                    {formatSignedCurrency(signedAmount)}
-                                                </Badge>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={
+                                                            "text-xs" +
+                                                            (adjustment.variant === "porcentaje"
+                                                                ? signedPercentage < 0
+                                                                    ? " text-destructive border-destructive/60"
+                                                                    : " text-emerald-700 border-emerald-400/70"
+                                                                : signedAmount < 0
+                                                                    ? " text-destructive border-destructive/60"
+                                                                    : " text-emerald-700 border-emerald-400/70")
+                                                        }
+                                                    >
+                                                        {adjustment.variant === "porcentaje"
+                                                            ? `${signedPercentage >= 0 ? "+" : ""}${signedPercentage.toFixed(2)}%`
+                                                            : formatSignedCurrency(signedAmount)}
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-[10px] uppercase">
+                                                        {adjustment.variant === "porcentaje" ? "Porcentaje" : "Monto"}
+                                                    </Badge>
+                                                </div>
                                             </div>
                                             {adjustment.motivo ? (
                                                 <p className="mt-3 text-xs text-muted-foreground">
@@ -634,7 +766,12 @@ const ClosureDetailPage = () => {
                                                 assignment.role,
                                             )
                                             const adjustmentData = adjustmentsByIdentifier.get(identifier)
-                                            const netoConAjustes = assignment.netAmount + (adjustmentData?.total ?? 0)
+                                            const porcentajeAcumulado = adjustmentData?.percentageTotal ?? 0
+                                            const deltaPorcentaje = assignment.netAmount * (porcentajeAcumulado / 100)
+                                            const netoConAjustes =
+                                                assignment.netAmount +
+                                                (adjustmentData?.amountTotal ?? 0) +
+                                                deltaPorcentaje
 
                                             return (
                                                 <div
@@ -652,15 +789,33 @@ const ClosureDetailPage = () => {
                                                             <Badge variant="secondary" className="text-xs">
                                                                 Neto snapshot: {formatCurrency(assignment.netAmount)}
                                                             </Badge>
-                                                            {adjustmentData ? (
+                                                            {adjustmentData && (adjustmentData.amountTotal !== 0 || porcentajeAcumulado !== 0) ? (
                                                                 <Badge
-                                                                    variant={adjustmentData.total >= 0 ? "outline" : "destructive"}
-                                                                    className="text-xs"
+                                                                    variant="outline"
+                                                                    className={
+                                                                        "text-xs" +
+                                                                        (netoConAjustes < assignment.netAmount
+                                                                            ? " text-destructive border-destructive/60"
+                                                                            : " text-emerald-700 border-emerald-400/70")
+                                                                    }
                                                                 >
-                                                                    Ajustes: {formatSignedCurrency(adjustmentData.total)}
+                                                                    Neto ajustado: {formatCurrency(netoConAjustes)}
                                                                 </Badge>
                                                             ) : null}
-                                                            {adjustmentData ? (
+                                                            {adjustmentData && adjustmentData.percentageTotal !== 0 ? (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={
+                                                                        "text-xs" +
+                                                                        (adjustmentData.percentageTotal < 0
+                                                                            ? " text-destructive border-destructive/60"
+                                                                            : " text-emerald-700 border-emerald-400/70")
+                                                                    }
+                                                                >
+                                                                    % ajustes: {adjustmentData.percentageTotal.toFixed(2)}%
+                                                                </Badge>
+                                                            ) : null}
+                                                            {adjustmentData && adjustmentData.amountTotal !== 0 ? (
                                                                 <Badge variant="default" className="text-xs">
                                                                     Neto ajustado: {formatCurrency(netoConAjustes)}
                                                                 </Badge>
@@ -685,20 +840,27 @@ const ClosureDetailPage = () => {
                                                             <span>Total neto</span>
                                                             <span className="font-semibold">{formatCurrency(assignment.netAmount)}</span>
                                                         </li>
-                                                        {adjustmentData ? (
+                                                        {adjustmentData && (adjustmentData.amountTotal !== 0 || porcentajeAcumulado !== 0) ? (
                                                             <li className="flex justify-between text-foreground">
-                                                                <span>Total ajustes</span>
+                                                                <span>Total ajustes (monto + %)</span>
                                                                 <span className="font-semibold">
-                                                                    {formatSignedCurrency(adjustmentData.total)}
+                                                                    {formatSignedCurrency(
+                                                                        (adjustmentData?.amountTotal ?? 0) + deltaPorcentaje,
+                                                                    )}
                                                                 </span>
                                                             </li>
                                                         ) : null}
-                                                        {adjustmentData ? (
+                                                        {adjustmentData && (adjustmentData.amountTotal !== 0 || porcentajeAcumulado !== 0) ? (
                                                             <li className="flex justify-between text-foreground">
                                                                 <span>Neto ajustado</span>
                                                                 <span className="font-semibold">
                                                                     {formatCurrency(netoConAjustes)}
                                                                 </span>
+                                                            </li>
+                                                        ) : null}
+                                                        {adjustmentData && adjustmentData.percentageTotal !== 0 ? (
+                                                            <li className="text-[11px] text-muted-foreground">
+                                                                Ajuste porcentual acumulado: {adjustmentData.percentageTotal.toFixed(2)}%
                                                             </li>
                                                         ) : null}
                                                         {totalDescuentos > 0 ? (

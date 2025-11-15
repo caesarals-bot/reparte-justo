@@ -4,7 +4,7 @@ import { es } from "date-fns/locale"
 import { doc, getDoc } from "firebase/firestore"
 
 import { Dashboard } from "../component/dashboard/dashboard"
-import type { DashboardPaymentGroup, DashboardSettlement } from "@/data/dashboard"
+import type { DashboardMember, DashboardPaymentGroup, DashboardSettlement } from "@/data/dashboard"
 import { useClosuresDashboard } from "./hooks/useClosuresDashboard"
 import { useAuth } from "@/context/AuthContext"
 import { db } from "@/firebase/config"
@@ -34,6 +34,9 @@ const formatClosureLabel = (referenceDate?: string | null, fallbackId?: string) 
     return `Cierre del ${formattedDate}`
 }
 
+const buildMemberIdentifier = (staffId?: string, name?: string, role?: string | null) =>
+    staffId ?? `${name ?? ""}|${role ?? ""}`
+
 const DashboardPage = () => {
     const { uid } = useAuth()
     const [restaurantName, setRestaurantName] = useState<string>("Tu restaurante")
@@ -41,7 +44,7 @@ const DashboardPage = () => {
     const [isLoadingConfig, setIsLoadingConfig] = useState(true)
     const [configError, setConfigError] = useState<string | null>(null)
 
-    const { historicalClosures, pendingClosures, aggregates, isLoading, error } = useClosuresDashboard({ uid })
+    const { historicalClosures, pendingClosures, isLoading, error } = useClosuresDashboard({ uid })
 
     useEffect(() => {
         if (!uid) {
@@ -90,49 +93,199 @@ const DashboardPage = () => {
             return []
         }
 
-        const groupedByMode: Record<string, DashboardPaymentGroup> = {}
+        const servicioMembersMap = new Map<string, DashboardMember>()
+        const cocinaMembersMap = new Map<string, DashboardMember>()
+        const ajustesRows: DashboardMember[] = []
 
-        pendingClosures.forEach((closure) => {
-            const closureLabel = formatClosureLabel(closure.metadata.referenceDate, closure.id)
-            const key = closure.mode ?? "pool"
-
-            if (!groupedByMode[key]) {
-                groupedByMode[key] = {
-                    groupName: key === "directa" ? "Venta directa" : "Pool",
-                    description:
-                        key === "directa"
-                            ? "Propinas registradas por venta directa listadas por integrante."
-                            : "Propinas del modo pool acumuladas, distribuidas por integrante.",
-                    totalAmount: 0,
-                    breakdown: [],
-                }
+        const accumulateAssignment = (
+            assignment: {
+                present: boolean
+                staffId?: string
+                nombre: string
+                role?: string | null
+                netAmount: number
+                netAmountAdjusted?: number
+                deductionAmount: number
+                penaltyAmount: number
+            },
+            map: Map<string, DashboardMember>,
+        ) => {
+            if (!assignment.present) {
+                return
             }
 
-            groupedByMode[key].breakdown.push({
-                id: closure.id,
-                name: closureLabel,
-                amount: closure.totals.netAfterDeductions,
-                totalDescuentos: closure.totals.deductionsAmount,
-                link: `/dashboard/closures/${closure.id}`,
-            })
+            const identifier = buildMemberIdentifier(assignment.staffId, assignment.nombre, assignment.role)
+            const netAmount = assignment.netAmountAdjusted ?? assignment.netAmount
+            const totalDescuentos = assignment.deductionAmount + assignment.penaltyAmount
+            const existing = map.get(identifier)
 
-            groupedByMode[key].totalAmount += closure.totals.netAfterDeductions
-        })
-
-        const perPersonGroup: DashboardPaymentGroup = {
-            groupName: "Acumulado por integrante",
-            description: "Totales netos agrupados por persona considerando todos los cierres pendientes.",
-            totalAmount: aggregates.reduce((sum, item) => sum + item.totalNeto, 0),
-            breakdown: aggregates.map((item) => ({
-                id: item.staffId ?? item.nombre,
-                name: item.nombre,
-                amount: item.totalNeto,
-                totalDescuentos: item.totalDeducciones + item.totalPenalizaciones,
-            })),
+            if (existing) {
+                existing.amount += netAmount
+                existing.totalDescuentos += totalDescuentos
+            } else {
+                map.set(identifier, {
+                    id: identifier,
+                    name: assignment.nombre,
+                    amount: netAmount,
+                    totalDescuentos,
+                })
+            }
         }
 
-        return [...Object.values(groupedByMode), perPersonGroup]
-    }, [pendingClosures, aggregates])
+        let transbankTotal = 0
+        let ajustesTotal = 0
+
+        pendingClosures.forEach((closure) => {
+            closure.assignments.servicio.forEach((assignment) => accumulateAssignment(assignment, servicioMembersMap))
+            closure.assignments.cocina.forEach((assignment) => accumulateAssignment(assignment, cocinaMembersMap))
+
+            const transbankAmount = Math.max(0, closure.totals.transbankAmount)
+            transbankTotal += transbankAmount
+
+            const findBaseNetForAdjustment = (staffId?: string, staffName?: string): number => {
+                if (!staffId && !staffName) {
+                    return 0
+                }
+
+                const matches = (assignment: { staffId?: string; nombre: string; netAmount: number }) => {
+                    if (staffId && assignment.staffId) {
+                        return assignment.staffId === staffId
+                    }
+
+                    if (!staffId && staffName) {
+                        return assignment.nombre === staffName
+                    }
+
+                    return false
+                }
+
+                const pools = [
+                    ...closure.assignments.servicio,
+                    ...closure.assignments.cocina,
+                    ...closure.assignments.ventaDirecta,
+                    ...closure.assignments.pocilloSecundario,
+                ]
+
+                const found = pools.find(matches)
+                return found?.netAmount ?? 0
+            }
+
+            closure.adjustments.forEach((adjustment) => {
+                const hasAmount = adjustment.variant === "monto" && adjustment.amount !== 0
+                const hasPercentage = adjustment.variant === "porcentaje" && (adjustment.percentage ?? 0) !== 0
+
+                if (!hasAmount && !hasPercentage) {
+                    return
+                }
+
+                const percentageDelta = hasPercentage
+                    ? (() => {
+                          const baseNet = findBaseNetForAdjustment(adjustment.staffId, adjustment.staffName)
+                          if (!baseNet) return 0
+                          const signedPercent =
+                              (adjustment.type === "descuento" ? -1 : 1) * ((adjustment.percentage ?? 0) / 100)
+                          return baseNet * signedPercent
+                      })()
+                    : 0
+
+                const amountDelta = hasAmount
+                    ? adjustment.type === "descuento"
+                        ? -adjustment.amount
+                        : adjustment.amount
+                    : 0
+
+                const totalDelta = amountDelta + percentageDelta
+
+                // Para la card queremos ver el total de descuentos en CLP (solo valores negativos)
+                const descuentoEnPesos = totalDelta < 0 ? -totalDelta : 0
+
+                if (descuentoEnPesos <= 0) {
+                    // Ajustes que solo aumentan propina no se cuentan en "Ajustes registrados" (card de descuentos)
+                    return
+                }
+
+                ajustesTotal += descuentoEnPesos
+
+                const percentageLabel = hasPercentage
+                    ? `${adjustment.type === "descuento" ? "-" : "+"}${(adjustment.percentage ?? 0).toFixed(2)}%`
+                    : null
+
+                const motivoLabel = adjustment.motivo
+                    ? adjustment.motivo.split(" ").slice(0, 3).join(" ")
+                    : undefined
+
+                const pieces = [percentageLabel, motivoLabel].filter(Boolean) as string[]
+                const deductionLabel =
+                    pieces.join(" • ") || (hasAmount ? "Ajuste por monto" : "Ajuste porcentual sobre neto")
+
+                ajustesRows.push({
+                    id: adjustment.id,
+                    name: adjustment.staffName ?? "Ajuste general",
+                    amount: descuentoEnPesos,
+                    totalDescuentos: 0,
+                    deductionLabel,
+                })
+            })
+        })
+
+        const servicioMembers = Array.from(servicioMembersMap.values()).sort((a, b) => b.amount - a.amount)
+        const cocinaMembers = Array.from(cocinaMembersMap.values()).sort((a, b) => b.amount - a.amount)
+
+        const servicioTotal = servicioMembers.reduce((sum, member) => sum + member.amount, 0)
+        const cocinaTotal = cocinaMembers.reduce((sum, member) => sum + member.amount, 0)
+
+        const nextGroups: DashboardPaymentGroup[] = []
+
+        if (servicioMembers.length) {
+            nextGroups.push({
+                groupName: "Pool Garzones",
+                description: "Total neto acumulado por cada integrante del staff de servicio.",
+                totalAmount: servicioTotal,
+                breakdown: servicioMembers,
+                category: "distribution",
+            })
+        }
+
+        if (cocinaMembers.length) {
+            nextGroups.push({
+                groupName: "Pool Cocina",
+                description: "Total neto acumulado por cada integrante del staff de cocina.",
+                totalAmount: cocinaTotal,
+                breakdown: cocinaMembers,
+                category: "distribution",
+            })
+        }
+
+        if (transbankTotal > 0) {
+            nextGroups.push({
+                groupName: "Transbank y descuentos",
+                description: "Cargos automáticos.",
+                totalAmount: transbankTotal,
+                breakdown: [
+                    {
+                        id: "transbank",
+                        name: "Transbank",
+                        amount: transbankTotal,
+                        totalDescuentos: 0,
+                        deductionLabel: "Cargo transaccional",
+                    },
+                ],
+                category: "deduction",
+            })
+        }
+
+        if (ajustesRows.length) {
+            nextGroups.push({
+                groupName: "Ajustes registrados",
+                description: "Ajustes por cierre.",
+                totalAmount: ajustesTotal,
+                breakdown: ajustesRows,
+                category: "deduction",
+            })
+        }
+
+        return nextGroups
+    }, [pendingClosures])
 
     const historicalData = useMemo<DashboardSettlement[]>(
         () =>

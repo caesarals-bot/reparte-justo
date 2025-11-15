@@ -3,12 +3,16 @@ import { addDoc, collection, getDocs, orderBy, query, serverTimestamp, type Time
 
 import { db } from "@/firebase/config"
 
+export type ClosureAdjustmentVariant = "monto" | "porcentaje"
+
 export type ClosureAdjustment = {
     id: string
     staffId?: string
     staffName?: string
     amount: number
     type: "incremento" | "descuento"
+    variant: ClosureAdjustmentVariant
+    percentage?: number
     motivo?: string
     createdAt?: Timestamp | null
     createdBy?: string
@@ -32,6 +36,12 @@ export type StaffAssignment = {
     penaltyAmount: number
     deductionAmount: number
     netAmount: number
+    netAmountAdjusted?: number
+    adjustmentSummary?: {
+        totalAmount: number
+        totalPercentage: number
+        redistributedDelta: number
+    }
 }
 
 export type StaffAssignments = {
@@ -87,6 +97,7 @@ export type StaffAggregate = {
     totalDeducciones: number
     totalNeto: number
     totalAjustes: number
+    totalNetoAjustado: number
 }
 
 const extractRecord = (value: unknown): Record<string, unknown> | undefined => {
@@ -143,6 +154,8 @@ const mapAssignment = (value: unknown): StaffAssignment => {
 
 const mapAdjustment = (value: Record<string, unknown> & { id: string }): ClosureAdjustment => {
     const amount = toNumber(value.amount)
+    const percentage = toNumber(value.percentage)
+    const variantValue = value.variant === "porcentaje" ? "porcentaje" : "monto"
 
     return {
         id: value.id,
@@ -150,9 +163,157 @@ const mapAdjustment = (value: Record<string, unknown> & { id: string }): Closure
         staffName: typeof value.staffName === "string" ? value.staffName : undefined,
         amount,
         type: value.type === "descuento" ? "descuento" : "incremento",
+        variant: variantValue,
+        percentage: variantValue === "porcentaje" ? percentage : undefined,
         motivo: typeof value.motivo === "string" ? value.motivo : undefined,
         createdAt: (value.createdAt as Timestamp | undefined) ?? null,
         createdBy: typeof value.createdBy === "string" ? value.createdBy : undefined,
+    }
+}
+
+const buildMemberIdentifier = (staffId?: string, nombre?: string, role?: string | null) =>
+    staffId ?? `${nombre ?? ""}|${role ?? ""}`
+
+const applyPercentageAdjustmentsToClosure = (closure: ClosureDocument): ClosureDocument => {
+    if (!closure.adjustments.length) {
+        return closure
+    }
+
+    const percentageByMember = new Map<string, number>()
+
+    closure.adjustments.forEach((adjustment) => {
+        if (adjustment.variant !== "porcentaje") {
+            return
+        }
+
+        const key = buildMemberIdentifier(adjustment.staffId, adjustment.staffName)
+
+        if (!key) {
+            return
+        }
+
+        const signedPercentage = (adjustment.type === "descuento" ? -1 : 1) * (adjustment.percentage ?? 0)
+        const previous = percentageByMember.get(key) ?? 0
+        percentageByMember.set(key, previous + signedPercentage)
+    })
+
+    if (!percentageByMember.size) {
+        return closure
+    }
+
+    const applyToGroup = (assignments: StaffAssignment[]): StaffAssignment[] => {
+        if (!assignments.length) {
+            return assignments
+        }
+
+        type LocalInfo = {
+            assignment: StaffAssignment
+            key: string
+            baseNet: number
+            ownPercentage: number
+            ownDelta: number
+        }
+
+        const locals: LocalInfo[] = assignments.map((assignment) => {
+            const key = buildMemberIdentifier(assignment.staffId, assignment.nombre, assignment.role)
+            const ownPercentage = assignment.present ? percentageByMember.get(key) ?? 0 : 0
+            const baseNet = assignment.netAmount
+            const ownDelta = assignment.present ? baseNet * (ownPercentage / 100) : 0
+
+            return {
+                assignment,
+                key,
+                baseNet,
+                ownPercentage,
+                ownDelta,
+            }
+        })
+
+        const totalOwnDelta = locals.reduce((sum, item) => sum + item.ownDelta, 0)
+
+        if (totalOwnDelta === 0) {
+            return assignments.map((assignment) => ({
+                ...assignment,
+                netAmountAdjusted: assignment.netAmountAdjusted ?? assignment.netAmount,
+                adjustmentSummary: assignment.adjustmentSummary ?? {
+                    totalAmount: 0,
+                    totalPercentage: 0,
+                    redistributedDelta: 0,
+                },
+            }))
+        }
+
+        const redistributionPool = -totalOwnDelta
+
+        const eligibleForRedistribution = locals.filter((item) => {
+            if (!item.assignment.present) {
+                return false
+            }
+
+            const hasOwnPercentage = (percentageByMember.get(item.key) ?? 0) !== 0
+            const hasPenalty = item.assignment.penaltyPercentage > 0
+
+            return !hasOwnPercentage && !hasPenalty
+        })
+
+        const totalBaseNetEligible = eligibleForRedistribution.reduce(
+            (sum, item) => sum + item.baseNet,
+            0,
+        )
+
+        const computeRedistributedDelta = (item: LocalInfo): number => {
+            if (!item.assignment.present) {
+                return 0
+            }
+
+            if (totalBaseNetEligible <= 0) {
+                return 0
+            }
+
+            const isEligible = eligibleForRedistribution.includes(item)
+
+            if (!isEligible) {
+                return 0
+            }
+
+            const weight = item.baseNet / totalBaseNetEligible
+            return redistributionPool * weight
+        }
+
+        return locals.map((item) => {
+            const redistributedDelta = computeRedistributedDelta(item)
+            const baseNet = item.baseNet
+            const ownDelta = item.ownDelta
+            const totalDelta = ownDelta + redistributedDelta
+            const adjustedNet = Math.max(baseNet + totalDelta, 0)
+
+            const previousSummary = item.assignment.adjustmentSummary ?? {
+                totalAmount: 0,
+                totalPercentage: 0,
+                redistributedDelta: 0,
+            }
+
+            return {
+                ...item.assignment,
+                netAmountAdjusted: adjustedNet,
+                adjustmentSummary: {
+                    totalAmount: previousSummary.totalAmount + ownDelta,
+                    totalPercentage:
+                        previousSummary.totalPercentage + (percentageByMember.get(item.key) ?? 0),
+                    redistributedDelta: previousSummary.redistributedDelta + redistributedDelta,
+                },
+            }
+        })
+    }
+
+    return {
+        ...closure,
+        assignments: {
+            servicio: applyToGroup(closure.assignments.servicio),
+            cocina: applyToGroup(closure.assignments.cocina),
+            ventaDirecta: applyToGroup(closure.assignments.ventaDirecta),
+            pocilloSecundario: applyToGroup(closure.assignments.pocilloSecundario),
+        },
     }
 }
 
@@ -221,6 +382,8 @@ export const createClosureAdjustment = async (params: {
         staffName: adjustment.staffName ?? null,
         amount: adjustment.amount,
         type: adjustment.type,
+        variant: adjustment.variant,
+        percentage: adjustment.percentage ?? null,
         motivo: adjustment.motivo ?? null,
         createdBy: adjustment.createdBy ?? null,
         createdAt: serverTimestamp(),
@@ -250,14 +413,15 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
             const nextClosures = await Promise.all(
                 snapshots.docs.map(async (docSnapshot) => {
                     const adjustments = await fetchClosureAdjustments(uid, docSnapshot.id)
-                    return mapSnapshotToClosure(docSnapshot, adjustments)
+                    const baseClosure = mapSnapshotToClosure(docSnapshot, adjustments)
+                    return applyPercentageAdjustmentsToClosure(baseClosure)
                 }),
             )
 
             const aggregatesMap = new Map<string, StaffAggregate>()
 
             const getIdentifier = (staffId?: string, nombre?: string, role?: string | null) =>
-                staffId ?? `${nombre ?? ""}|${role ?? ""}`
+                buildMemberIdentifier(staffId, nombre, role)
 
             const mergeAssignment = (assignment: StaffAssignment) => {
                 if (!assignment.present) {
@@ -272,6 +436,8 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
                     existing.totalPenalizaciones += assignment.penaltyAmount
                     existing.totalDeducciones += assignment.deductionAmount
                     existing.totalNeto += assignment.netAmount
+                    existing.totalNetoAjustado += assignment.netAmountAdjusted ?? assignment.netAmount
+                    existing.totalAjustes += assignment.adjustmentSummary?.totalAmount ?? 0
                 } else {
                     aggregatesMap.set(identifier, {
                         staffId: assignment.staffId,
@@ -281,7 +447,8 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
                         totalPenalizaciones: assignment.penaltyAmount,
                         totalDeducciones: assignment.deductionAmount,
                         totalNeto: assignment.netAmount,
-                        totalAjustes: 0,
+                        totalAjustes: assignment.adjustmentSummary?.totalAmount ?? 0,
+                        totalNetoAjustado: assignment.netAmountAdjusted ?? assignment.netAmount,
                     })
                 }
             }
@@ -297,12 +464,17 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
                 pools.forEach(mergeAssignment)
 
                 closure.adjustments.forEach((adjustment) => {
+                    if (adjustment.variant === "porcentaje") {
+                        return
+                    }
+
                     const signedAmount = adjustment.type === "descuento" ? -adjustment.amount : adjustment.amount
                     const identifier = getIdentifier(adjustment.staffId, adjustment.staffName)
                     const existing = aggregatesMap.get(identifier)
 
                     if (existing) {
                         existing.totalAjustes += signedAmount
+                        existing.totalNetoAjustado += signedAmount
                     } else {
                         aggregatesMap.set(identifier, {
                             staffId: adjustment.staffId,
@@ -313,6 +485,7 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
                             totalDeducciones: 0,
                             totalNeto: 0,
                             totalAjustes: signedAmount,
+                            totalNetoAjustado: signedAmount,
                         })
                     }
                 })

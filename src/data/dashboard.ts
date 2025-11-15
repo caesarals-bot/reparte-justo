@@ -5,6 +5,7 @@ export type DashboardMember = {
   totalDescuentos: number
   link?: string
   totalAjustes?: number
+  deductionLabel?: string
 }
 
 export type DashboardPaymentGroup = {
@@ -12,6 +13,7 @@ export type DashboardPaymentGroup = {
   description: string
   totalAmount: number
   breakdown: DashboardMember[]
+  category?: "distribution" | "deduction"
 }
 
 export type DashboardSettlement = {
