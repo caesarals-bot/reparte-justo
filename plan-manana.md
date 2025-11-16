@@ -53,3 +53,32 @@
   - Descuento de 50% a un garzón presente.
   - Incremento de porcentaje a un integrante de cocina.
   - Combinación de ajustes por monto y porcentaje en el mismo cierre.
+
+## 8. Micro-tareas para la página de Liquidación
+
+- **Exportar datos de liquidación**
+  - Diseñar un payload tipo `LiquidacionMemberSummary` con la información que se muestra en la tabla (neto, penalizaciones, deducciones, ajustes) para poder exportar a CSV o enviar a un backend.
+  - Añadir un botón de "Exportar resumen" que por ahora solo haga `console.log` del payload generado.
+
+- **Preparar resumen para correos al staff**
+  - Definir la forma del resumen por integrante para email (nombre, rol, rango de fechas, monto total a pagar, desglose básico).
+  - Identificar desde dónde se obtendrán los correos de cada integrante (`staffId` → documento de staff en Firestore).
+
+- **Flujo futuro de confirmación de liquidación**
+  - Especificar la API/Cloud Function que marcará como `liquidado` un conjunto de cierres (por `closureId`) y generará un reporte persistente.
+  - Definir el comportamiento de la UI tras confirmar: recarga del dashboard, estado de éxito y bloqueo de modificaciones sobre cierres liquidados.
+
+- **Mejoras UX del calendario de liquidación**
+  - Evaluar si se debe restringir el rango seleccionable a días que tengan cierres pendientes (evitar rangos vacíos).
+  - Ajustar la leyenda del calendario para explicar el color de los días con movimiento y el comportamiento del filtro.
+
+## 9. Gestión centralizada de personal
+
+- **Conectar altas desde `/dashboard/personal` con el cierre diario**
+  - Consumir la misma transformación que usa `InitialSetupPage` para garantizar que las ponderaciones/porcentajes mantengan el formato esperado.
+  - Sincronizar inmediatamente tras guardar para que el dashboard refleje los nuevos integrantes sin requerir reload manual.
+- **Notas de UX**
+  - Mostrar un badge en cada tabla indicando cuántos integrantes están inactivos y permitir filtrarlos rápidamente.
+  - Añadir confirmación al eliminar integrantes (modal ligero) para evitar eliminaciones accidentales.
+- **Permisos**
+  - Analizar si conviene admitir más de un `staffEditor` y exponerlo en esta misma vista (evitar volver al setup).

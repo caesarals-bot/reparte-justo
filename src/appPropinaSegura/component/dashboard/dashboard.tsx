@@ -5,7 +5,7 @@ import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { FileTextIcon, CheckCircle2Icon, AlertCircleIcon } from "lucide-react"
+import { FileTextIcon, CheckCircle2Icon, AlertCircleIcon, Users } from "lucide-react"
 import { PaymentGroupCard } from "./payment-group-card"
 import { DateRangePicker } from "./date-range-picker"
 import { HistoricalSettlement } from "./historical-settlement"
@@ -36,6 +36,10 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, histor
 
   const handleSettlement = () => {
     navigate("/dashboard/liquidacion")
+  }
+
+  const handleManageStaff = () => {
+    navigate("/dashboard/personal")
   }
 
   return (
@@ -96,8 +100,17 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, histor
               </div>
             ) : null}
 
-            {/* Settlement Button */}
-            <div className="mt-6 flex justify-center">
+            {/* Actions */}
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Button
+                variant="outline"
+                className="gap-2 px-6"
+                onClick={handleManageStaff}
+                aria-label="Gestionar personal"
+              >
+                <Users className="h-5 w-5" />
+                Editar personal
+              </Button>
               <Button size="lg" className="gap-2 px-8" onClick={handleSettlement}>
                 <CheckCircle2Icon className="h-5 w-5" />
                 Liquidar y Generar Reporte
