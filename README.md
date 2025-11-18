@@ -16,6 +16,8 @@ Aplicación web orientada a restaurantes para gestionar la distribución transpa
 - **Onboarding guiado ( `/setup` )** con persistencia en Firestore para nombre del restaurante, deducciones y staff (roles, emails, ponderaciones).
 - **Cierre Diario ( `/cierre` )** conectado a la configuración guardada, calcula propinas cocina/garzones aplicando descuentos y muestra montos asignados por persona.
 - **Dashboard administrativo (en progreso)** con páginas base para overview, restaurantes y usuarios.
+- **Liquidación guiada con PDF automático**: la vista `/dashboard/liquidacion` se apoya en `useLiquidacionWorkflow` para preparar rangos, bloquear días ya liquidados, generar un PDF detallado y descargarlo inmediatamente después de confirmar.
+- **Detalle de cierre modularizado**: `ClosureDetailPage` ahora delega cálculos/ajustes en `useClosureDetail`, mostrando un historial claro de miembros, penalizaciones y ajustes antes de liquidar.
 - **Accesibilidad cuidada**: etiquetas, `aria-*`, soporte para teclado en el menú móvil y inputs consistentes.
 
 ## Tecnologías
@@ -75,18 +77,26 @@ VITE_FIREBASE_APP_ID=...
 - **Accesibilidad**: cada input debe tener su `Label`; usar `aria-label` en enlaces o botones iconográficos.
 - **Estado**: actualmente se maneja con `useState`; la conexión a APIs se implementará en iteraciones posteriores.
 
+## Flujo de liquidación (estado actual)
+
+1. `useClosuresDashboard` provee cierres pendientes + fechas liquidadas para que `LiquidacionPage` sólo se enfoque en UI.
+2. `useLiquidacionWorkflow` centraliza la lógica de filtrado, validación de rango, construcción del payload, generación del PDF (via `pdf-lib`) y bloqueo local de días liquidados.
+3. Al confirmar la liquidación, se descarga automáticamente el PDF generado (`generateLiquidacionPdf`) mientras dejamos documentado el envío de correos para activarlo más adelante.
+4. `ClosureDetailPage` utiliza `useClosureDetail` para cargar el snapshot de un cierre, listar ajustes y permitir registrar nuevos, manteniendo la trazabilidad antes de ejecutar la liquidación.
+
 ## Estado Actual & Próximos Pasos
 
 ### Hoy
 - Configuración inicial persiste en Firestore y se reutiliza en el cierre diario.
 - El cierre calcula propinas netas (cocina/garzones) aplicando descuentos y ponderaciones.
-- Se creó el documento `plan-manana.md` con el roadmap inmediato.
+- La pantalla de liquidación bloquea días asentados, genera y descarga automáticamente un PDF con el detalle del período y deja listo el hook para activar correos.
+- Se documentó el flujo completo (hooks, PDF y pasos futuros) y se actualizó `plan-manana.md` con la siguiente iteración.
 
 ### Mañana / Iteración inmediata
-1. Implementar Cloud Function `guardarCierreDiario` para generar snapshots auditables y actualizar totales no liquidados.
-2. Integrar el frontend del cierre con la API real (guardar vs. pagar) y mostrar feedback.
-3. Diseñar/implementar dashboard con “Total No Liquidado” y flujo de “Liquidar Período”.
-4. Versionar configuración utilizada y registrar actividad (timestamps, usuario encargado).
+1. Conectar las Cloud Functions reales (`guardarCierreDiario`, `liquidarPeriodo`) y reemplazar los placeholders actuales.
+2. Extender el flujo de liquidación para enviar correos (cuando se habilite) reutilizando el payload documentado.
+3. Mostrar en el dashboard un indicador de "Total no liquidado" usando los datos retornados por la API.
+4. Agregar pruebas/regresión manual sobre días bloqueados y descarga automática de PDF.
 
 ### Más adelante
 - Añadir notificaciones de éxito/error (Shadcn `sonner`).
