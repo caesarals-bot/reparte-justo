@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react"
 import { useNavigate, useParams } from "react-router"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { doc, getDoc, type Timestamp } from "firebase/firestore"
+import type { Timestamp } from "firebase/firestore"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,17 +22,7 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, Loader2, Users } from "lucide-react"
 
 import { useAuth } from "@/context/AuthContext"
-import { db } from "@/firebase/config"
-import {
-    useClosuresDashboard,
-    type ClosureDocument,
-    type StaffAssignment,
-    type ClosureAdjustment,
-    type ClosureAdjustmentVariant,
-    createClosureAdjustment,
-    fetchClosureAdjustments,
-    mapSnapshotToClosure,
-} from "./hooks/useClosuresDashboard"
+import { buildMemberIdentifier, useClosureDetail } from "./hooks/useClosureDetail"
 
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", minimumFractionDigits: 0 }).format(value)
@@ -53,9 +42,6 @@ const getStatusBadgeVariant = (estado: string) => {
     return "outline" as const
 }
 
-const buildMemberIdentifier = (staffId?: string, name?: string, role?: string | null) =>
-    staffId ?? `${name ?? ""}|${role ?? ""}`
-
 const fieldInputClassName =
     "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
 
@@ -73,358 +59,40 @@ const formatAdjustmentTimestamp = (timestamp?: Timestamp | null) => {
     }
 }
 
+/**
+ * Página de detalle de cierre: consume useClosureDetail para obtener datos y acciones,
+ * manteniendo este componente enfocado en la presentación.
+ */
 const ClosureDetailPage = () => {
     const { closureId } = useParams()
     const navigate = useNavigate()
     const { uid, displayName, email } = useAuth()
-    const { refresh } = useClosuresDashboard({ uid })
-
-    const [closure, setClosure] = useState<ClosureDocument | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
-    const [adjustmentFeedback, setAdjustmentFeedback] = useState<{
-        type: "success" | "error"
-        message: string
-    } | null>(null)
-    const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false)
-    const generalAdjustmentKey = "__general__"
-    const [adjustmentForm, setAdjustmentForm] = useState({
-        staffKey: "",
-        type: "descuento" as "incremento" | "descuento",
-        variant: "monto" as ClosureAdjustmentVariant,
-        amount: "",
-        percentage: "",
-        motivo: "",
-    })
-    const [adjustmentFormError, setAdjustmentFormError] = useState<string | null>(null)
-    const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false)
-
-    const refreshClosureAdjustments = useCallback(async () => {
-        if (!uid || !closureId) {
-            return [] as ClosureAdjustment[]
-        }
-
-        const adjustments = await fetchClosureAdjustments(uid, closureId)
-        setClosure((previous) => (previous ? { ...previous, adjustments } : previous))
-        return adjustments
-    }, [closureId, uid])
-
-    const loadClosure = useCallback(async () => {
-        if (!uid) {
-            setError("Inicia sesión para ver el detalle del cierre.")
-            setIsLoading(false)
-            return
-        }
-
-        if (!closureId) {
-            setError("No se especificó un cierre a consultar.")
-            setIsLoading(false)
-            return
-        }
-
-        try {
-            setIsLoading(true)
-            const reference = doc(db, "restaurants", uid, "registros_diarios", closureId)
-            const snapshot = await getDoc(reference)
-
-            if (!snapshot.exists()) {
-                setError("No encontramos el cierre solicitado. Verifica el historial o intenta con otro registro.")
-                setClosure(null)
-                return
-            }
-
-            const mapped = mapSnapshotToClosure({
-                id: snapshot.id,
-                data: () => (snapshot.data() as Record<string, unknown>) ?? {},
-            })
-
-            const adjustments = await fetchClosureAdjustments(uid, snapshot.id)
-
-            setClosure({ ...mapped, adjustments })
-            setError(null)
-            void refresh()
-        } catch (fetchError) {
-            console.error("Error al obtener el cierre", fetchError)
-            setError("No pudimos cargar el detalle del cierre. Intenta nuevamente en unos segundos.")
-            setClosure(null)
-        } finally {
-            setIsLoading(false)
-        }
-    }, [closureId, refresh, uid])
-
-    useEffect(() => {
-        void loadClosure()
-    }, [loadClosure])
-
-    const handleAdjustmentDialogOpenChange = (open: boolean) => {
-        setIsAdjustmentDialogOpen(open)
-
-        if (!open) {
-            setAdjustmentForm({
-                staffKey: "",
-                type: "descuento",
-                variant: "monto",
-                amount: "",
-                percentage: "",
-                motivo: "",
-            })
-            setAdjustmentFormError(null)
-        }
-    }
-
-    const handleAdjustmentMemberChange = (value: string) => {
-        setAdjustmentForm((previous) => ({ ...previous, staffKey: value }))
-        setAdjustmentFormError(null)
-    }
-
-    const handleAdjustmentTypeChange = (value: "incremento" | "descuento") => {
-        setAdjustmentForm((previous) => ({ ...previous, type: value }))
-        setAdjustmentFormError(null)
-    }
-
-    const handleAdjustmentVariantChange = (value: ClosureAdjustmentVariant) => {
-        setAdjustmentForm((previous) => ({
-            ...previous,
-            variant: value,
-        }))
-        setAdjustmentFormError(null)
-    }
-
-    const handleAdjustmentAmountChange = (event: ChangeEvent<HTMLInputElement>) => {
-        setAdjustmentForm((previous) => ({ ...previous, amount: event.target.value }))
-        setAdjustmentFormError(null)
-    }
-
-    const handleAdjustmentPercentageChange = (event: ChangeEvent<HTMLInputElement>) => {
-        setAdjustmentForm((previous) => ({ ...previous, percentage: event.target.value }))
-        setAdjustmentFormError(null)
-    }
-
-    const handleAdjustmentMotivoChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-        setAdjustmentForm((previous) => ({ ...previous, motivo: event.target.value }))
-    }
-
-    const handleAdjustmentSubmit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault()
-
-        if (!uid || !closureId) {
-            setAdjustmentFormError("Necesitas una sesión activa para registrar ajustes.")
-            return
-        }
-
-        const isPercentageVariant = adjustmentForm.variant === "porcentaje"
-        const amountNumber = isPercentageVariant ? 0 : Number.parseInt(adjustmentForm.amount, 10)
-        const percentageNumber = isPercentageVariant
-            ? Number.parseFloat(adjustmentForm.percentage.replace(",", "."))
-            : undefined
-
-        if (!isPercentageVariant && (!amountNumber || amountNumber <= 0)) {
-            setAdjustmentFormError("Ingresa un monto mayor a 0.")
-            return
-        }
-
-        if (isPercentageVariant) {
-            if (!adjustmentForm.staffKey || adjustmentForm.staffKey === generalAdjustmentKey) {
-                setAdjustmentFormError("Selecciona un integrante específico para ajustar porcentaje.")
-                return
-            }
-
-            if (percentageNumber === undefined || Number.isNaN(percentageNumber)) {
-                setAdjustmentFormError("Ingresa un porcentaje válido.")
-                return
-            }
-
-            if (percentageNumber === 0) {
-                setAdjustmentFormError("El porcentaje debe ser distinto de 0.")
-                return
-            }
-
-            if (percentageNumber < -100 || percentageNumber > 100) {
-                setAdjustmentFormError("El porcentaje debe estar entre -100 y 100.")
-                return
-            }
-        }
-
-        const isGeneralAdjustment = adjustmentForm.staffKey === generalAdjustmentKey
-        const staffData = staffMembers.find((member) => member.identifier === adjustmentForm.staffKey)
-
-        if (!isGeneralAdjustment && !staffData) {
-            setAdjustmentFormError("Selecciona el integrante al que aplicarás el ajuste.")
-            return
-        }
-
-        if (isGeneralAdjustment && isPercentageVariant) {
-            setAdjustmentFormError("Los ajustes porcentuales deben aplicarse a un integrante específico.")
-            return
-        }
-
-        try {
-            setIsSubmittingAdjustment(true)
-            await createClosureAdjustment({
-                restaurantId: uid,
-                closureId,
-                adjustment: {
-                    staffId: staffData?.staffId,
-                    staffName: isGeneralAdjustment ? "Ajuste general" : staffData?.name ?? "Integrante",
-                    amount: amountNumber,
-                    type: adjustmentForm.type,
-                    variant: adjustmentForm.variant,
-                    percentage: isPercentageVariant ? percentageNumber : undefined,
-                    motivo: adjustmentForm.motivo.trim() ? adjustmentForm.motivo.trim() : undefined,
-                    createdBy: displayName ?? email ?? "Usuario",
-                },
-            })
-
-            await refreshClosureAdjustments()
-            setAdjustmentFeedback({
-                type: "success",
-                message: "Ajuste registrado correctamente.",
-            })
-            setAdjustmentForm({
-                staffKey: "",
-                type: "descuento",
-                variant: "monto",
-                amount: "",
-                percentage: "",
-                motivo: "",
-            })
-            setAdjustmentFormError(null)
-            handleAdjustmentDialogOpenChange(false)
-            void refresh()
-        } catch (submitError) {
-            console.error("Error al registrar ajuste", submitError)
-            setAdjustmentFeedback({
-                type: "error",
-                message: "No pudimos registrar el ajuste. Intenta nuevamente en unos segundos.",
-            })
-        } finally {
-            setIsSubmittingAdjustment(false)
-        }
-    }
-
-    const formattedReferenceDate = useMemo(() => {
-        if (!closure?.metadata.referenceDate) {
-            return "Sin fecha definida"
-        }
-
-        const parsed = new Date(closure.metadata.referenceDate)
-
-        if (Number.isNaN(parsed.getTime())) {
-            return "Fecha no válida"
-        }
-
-        return format(parsed, "PPP", { locale: es })
-    }, [closure?.metadata.referenceDate])
-
-    const assignmentSections = useMemo(() => {
-        if (!closure) {
-            return [] as Array<{ key: string; title: string; data: StaffAssignment[] }>
-        }
-
-        return [
-            { key: "servicio", title: "Staff de servicio", data: closure.assignments.servicio },
-            { key: "cocina", title: "Staff de cocina", data: closure.assignments.cocina },
-            { key: "ventaDirecta", title: "Venta directa", data: closure.assignments.ventaDirecta },
-        ].filter((section) => section.data.length)
-    }, [closure])
-
-    const staffMembers = useMemo(() => {
-        if (!closure) {
-            return [] as Array<{
-                identifier: string
-                staffId?: string
-                name: string
-                role?: string | null
-            }>
-        }
-
-        const map = new Map<string, { identifier: string; staffId?: string; name: string; role?: string | null }>()
-        const pushMembers = (members: StaffAssignment[]) => {
-            members.forEach((assignment) => {
-                if (!assignment.present) {
-                    return
-                }
-
-                const identifier = buildMemberIdentifier(assignment.staffId, assignment.nombre, assignment.role)
-
-                if (!map.has(identifier)) {
-                    map.set(identifier, {
-                        identifier,
-                        staffId: assignment.staffId,
-                        name: assignment.nombre,
-                        role: assignment.role,
-                    })
-                }
-            })
-        }
-
-        pushMembers(closure.assignments.servicio)
-        pushMembers(closure.assignments.cocina)
-        pushMembers(closure.assignments.ventaDirecta)
-
-        return Array.from(map.values())
-    }, [closure])
-
-    const adjustmentsByIdentifier = useMemo(() => {
-        const map = new Map<
-            string,
-            { amountTotal: number; percentageTotal: number; items: ClosureAdjustment[] }
-        >()
-
-        closure?.adjustments?.forEach((adjustment) => {
-            const identifier = buildMemberIdentifier(adjustment.staffId, adjustment.staffName)
-            const signedAmount =
-                adjustment.variant === "porcentaje"
-                    ? 0
-                    : adjustment.type === "descuento"
-                      ? -adjustment.amount
-                      : adjustment.amount
-            const signedPercentage =
-                adjustment.variant === "porcentaje"
-                    ? (adjustment.type === "descuento" ? -1 : 1) * (adjustment.percentage ?? 0)
-                    : 0
-
-            if (map.has(identifier)) {
-                const entry = map.get(identifier)!
-                entry.amountTotal += signedAmount
-                entry.percentageTotal += signedPercentage
-                entry.items.push(adjustment)
-            } else {
-                map.set(identifier, {
-                    amountTotal: signedAmount,
-                    percentageTotal: signedPercentage,
-                    items: [adjustment],
-                })
-            }
-        })
-
-        return map
-    }, [closure?.adjustments])
-
-    const totalAdjustments = useMemo(
-        () =>
-            closure?.adjustments?.reduce((accumulator, adjustment) => {
-                if (adjustment.variant === "porcentaje") {
-                    return accumulator
-                }
-
-                const signedAmount = adjustment.type === "descuento" ? -adjustment.amount : adjustment.amount
-                return accumulator + signedAmount
-            }, 0) ?? 0,
-        [closure?.adjustments],
-    )
-
-    const sortedAdjustments = useMemo(() => {
-        if (!closure?.adjustments?.length) {
-            return [] as ClosureAdjustment[]
-        }
-
-        return [...closure.adjustments].sort((a, b) => {
-            const aTime = a.createdAt?.toMillis?.() ?? 0
-            const bTime = b.createdAt?.toMillis?.() ?? 0
-            return bTime - aTime
-        })
-    }, [closure?.adjustments])
+    const {
+        isLoading,
+        error,
+        closure,
+        summaryItems,
+        formattedReferenceDate,
+        assignmentSections,
+        staffMembers,
+        adjustmentsByIdentifier,
+        sortedAdjustments,
+        adjustmentFeedback,
+        generalAdjustmentKey,
+        adjustmentForm,
+        adjustmentFormError,
+        isAdjustmentDialogOpen,
+        isSubmittingAdjustment,
+        handleAdjustmentDialogOpenChange,
+        handleAdjustmentMemberChange,
+        handleAdjustmentTypeChange,
+        handleAdjustmentVariantChange,
+        handleAdjustmentAmountChange,
+        handleAdjustmentPercentageChange,
+        handleAdjustmentMotivoChange,
+        handleAdjustmentSubmit,
+        handleRetry,
+    } = useClosureDetail({ uid, closureId, displayName, email })
 
     if (isLoading) {
         return (
@@ -452,7 +120,7 @@ const ClosureDetailPage = () => {
                         </CardContent>
                     </Card>
                     <div className="flex justify-center">
-                        <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
+                        <Button type="button" variant="secondary" onClick={error ? handleRetry : () => navigate(-1)}>
                             <ArrowLeft className="mr-2 h-4 w-4" /> Volver
                         </Button>
                     </div>
@@ -461,18 +129,7 @@ const ClosureDetailPage = () => {
         )
     }
 
-    const { totals, metadata, estado } = closure
-    const netAfterAdjustments = totals.netAfterDeductions + totalAdjustments
-
-    const summaryItems = [
-        { label: "Propinas brutas", value: totals.propinas, formatter: formatCurrency },
-        { label: "Total neto (snapshot)", value: totals.netAfterDeductions, formatter: formatCurrency },
-        { label: "Ajustes registrados", value: totalAdjustments, formatter: formatSignedCurrency },
-        { label: "Total neto ajustado", value: netAfterAdjustments, formatter: formatCurrency },
-        { label: "Deducciones", value: totals.deductionsAmount, formatter: formatCurrency },
-        { label: "Transbank", value: totals.transbankAmount, formatter: formatCurrency },
-    ]
-
+    const { metadata, estado } = closure
     return (
         <main className="flex min-h-screen items-start justify-center bg-linear-to-b from-background to-muted/30 px-4 py-12">
             <section className="w-full max-w-5xl space-y-8">
@@ -638,7 +295,7 @@ const ClosureDetailPage = () => {
                                         {item.label}
                                     </p>
                                     <p className="mt-2 text-xl font-semibold text-foreground">
-                                        {item.formatter(item.value)}
+                                        {formatCurrency(item.value)}
                                     </p>
                                 </div>
                             ))}
