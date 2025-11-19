@@ -18,6 +18,23 @@ export type ClosureAdjustment = {
     createdBy?: string
 }
 
+const mapRestaurantContact = (value: unknown): RestaurantContact | undefined => {
+    const record = extractRecord(value)
+
+    if (!record) {
+        return undefined
+    }
+
+    const email = typeof record.email === "string" ? record.email : undefined
+    const responsibleName = typeof record.responsibleName === "string" ? record.responsibleName : undefined
+
+    if (!email && !responsibleName) {
+        return undefined
+    }
+
+    return { email, responsibleName }
+}
+
 const toNumber = (value: unknown): number => {
     if (typeof value === "number" && Number.isFinite(value)) {
         return value
@@ -30,6 +47,7 @@ export type StaffAssignment = {
     staffId?: string
     nombre: string
     role?: "garzon" | "cocinero" | "ayudante" | string | null
+    email?: string
     present: boolean
     assignedAmount: number
     penaltyPercentage: number
@@ -51,6 +69,11 @@ export type StaffAssignments = {
     pocilloSecundario: StaffAssignment[]
 }
 
+type RestaurantContact = {
+    email?: string
+    responsibleName?: string
+}
+
 export type ClosureDocument = {
     id: string
     estado: string
@@ -70,6 +93,7 @@ export type ClosureDocument = {
     adjustments: ClosureAdjustment[]
     createdAt?: Timestamp | null
     updatedAt?: Timestamp | null
+    restaurantContact?: RestaurantContact
 }
 
 export type ClosuresSummary = {
@@ -143,6 +167,7 @@ const mapAssignment = (value: unknown): StaffAssignment => {
         staffId: typeof record.staffId === "string" ? record.staffId : undefined,
         nombre: typeof record.nombre === "string" ? record.nombre : "—",
         role: typeof record.role === "string" ? record.role : null,
+        email: typeof record.email === "string" ? record.email : undefined,
         present: Boolean(record.present),
         assignedAmount,
         penaltyPercentage,
@@ -328,6 +353,10 @@ export const mapSnapshotToClosure = (
         extractRecord(data["metadata"]) ?? extractRecord(snapshotRecord?.["metadata"]) ?? {}
     const assignmentsRecord =
         extractRecord(data["assignments"]) ?? extractRecord(snapshotRecord?.["assignments"]) ?? {}
+    const restaurantContact =
+        mapRestaurantContact(data["restaurantContact"]) ??
+        mapRestaurantContact(snapshotRecord?.["restaurantContact"]) ??
+        undefined
 
     const buildAssignments = (key: keyof StaffAssignments): StaffAssignment[] =>
         extractArray(assignmentsRecord?.[key]).map((item) => mapAssignment(item))
@@ -358,6 +387,7 @@ export const mapSnapshotToClosure = (
         adjustments,
         createdAt: (data.createdAt as Timestamp | undefined) ?? null,
         updatedAt: (data.updatedAt as Timestamp | undefined) ?? null,
+        restaurantContact,
     }
 }
 

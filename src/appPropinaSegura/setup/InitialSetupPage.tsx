@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react"
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
     Card,
@@ -10,155 +10,43 @@ import {
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
-import { CalendarIcon, Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { useNavigate } from "react-router"
 import { deleteField, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
 import { useAuth } from "@/context/AuthContext"
 import { db } from "@/firebase/config"
 
-type SettlementMode = "pool" | "directa"
-
-type PoolConfig = {
-    kitchenPercentage: string
-    transbankPercentage: string
-}
-
-type DirectConfig = {
-    directWaiterPercentage: string
-}
-
-type AdditionalDeduction = {
-    id: string
-    name: string
-    percentage: string
-}
-
-type StaffMember = {
-    id: string
-    name: string
-    weight: string
-    email: string
-    role: "garzon" | "cocinero" | "ayudante"
-    startDate?: Date
-}
-
-type StaffFormValues = {
-    name: string
-    weight: string
-    email: string
-    role: "garzon" | "cocinero" | "ayudante"
-    startDate?: Date
-}
-
-type RestaurantFormValues = {
-    restaurantName: string
-}
-
-type StoredStaffMember = {
-    id: string
-    name: string
-    email: string
-    role: "garzon" | "cocinero" | "ayudante"
-    weight: number | string
-    startDate?: string | null
-}
-
-type StoredAdditionalDeduction = {
-    id: string
-    name: string
-    percentage: number | string
-}
-
-type RestaurantConfigurationDocument = {
-    restaurantName?: string
-    location?: string
-    responsibleName?: string
-    settlementMode?: SettlementMode
-    poolConfig?: {
-        kitchenPercentage?: number
-        transbankPercentage?: number
-    }
-    directConfig?: {
-        directWaiterPercentage?: number
-    }
-    additionalDeductions?: StoredAdditionalDeduction[]
-    serviceStaff?: StoredStaffMember[]
-    supportStaff?: StoredStaffMember[]
-}
-
-const parseNumberInput = (value: string) => {
-    const normalizedValue = value.replace(",", ".")
-    const parsed = Number.parseFloat(normalizedValue)
-
-    return Number.isFinite(parsed) ? parsed : 0
-}
-
-const mapStoredStaffMember = (member: StoredStaffMember): StaffMember => ({
-    id: member.id,
-    name: member.name,
-    email: member.email ?? "",
-    role: member.role,
-    weight: typeof member.weight === "number" ? member.weight.toString() : member.weight ?? "0",
-    startDate: member.startDate ? new Date(member.startDate) : undefined,
-})
-
-const mapStaffMemberForStorage = (member: StaffMember): StoredStaffMember => ({
-    id: member.id,
-    name: member.name,
-    email: member.email,
-    role: member.role,
-    weight: parseNumberInput(member.weight),
-    startDate: member.startDate ? member.startDate.toISOString() : null,
-})
-
-const mapAdditionalDeductionForStorage = (
-    deduction: AdditionalDeduction,
-): StoredAdditionalDeduction => ({
-    id: deduction.id,
-    name: deduction.name,
-    percentage: parseNumberInput(deduction.percentage),
-})
-
-const mapStoredAdditionalDeduction = (deduction: StoredAdditionalDeduction): AdditionalDeduction => ({
-    id: deduction.id,
-    name: deduction.name,
-    percentage:
-        typeof deduction.percentage === "number"
-            ? deduction.percentage.toString()
-            : deduction.percentage ?? "",
-})
-
-const defaultPoolConfig: PoolConfig = {
-    kitchenPercentage: "35",
-    transbankPercentage: "5",
-}
-
-const defaultDirectConfig: DirectConfig = {
-    directWaiterPercentage: "70",
-}
-
-const defaultStaffForm: StaffFormValues = {
-    name: "",
-    weight: "1.0",
-    email: "",
-    role: "garzon",
-}
-
-const defaultAdditionalDeductionForm: Omit<AdditionalDeduction, "id"> = {
-    name: "",
-    percentage: "",
-}
-
-const defaultRestaurantForm: RestaurantFormValues = {
-    restaurantName: "",
-}
+import type {
+    SettlementMode,
+    PoolConfig,
+    DirectConfig,
+    AdditionalDeduction,
+    StaffMember,
+    RestaurantFormValues,
+    RestaurantConfigurationDocument,
+} from "./staffTypes.ts"
+import {
+    defaultAdditionalDeductionForm,
+    defaultDirectConfig,
+    defaultPoolConfig,
+    defaultRestaurantForm,
+    isValidEmail,
+    mapAdditionalDeductionForStorage,
+    mapStaffMemberForStorage,
+    mapStoredAdditionalDeduction,
+    mapStoredStaffMember,
+    parseNumberInput,
+} from "./staffUtils.ts"
+import { useStaffForms } from "./hooks/useStaffForms.ts"
+import { useStaffEditors } from "./hooks/useStaffEditors.ts"
+import { StaffPermissionsCard } from "./components/StaffPermissionsCard.tsx"
+import { StaffFormCard, type StaffPopoverId, getStaffCategoryFromRole } from "./components/StaffFormCard.tsx"
 
 const percentageInputClassName =
     "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+const baseInputClass =
+    "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+const MAX_STAFF_EDITORS = 1
 
 const InitialSetupPage = () => {
     const { displayName, email, uid } = useAuth()
@@ -168,16 +56,35 @@ const InitialSetupPage = () => {
     const [additionalDeductions, setAdditionalDeductions] = useState<AdditionalDeduction[]>([])
     const [additionalDeductionForm, setAdditionalDeductionForm] = useState(defaultAdditionalDeductionForm)
     const [directConfig, setDirectConfig] = useState<DirectConfig>(defaultDirectConfig)
-    const [serviceStaffForm, setServiceStaffForm] = useState<StaffFormValues>({ ...defaultStaffForm, role: "garzon" })
-    const [supportStaffForm, setSupportStaffForm] = useState<StaffFormValues>({ ...defaultStaffForm, role: "cocinero" })
     const [serviceStaff, setServiceStaff] = useState<StaffMember[]>([])
     const [supportStaff, setSupportStaff] = useState<StaffMember[]>([])
-    const [activePopover, setActivePopover] = useState<"service" | "support" | null>(null)
+    const [activePopover, setActivePopover] = useState<StaffPopoverId>(null)
     const [responsibleName, setResponsibleName] = useState(() => displayName ?? email ?? "")
     const [restaurantForm, setRestaurantForm] = useState<RestaurantFormValues>(defaultRestaurantForm)
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
     const [hasExistingConfig, setHasExistingConfig] = useState(false)
+    const {
+        staffForm,
+        formattedStartDate,
+        formattedInactiveDate,
+        formatInactiveDateLabel,
+        handleStaffFormChange,
+        resetStaffForm,
+    } = useStaffForms()
+    const normalizedUserEmail = email ? email.toLowerCase() : null
+    const {
+        staffEditors,
+        setStaffEditors,
+        newStaffEditor,
+        staffEditorError,
+        canManageStaffEditors,
+        staffInputsDisabled,
+        reachedStaffEditorsLimit,
+        handleNewStaffEditorChange,
+        handleAddStaffEditor,
+        handleRemoveStaffEditor,
+    } = useStaffEditors({ normalizedUserEmail, maxEditors: MAX_STAFF_EDITORS })
 
     useEffect(() => {
         const authName = displayName ?? email ?? ""
@@ -198,22 +105,6 @@ const InitialSetupPage = () => {
             restaurantName: value,
         }))
     }
-
-    const formattedServiceDate = useMemo(() => {
-        if (!serviceStaffForm.startDate) {
-            return "Seleccionar fecha"
-        }
-
-        return format(serviceStaffForm.startDate, "PPP", { locale: es })
-    }, [serviceStaffForm.startDate])
-
-    const formattedSupportDate = useMemo(() => {
-        if (!supportStaffForm.startDate) {
-            return "Seleccionar fecha"
-        }
-
-        return format(supportStaffForm.startDate, "PPP", { locale: es })
-    }, [supportStaffForm.startDate])
 
     const handleSettlementModeChange = (value: SettlementMode) => {
         setSettlementMode(value)
@@ -254,82 +145,52 @@ const InitialSetupPage = () => {
         setAdditionalDeductions((previousState) => previousState.filter((item) => item.id !== deductionId))
     }
 
-    const handleStaffFormChange = (
-        category: "service" | "support",
-        field: keyof StaffFormValues,
-    ) => (eventOrValue: React.ChangeEvent<HTMLInputElement> | Date | undefined) => {
-        if (field === "startDate") {
-            const selectedDate = eventOrValue as Date | undefined
-
-            if (category === "service") {
-                setServiceStaffForm((previousState) => ({
-                    ...previousState,
-                    startDate: selectedDate,
-                }))
-                return
-            }
-
-            setSupportStaffForm((previousState) => ({
-                ...previousState,
-                startDate: selectedDate,
-            }))
+    const handleAddStaffMember = () => {
+        if (staffInputsDisabled) {
             return
         }
 
-        const event = eventOrValue as React.ChangeEvent<HTMLInputElement>
-        const { value } = event.target
+        const { name, weight, email: memberEmail, role, isActive, inactiveSince, startDate } = staffForm
 
-        if (category === "service") {
-            setServiceStaffForm((previousState) => ({
-                ...previousState,
-                [field]: value,
-            }))
+        if (!name.trim()) {
             return
         }
 
-        setSupportStaffForm((previousState) => ({
-            ...previousState,
-            [field]: value,
-        }))
-    }
+        const sanitizedEmail = memberEmail.trim()
 
-    const resetStaffForm = (category: "service" | "support") => {
-        if (category === "service") {
-            setServiceStaffForm({ ...defaultStaffForm, role: "garzon" })
+        if (sanitizedEmail && !isValidEmail(sanitizedEmail)) {
+            setSaveError("El correo ingresado no parece válido. Corrígelo para continuar.")
             return
         }
 
-        setSupportStaffForm({ ...defaultStaffForm, role: "cocinero" })
-    }
-
-    const handleAddStaffMember = (category: "service" | "support") => {
-        const formValues = category === "service" ? serviceStaffForm : supportStaffForm
-        const { name, weight, email: memberEmail, role } = formValues
-
-        if (!name.trim() || !memberEmail.trim()) {
-            return
-        }
+        const category = getStaffCategoryFromRole(role)
 
         const newMember: StaffMember = {
             id: crypto.randomUUID(),
             name: name.trim(),
             weight: weight.trim(),
-            email: memberEmail.trim(),
+            email: sanitizedEmail,
             role,
-            startDate: formValues.startDate,
+            startDate,
+            isActive,
+            inactiveSince: isActive ? undefined : inactiveSince ?? new Date(),
         }
 
         if (category === "service") {
             setServiceStaff((previousState) => [...previousState, newMember])
-            resetStaffForm("service")
+            resetStaffForm(role)
             return
         }
 
         setSupportStaff((previousState) => [...previousState, newMember])
-        resetStaffForm("support")
+        resetStaffForm(role)
     }
 
     const handleRemoveMember = (category: "service" | "support", memberId: string) => {
+        if (staffInputsDisabled) {
+            return
+        }
+
         if (category === "service") {
             setServiceStaff((previousState) => previousState.filter((member) => member.id !== memberId))
             return
@@ -390,6 +251,7 @@ const InitialSetupPage = () => {
                 )
                 setServiceStaff(data.serviceStaff?.map(mapStoredStaffMember) ?? [])
                 setSupportStaff(data.supportStaff?.map(mapStoredStaffMember) ?? [])
+                setStaffEditors(data.staffEditors ?? [])
                 setSaveError(null)
             } catch (error) {
                 console.error("Error al cargar la configuración del restaurante", error)
@@ -438,6 +300,7 @@ const InitialSetupPage = () => {
                 serviceStaff: serviceStaff.map(mapStaffMemberForStorage),
                 supportStaff: supportStaff.map(mapStaffMemberForStorage),
                 updatedAt: timestamp,
+                staffEditors,
             }
 
             if (!hasExistingConfig) {
@@ -648,6 +511,17 @@ const InitialSetupPage = () => {
                                                     </ul>
                                                 )}
                                             </div>
+                                            <StaffPermissionsCard
+                            staffEditors={staffEditors}
+                            maxStaffEditors={MAX_STAFF_EDITORS}
+                            canManageStaffEditors={canManageStaffEditors}
+                            newStaffEditor={newStaffEditor}
+                            staffEditorError={staffEditorError}
+                            reachedStaffEditorsLimit={reachedStaffEditorsLimit}
+                            onNewEditorChange={handleNewStaffEditorChange}
+                            onAddEditor={handleAddStaffEditor}
+                            onRemoveEditor={handleRemoveStaffEditor}
+                        />
                                         </div>
                                     </div>
                                 ) : null}
@@ -656,273 +530,22 @@ const InitialSetupPage = () => {
                     </TabsContent>
 
                     <TabsContent value="personal" className="mt-6">
-                        <div className="grid gap-6 lg:grid-cols-2">
-                            <Card className="border bg-background/95 shadow-sm">
-                                <CardHeader>
-                                    <CardTitle>Gestionar Staff de Servicio</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    <div className="space-y-3">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="service-name">Nombre</Label>
-                                            <input
-                                                id="service-name"
-                                                type="text"
-                                                value={serviceStaffForm.name}
-                                                onChange={handleStaffFormChange("service", "name")}
-                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                                tabIndex={0}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="service-email">Correo electrónico</Label>
-                                            <input
-                                                id="service-email"
-                                                type="email"
-                                                value={serviceStaffForm.email}
-                                                onChange={handleStaffFormChange("service", "email")}
-                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                                placeholder="correo@ejemplo.com"
-                                                tabIndex={0}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="service-weight">
-                                                {settlementMode === "pool"
-                                                    ? "Ponderación (ej. 1.0, 0.75, 0.5)"
-                                                    : "Porcentaje de venta (%)"}
-                                            </Label>
-                                            <input
-                                                id="service-weight"
-                                                type="number"
-                                                step="0.25"
-                                                value={serviceStaffForm.weight}
-                                                onChange={handleStaffFormChange("service", "weight")}
-                                                className={percentageInputClassName}
-                                                tabIndex={0}
-                                                min={settlementMode === "pool" ? 0 : 0}
-                                                max={settlementMode === "pool" ? 5 : 100}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="service-role">Rol</Label>
-                                            <select
-                                                id="service-role"
-                                                value={serviceStaffForm.role}
-                                                onChange={handleStaffFormChange("service", "role") as unknown as React.ChangeEventHandler<HTMLSelectElement>}
-                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                            >
-                                                <option value="garzon">Garzón</option>
-                                                <option value="ayudante">Ayudante</option>
-                                                <option value="cocinero">Cocinero</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Fecha de Ingreso</Label>
-                                            <Popover
-                                                open={activePopover === "service"}
-                                                onOpenChange={(open) => setActivePopover(open ? "service" : null)}
-                                            >
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        className="flex w-full items-center justify-start gap-2 px-3"
-                                                    >
-                                                        <CalendarIcon className="h-4 w-4" />
-                                                        <span>{formattedServiceDate}</span>
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="p-2" align="start">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={serviceStaffForm.startDate}
-                                                        onSelect={handleStaffFormChange("service", "startDate")}
-                                                        initialFocus
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            onClick={() => handleAddStaffMember("service")}
-                                            className="w-full"
-                                            tabIndex={0}
-                                        >
-                                            Añadir Garzón
-                                        </Button>
-                                    </div>
-
-                                    <div className="overflow-hidden rounded-lg border">
-                                        <table className="w-full min-w-full divide-y divide-border text-left text-sm">
-                                            <thead className="bg-muted/50">
-                                                <tr>
-                                                    <th scope="col" className="px-4 py-3 font-semibold">Nombre</th>
-                                                    <th scope="col" className="px-4 py-3 font-semibold">Ponderación</th>
-                                                    <th scope="col" className="px-4 py-3 font-semibold">Acciones</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-border">
-                                                {serviceStaff.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
-                                                            Aún no has añadido garzones.
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    serviceStaff.map((member) => (
-                                                        <tr key={member.id}>
-                                                            <td className="px-4 py-3">{member.name}</td>
-                                                            <td className="px-4 py-3">{member.weight}</td>
-                                                            <td className="px-4 py-3">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleRemoveMember("service", member.id)}
-                                                                    aria-label={`Eliminar ${member.name}`}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </td>
-                                                        </tr>
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="border bg-background/95 shadow-sm">
-                                <CardHeader>
-                                    <CardTitle>Gestionar Otro Staff (Cocina/Bar)</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    <div className="space-y-3">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="support-name">Nombre</Label>
-                                            <input
-                                                id="support-name"
-                                                type="text"
-                                                value={supportStaffForm.name}
-                                                onChange={handleStaffFormChange("support", "name")}
-                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                                tabIndex={0}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="support-email">Correo electrónico</Label>
-                                            <input
-                                                id="support-email"
-                                                type="email"
-                                                value={supportStaffForm.email}
-                                                onChange={handleStaffFormChange("support", "email")}
-                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                                placeholder="correo@ejemplo.com"
-                                                tabIndex={0}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="support-weight">Ponderación (ej. 1.0, 0.75, 0.5)</Label>
-                                            <input
-                                                id="support-weight"
-                                                type="number"
-                                                step="0.25"
-                                                value={supportStaffForm.weight}
-                                                onChange={handleStaffFormChange("support", "weight")}
-                                                className={percentageInputClassName}
-                                                tabIndex={0}
-                                                min={0}
-                                                max={5}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="support-role">Rol</Label>
-                                            <select
-                                                id="support-role"
-                                                value={supportStaffForm.role}
-                                                onChange={handleStaffFormChange("support", "role") as unknown as React.ChangeEventHandler<HTMLSelectElement>}
-                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                            >
-                                                <option value="cocinero">Cocinero</option>
-                                                <option value="garzon">Garzón</option>
-                                                <option value="ayudante">Ayudante</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Fecha de Ingreso</Label>
-                                            <Popover
-                                                open={activePopover === "support"}
-                                                onOpenChange={(open) => setActivePopover(open ? "support" : null)}
-                                            >
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        className="flex w-full items-center justify-start gap-2 px-3"
-                                                    >
-                                                        <CalendarIcon className="h-4 w-4" />
-                                                        <span>{formattedSupportDate}</span>
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="p-2" align="start">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={supportStaffForm.startDate}
-                                                        onSelect={handleStaffFormChange("support", "startDate")}
-                                                        initialFocus
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            onClick={() => handleAddStaffMember("support")}
-                                            className="w-full"
-                                            tabIndex={0}
-                                        >
-                                            Añadir Staff
-                                        </Button>
-                                    </div>
-
-                                    <div className="overflow-hidden rounded-lg border">
-                                        <table className="w-full min-w-full divide-y divide-border text-left text-sm">
-                                            <thead className="bg-muted/50">
-                                                <tr>
-                                                    <th scope="col" className="px-4 py-3 font-semibold">Nombre</th>
-                                                    <th scope="col" className="px-4 py-3 font-semibold">Ponderación</th>
-                                                    <th scope="col" className="px-4 py-3 font-semibold">Acciones</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-border">
-                                                {supportStaff.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
-                                                            Aún no has añadido staff de apoyo.
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    supportStaff.map((member) => (
-                                                        <tr key={member.id}>
-                                                            <td className="px-4 py-3">{member.name}</td>
-                                                            <td className="px-4 py-3">{member.weight}</td>
-                                                            <td className="px-4 py-3">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleRemoveMember("support", member.id)}
-                                                                    aria-label={`Eliminar ${member.name}`}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </td>
-                                                        </tr>
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
+                        <StaffFormCard
+                            settlementMode={settlementMode}
+                            formValues={staffForm}
+                            formattedStartDate={formattedStartDate}
+                            formattedInactiveDate={formattedInactiveDate}
+                            activePopover={activePopover}
+                            onActivePopoverChange={setActivePopover}
+                            onFieldChange={handleStaffFormChange}
+                            onAddMember={handleAddStaffMember}
+                            serviceStaff={serviceStaff}
+                            supportStaff={supportStaff}
+                            onRemoveMember={handleRemoveMember}
+                            staffInputsDisabled={staffInputsDisabled}
+                            baseInputClassName={baseInputClass}
+                            formatInactiveDateLabel={formatInactiveDateLabel}
+                        />
                     </TabsContent>
                 </Tabs>
 

@@ -33,14 +33,18 @@ src/
  ├─ appPropinaSegura/
  │   ├─ cierre/               # página de Cierre Diario
  │   ├─ component/navbar/     # NavBar y Footer
- │   ├─ features/
- │   ├─ hero/
- │   ├─ home/
- │   └─ setup/                # Configuración inicial
- ├─ auth/                     # Login y Register
- ├─ components/ui/            # Shadcn/UI
- ├─ router/                   # Definición de rutas
+ │   ├─ dashboard/            # Liquidación y detalle de cierres
+ │   └─ setup/                # Configuración inicial y staff
+ ├─ auth/, components/, router/, context/ …
  └─ main.tsx, index.css
+
+functions/
+ ├─ src/
+ │   ├─ index.ts              # Registro de Cloud Functions (https.onRequest)
+ │   ├─ config/firebaseAdmin.ts # Inicialización compartida del Admin SDK
+ │   └─ handlers/guardarCierreDiario.ts # Stub inicial del handler
+ ├─ package.json, tsconfig.json
+ └─ firebase.json (fuente = lib)
 ```
 
 ## Primeros Pasos
@@ -70,6 +74,11 @@ VITE_FIREBASE_APP_ID=...
 - `npm run dev`: inicia el servidor de desarrollo con HMR.
 - `npm run build`: compila a producción usando `tsc` y `vite build`.
 - `npm run preview`: sirve la versión compilada.
+- **Backend (`functions/`):**
+  - `npm install` (una sola vez) dentro de `functions/`.
+  - `npm run build`: compila las funciones a `lib/`.
+  - `npm run emulate`: compila y levanta los emuladores de Firebase Functions.
+  - `npm run deploy`: compila y despliega solo las Cloud Functions (`firebase deploy --only functions`).
 
 ## Guía de Desarrollo
 - **Estilos**: usar clases de Tailwind. Evitar CSS plano salvo casos muy específicos.

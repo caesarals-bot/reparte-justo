@@ -24,6 +24,7 @@ export type StaffAssignmentSnapshot = {
     staffId: string
     nombre: string
     role?: "garzon" | "cocinero" | "ayudante"
+    email?: string
     present: boolean
     assignedAmount: number
     penaltyPercentage: number
@@ -37,6 +38,26 @@ export type StaffAssignmentsSnapshot = {
     cocina: StaffAssignmentSnapshot[]
     ventaDirecta: StaffAssignmentSnapshot[]
     pocilloSecundario: StaffAssignmentSnapshot[]
+}
+
+export type PenaltyEntry = {
+    staffId?: string
+    nombre: string
+    role?: string | null
+    referenceDate: string | null
+    percentage: number
+    amount: number
+}
+
+export type AdjustmentEntry = {
+    id: string
+    staffId?: string
+    staffName?: string
+    variant: "monto" | "porcentaje"
+    type: "incremento" | "descuento"
+    amount?: number
+    percentage?: number
+    motivo?: string
 }
 
 export type ClosureSnapshotPayload = {
@@ -70,6 +91,21 @@ export type ClosureSnapshotPayload = {
         referenceDateKey: string | null
         daysWithoutSettlement: number
     }
+    penalties: PenaltyEntry[]
+    adjustments: AdjustmentEntry[]
+    dailySummary: {
+        netAfterDeductions: number
+        propinas: number
+        transbankAmount: number
+        deductionsAmount: number
+    }
+    restaurantContact?: {
+        email?: string
+        responsibleName?: string
+    }
+    configurationSnapshot?: ConfigurationVersionSnapshot
+    submittedBy?: SubmittedBySnapshot
+    submittedAt?: string
 }
 
 type StoredStaffMember = {
@@ -80,6 +116,8 @@ type StoredStaffMember = {
     weight?: number | string
     entryDate?: string | Date | { toDate: () => Date }
     startDate?: string | Date | { toDate: () => Date }
+    isActive?: boolean
+    inactiveSince?: string | Date | { toDate: () => Date }
 }
 
 type RestaurantConfigurationSnapshot = {
@@ -91,10 +129,48 @@ type RestaurantConfigurationSnapshot = {
         transbankPercentage?: number
     }
     additionalDeductions?: { percentage?: number }[]
+    responsibleName?: string
+    contactEmail?: string
+}
+
+type VersionedStaffMemberSnapshot = {
+    id: string
+    name: string
+    role?: "garzon" | "cocinero" | "ayudante" | string
+    weight?: number | string
+    email?: string
+    isActive?: boolean
+    entryDate?: string
+    inactiveSince?: string
+}
+
+type SubmittedBySnapshot = {
+    uid?: string
+    name?: string
+    email?: string
+}
+
+type ConfigurationVersionSnapshot = {
+    settlementMode?: "pool" | "directa" | null
+    poolPercentages: {
+        kitchen: number
+        transbank: number
+    }
+    additionalDeductions: number[]
+    serviceStaff: VersionedStaffMemberSnapshot[]
+    supportStaff: VersionedStaffMemberSnapshot[]
+    contact?: {
+        email?: string
+        responsibleName?: string
+    }
 }
 
 type UseCierreDiarioArgs = {
     uid?: string | null
+    userInfo?: {
+        name?: string | null
+        email?: string | null
+    }
 }
 
 type UseCierreDiarioFieldArrays = {
@@ -180,6 +256,7 @@ const parseWeightValue = (value?: string) => {
 
 const mapStaffMemberToEntry = (member: StoredStaffMember): StaffEntry => {
     const normalizedEntryDate = normalizeEntryDate(member.entryDate ?? member.startDate)
+    const normalizedInactiveDate = normalizeEntryDate(member.inactiveSince)
     const ponderacion = formatWeight(member.weight)
 
     const entry: StaffEntry = {
@@ -206,6 +283,14 @@ const mapStaffMemberToEntry = (member: StoredStaffMember): StaffEntry => {
         entry.fechaIngreso = normalizedEntryDate.toISOString()
     }
 
+    if (typeof member.isActive === "boolean") {
+        entry.isActive = member.isActive
+    }
+
+    if (normalizedInactiveDate) {
+        entry.inactiveSince = normalizedInactiveDate.toISOString()
+    }
+
     return entry
 }
 
@@ -215,6 +300,24 @@ const mapStaffMemberToDirectEntry = (member: StoredStaffMember): StaffEntry => (
     porcentajeVenta: 0,
     totalVenta: 0,
 })
+
+const mapStaffMemberForConfigurationSnapshot = (
+    member: StoredStaffMember,
+): VersionedStaffMemberSnapshot => {
+    const entryDate = normalizeEntryDate(member.entryDate ?? member.startDate)
+    const inactiveSince = normalizeEntryDate(member.inactiveSince)
+
+    return {
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        weight: member.weight,
+        email: member.email,
+        isActive: member.isActive,
+        entryDate: entryDate ? entryDate.toISOString() : undefined,
+        inactiveSince: inactiveSince ? inactiveSince.toISOString() : undefined,
+    }
+}
 
 const sanitizePercentageValue = (value: unknown) => {
     if (typeof value === "number") {
@@ -250,7 +353,7 @@ const normalizeEntryDate = (value: StoredStaffMember["entryDate"]) => {
     return undefined
 }
 
-export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioResult => {
+export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCierreDiarioResult => {
     const [poolDate, setPoolDate] = useState<Date | undefined>(new Date())
     const [directDate, setDirectDate] = useState<Date | undefined>(new Date())
     const [isLoadingConfig, setIsLoadingConfig] = useState(true)
@@ -268,6 +371,7 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
         mode: "pool" | "directa"
     } | null>(null)
     const [ineligibleStaffNames, setIneligibleStaffNames] = useState<string[]>([])
+    const [restaurantContact, setRestaurantContact] = useState<{ email?: string; responsibleName?: string }>({})
 
     const formMethods = useForm<CierreFormValues>({
         resolver: zodResolver(cierreSchema),
@@ -478,6 +582,10 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
                 setPoolPercentages({ kitchen: kitchenPercentage, transbank: transbankPercentage })
                 setAdditionalDeductionPercents(deductions)
                 setSettlementModeConfig(mode)
+                setRestaurantContact({
+                    email: typeof data.contactEmail === "string" ? data.contactEmail : undefined,
+                    responsibleName: typeof data.responsibleName === "string" ? data.responsibleName : undefined,
+                })
                 setLoadError(null)
             } catch (error) {
                 console.error("Error al cargar la configuración del cierre", error)
@@ -486,6 +594,7 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
                 setPoolPercentages({ kitchen: 0, transbank: 0 })
                 setAdditionalDeductionPercents([])
                 reset(defaultCierreValues)
+                setRestaurantContact({})
             } finally {
                 setIsLoadingConfig(false)
             }
@@ -511,6 +620,13 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
     }, [directDate])
 
     const buildClosureSnapshotPayload = useCallback((): ClosureSnapshotPayload => {
+        const submittedAt = new Date().toISOString()
+        const submittedBy: SubmittedBySnapshot = {
+            uid: uid ?? undefined,
+            name: userInfo?.name ?? undefined,
+            email: userInfo?.email ?? undefined,
+        }
+
         const buildAssignmentSnapshot = (
             entries: StaffEntry[],
             assignedAmounts: number[],
@@ -526,6 +642,7 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
                     staffId: entry.id,
                     nombre: entry.nombre,
                     role: entry.role,
+                    email: entry.email,
                     present: entry.presente !== false,
                     assignedAmount,
                     penaltyPercentage,
@@ -534,6 +651,55 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
                     netAmount,
                 }
             })
+
+        const referenceDateIso = referenceDate?.toISOString() ?? null
+
+        const buildPenaltyEntries = (assignmentsSnapshot: StaffAssignmentsSnapshot): PenaltyEntry[] => {
+            const pools = [
+                ...assignmentsSnapshot.servicio,
+                ...assignmentsSnapshot.cocina,
+                ...assignmentsSnapshot.ventaDirecta,
+                ...assignmentsSnapshot.pocilloSecundario,
+            ]
+
+            return pools
+                .filter((assignment) => assignment.present && assignment.penaltyAmount > 0)
+                .map((assignment) => ({
+                    staffId: assignment.staffId,
+                    nombre: assignment.nombre,
+                    role: assignment.role,
+                    referenceDate: referenceDateIso,
+                    percentage: assignment.penaltyPercentage,
+                    amount: assignment.penaltyAmount,
+                }))
+        }
+
+        const assignmentsSnapshot = {
+            servicio: buildAssignmentSnapshot(asistenciaServicioValues, serviceAssignedAmounts),
+            cocina: buildAssignmentSnapshot(asistenciaCocinaValues, supportAssignedAmounts),
+            ventaDirecta: buildAssignmentSnapshot(ventaDirectaValues, directAssignedAmounts),
+            pocilloSecundario: buildAssignmentSnapshot(pocilloSecundarioValues, supportAssignedAmounts),
+        }
+
+        const penalties = buildPenaltyEntries(assignmentsSnapshot)
+
+        const configurationSnapshot: ConfigurationVersionSnapshot = {
+            settlementMode: settlementModeConfig,
+            poolPercentages: {
+                kitchen: poolPercentages.kitchen,
+                transbank: poolPercentages.transbank,
+            },
+            additionalDeductions: additionalDeductionPercents,
+            serviceStaff: (initialStaffConfig?.serviceStaff ?? []).map(mapStaffMemberForConfigurationSnapshot),
+            supportStaff: (initialStaffConfig?.supportStaff ?? []).map(mapStaffMemberForConfigurationSnapshot),
+            contact:
+                restaurantContact && (restaurantContact.email || restaurantContact.responsibleName)
+                    ? {
+                          email: restaurantContact.email,
+                          responsibleName: restaurantContact.responsibleName,
+                      }
+                    : undefined,
+        }
 
         return {
             mode: settlementModeConfig,
@@ -560,17 +726,24 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
                 ventaDirecta: ventaDirectaValues,
                 pocilloSecundario: pocilloSecundarioValues,
             },
-            assignments: {
-                servicio: buildAssignmentSnapshot(asistenciaServicioValues, serviceAssignedAmounts),
-                cocina: buildAssignmentSnapshot(asistenciaCocinaValues, supportAssignedAmounts),
-                ventaDirecta: buildAssignmentSnapshot(ventaDirectaValues, directAssignedAmounts),
-                pocilloSecundario: buildAssignmentSnapshot(pocilloSecundarioValues, supportAssignedAmounts),
-            },
+            assignments: assignmentsSnapshot,
             metadata: {
-                referenceDate: referenceDate?.toISOString() ?? null,
+                referenceDate: referenceDateIso,
                 referenceDateKey: referenceDate ? format(referenceDate, "yyyy-MM-dd") : null,
                 daysWithoutSettlement,
             },
+            penalties,
+            adjustments: [],
+            dailySummary: {
+                netAfterDeductions,
+                propinas: totalPropinasGeneradas,
+                transbankAmount,
+                deductionsAmount,
+            },
+            restaurantContact,
+            configurationSnapshot,
+            submittedBy,
+            submittedAt,
         }
     }, [
         additionalDeductionPercents,
@@ -594,6 +767,13 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
         serviceAssignedAmounts,
         supportAssignedAmounts,
         directAssignedAmounts,
+        restaurantContact,
+        poolPercentages.kitchen,
+        poolPercentages.transbank,
+        initialStaffConfig,
+        uid,
+        userInfo?.name,
+        userInfo?.email,
     ])
 
     const resetAfterSave = useCallback(() => {
@@ -626,8 +806,14 @@ export const useCierreDiario = ({ uid }: UseCierreDiarioArgs): UseCierreDiarioRe
         const evaluateEntries = (entries: StaffEntry[], fieldName: keyof CierreFormValues) => {
             entries.forEach((entry, index) => {
                 const parsedEntryDate = entry.fechaIngreso ? startOfDay(new Date(entry.fechaIngreso)) : null
+                const parsedInactiveDate = entry.inactiveSince ? startOfDay(new Date(entry.inactiveSince)) : null
+                const explicitlyInactive = entry.isActive === false
 
-                if (parsedEntryDate && differenceInCalendarDays(referenceDay, parsedEntryDate) < 0) {
+                const startsAfterReference = parsedEntryDate && differenceInCalendarDays(referenceDay, parsedEntryDate) < 0
+                const inactiveBeforeReference =
+                    parsedInactiveDate && differenceInCalendarDays(referenceDay, parsedInactiveDate) >= 0
+
+                if (startsAfterReference || inactiveBeforeReference || explicitlyInactive) {
                     updatedIneligible.add(entry.nombre)
 
                     if (entry.presente !== false) {

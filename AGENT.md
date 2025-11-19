@@ -31,3 +31,7 @@ Follow these rules when you write code:
 - Use descriptive variable and function/const names. Also, event functions should be named with a “handle” prefix, like “handleClick” for onClick and “handleKeyDown” for onKeyDown.
 - Implement accessibility features on elements. For example, a tag should have a tabindex=“0”, aria-label, on:click, and on:keydown, and similar attributes.
 - Use consts instead of functions, for example, “const toggle = () =>”. Also, define a type if possible.
+- Antes de implementar una nueva funcionalidad, revisa `docs/reusable-functions.md` para confirmar si ya existe un hook o helper reutilizable. Extiende esos bloques en lugar de duplicar lógica.
+
+### Accesos y roles
+- Solo los encargados autorizados (máximo dos personas designadas) pueden editar datos sensibles del staff (correos, estado activo, permisos). Cualquier cambio que permita editar ese contenido debe respetar que únicamente ellos puedan habilitar o revocar permisos de edición al resto del equipo; los demás roles tienen acceso de solo lectura.

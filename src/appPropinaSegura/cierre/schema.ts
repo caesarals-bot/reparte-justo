@@ -13,6 +13,8 @@ export const staffEntrySchema = z.object({
     email: z.string().email().optional(),
     role: z.enum(["garzon", "cocinero", "ayudante"]).optional(),
     fechaIngreso: z.string().optional(),
+    isActive: z.boolean().optional(),
+    inactiveSince: z.string().optional(),
 })
 
 export const cierreSchema = z

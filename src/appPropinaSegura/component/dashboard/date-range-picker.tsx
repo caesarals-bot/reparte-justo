@@ -11,9 +11,11 @@ import { es } from "date-fns/locale"
 type DateRangePickerProps = {
   dateRange: { from: Date | undefined; to: Date | undefined }
   setDateRange: (range: { from: Date | undefined; to: Date | undefined }) => void
+  highlightedDates?: Date[]
+  settledDates?: Date[]
 }
 
-export function DateRangePicker({ dateRange, setDateRange }: DateRangePickerProps) {
+export function DateRangePicker({ dateRange, setDateRange, highlightedDates, settledDates }: DateRangePickerProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -45,6 +47,17 @@ export function DateRangePicker({ dateRange, setDateRange }: DateRangePickerProp
           onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
           numberOfMonths={2}
           locale={es}
+          modifiers={{
+            pendingClosure: highlightedDates ?? [],
+            settledClosure: settledDates ?? [],
+          }}
+          disabled={settledDates ?? []}
+          modifiersClassNames={{
+            pendingClosure:
+              "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 data-[selected]:bg-emerald-600 data-[selected]:text-emerald-50",
+            settledClosure:
+              "bg-muted-foreground/20 text-muted-foreground/70 pointer-events-none line-through",
+          }}
         />
       </PopoverContent>
     </Popover>

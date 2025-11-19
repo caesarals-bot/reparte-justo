@@ -295,6 +295,7 @@ const DashboardPage = () => {
                 totalRepartido: closure.totals.netAfterDeductions,
                 totalDescuentos: closure.totals.deductionsAmount,
                 link: `/dashboard/closures/${closure.id}`,
+                status: closure.estado,
             })),
         [historicalClosures],
     )

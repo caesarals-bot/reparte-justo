@@ -22,6 +22,7 @@ export type DashboardSettlement = {
   totalRepartido: number
   totalDescuentos: number
   link?: string
+  status?: string
 }
 
 export const mockDashboardRestaurantName = "Restaurante La Transparencia"

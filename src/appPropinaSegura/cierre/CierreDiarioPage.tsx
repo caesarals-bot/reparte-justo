@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { FormProvider } from "react-hook-form"
 import { Card, CardContent } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
@@ -12,11 +12,20 @@ import { amountInputClassName } from "./constants"
 import { useAuth } from "@/context/AuthContext"
 import { useNavigate } from "react-router"
 import { useCierreDiario } from "./hooks/useCierreDiario"
-import { db } from "@/firebase/config"
-import { addDoc, collection, getDocs, limit, query, serverTimestamp, where } from "firebase/firestore"
+import { useClosuresDashboard } from "@/appPropinaSegura/dashboard/hooks/useClosuresDashboard"
+import { buildClosureHighlights } from "@/appPropinaSegura/dashboard/utils/closureCalculations"
+import { guardarCierreDiario, type GuardarCierreDiarioResponse } from "./services/closuresApi"
+
+const calendarModifiersClassNames = {
+    pendingClosure:
+        "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 data-[selected]:bg-emerald-600 data-[selected]:text-emerald-50",
+    settledClosure:
+        "bg-muted text-foreground/70 hover:bg-muted data-[selected]:bg-muted data-[selected]:text-foreground",
+    latestClosure: "ring-2 ring-primary ring-offset-1",
+}
 
 const CierreDiarioPage = () => {
-    const { uid } = useAuth()
+    const { uid, displayName, email } = useAuth()
     const navigate = useNavigate()
     const {
         formMethods,
@@ -47,10 +56,40 @@ const CierreDiarioPage = () => {
         setSaveSuccessMessage,
         resetAfterSave,
         ineligibleStaffNames,
-    } = useCierreDiario({ uid })
+    } = useCierreDiario({
+        uid,
+        userInfo: {
+            name: displayName ?? undefined,
+            email: email ?? undefined,
+        },
+    })
 
     const { asistenciaServicio, asistenciaCocina, ventaDirecta, pocilloSecundario } = fieldArrays
+    const { closures, refresh: refreshClosures } = useClosuresDashboard({ uid })
     const [hasSavedPendingClosure, setHasSavedPendingClosure] = useState(false)
+    const [lastSavedResponse, setLastSavedResponse] = useState<GuardarCierreDiarioResponse | null>(null)
+
+    const highlightData = useMemo(() => buildClosureHighlights(closures), [closures])
+
+    const disabledDates = useMemo(() => {
+        if (!highlightData.pendingDates.length && !highlightData.settledDates.length) {
+            return [] as Date[]
+        }
+
+        const map = new Map<number, Date>()
+        highlightData.pendingDates.forEach((date) => map.set(date.getTime(), date))
+        highlightData.settledDates.forEach((date) => map.set(date.getTime(), date))
+        return Array.from(map.values())
+    }, [highlightData.pendingDates, highlightData.settledDates])
+
+    const calendarModifiers = useMemo(
+        () => ({
+            pendingClosure: highlightData.pendingDates,
+            settledClosure: highlightData.settledDates,
+            latestClosure: highlightData.latestDates,
+        }),
+        [highlightData],
+    )
 
     useEffect(() => {
         if (!formMethods.formState.isDirty) {
@@ -58,6 +97,7 @@ const CierreDiarioPage = () => {
         }
 
         setHasSavedPendingClosure(false)
+        setLastSavedResponse(null)
         setSaveSuccessMessage(null)
     }, [formMethods.formState.isDirty, setSaveSuccessMessage])
 
@@ -68,6 +108,7 @@ const CierreDiarioPage = () => {
 
         setSaveError(null)
         setSaveSuccessMessage(null)
+        setLastSavedResponse(null)
 
         if (!uid) {
             setSaveError("No se encontró una sesión activa. Inicia sesión para guardar el cierre.")
@@ -77,65 +118,23 @@ const CierreDiarioPage = () => {
         try {
             setIsSavingClosure(true)
             const snapshotPayload = buildClosureSnapshotPayload()
-            const closureCollection = collection(db, "restaurants", uid, "registros_diarios")
 
-            const referenceDateKey = snapshotPayload.metadata.referenceDateKey
-
-            if (!referenceDateKey) {
+            if (!snapshotPayload.metadata.referenceDateKey) {
                 setSaveError("Selecciona una fecha válida antes de guardar el cierre.")
                 setIsSavingClosure(false)
                 return
             }
 
-            const duplicateQuery = query(
-                closureCollection,
-                where("metadata.referenceDateKey", "==", referenceDateKey),
-                limit(1),
-            )
+            const response = await guardarCierreDiario({ restaurantId: uid, payload: snapshotPayload })
+            await refreshClosures()
 
-            const existingSnapshot = await getDocs(duplicateQuery)
-
-            if (!existingSnapshot.empty) {
-                setSaveError("Esa fecha ya tiene un cierre guardado. Usa la vista de historial para editarlo.")
-                setSaveSuccessMessage(null)
-                setHasSavedPendingClosure(false)
-                setIsSavingClosure(false)
-                return
-            }
-
-            const legacyDuplicateQuery = query(
-                closureCollection,
-                where("snapshot.metadata.referenceDateKey", "==", referenceDateKey),
-                limit(1),
-            )
-
-            const existingLegacySnapshot = await getDocs(legacyDuplicateQuery)
-
-            if (!existingLegacySnapshot.empty) {
-                setSaveError("Esa fecha ya tiene un cierre guardado. Usa la vista de historial para editarlo.")
-                setSaveSuccessMessage(null)
-                setHasSavedPendingClosure(false)
-                setIsSavingClosure(false)
-                return
-            }
-
-            await addDoc(closureCollection, {
-                estado: "pendiente",
-                snapshot: snapshotPayload,
-                restaurantId: uid,
-                metadata: snapshotPayload.metadata,
-                totals: snapshotPayload.totals,
-                // createdAt es la fecha/hora del registro; metadata.referenceDateKey corresponde al día de la propina.
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            })
-
-            setSaveSuccessMessage("Cierre guardado como pendiente. Podrás liquidarlo cuando el backend esté listo.")
+            setLastSavedResponse(response)
+            setSaveSuccessMessage(`Cierre ${response.closureId} guardado correctamente. Ya aparece como pendiente.`)
             setHasSavedPendingClosure(true)
             resetAfterSave()
         } catch (error) {
             console.error("Error al guardar el cierre", error)
-            setSaveError("No pudimos guardar el cierre. Intenta nuevamente en unos segundos.")
+            setSaveError(error instanceof Error ? error.message : "No pudimos guardar el cierre. Intenta nuevamente en unos segundos.")
         } finally {
             setIsSavingClosure(false)
         }
@@ -240,6 +239,49 @@ const CierreDiarioPage = () => {
                         </div>
                     ) : null}
 
+                    {lastSavedResponse ? (
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="font-semibold">Resumen del cierre enviado</p>
+                                <span className="text-xs text-emerald-700">ID: {lastSavedResponse.closureId}</span>
+                            </div>
+                            <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <div>
+                                    <dt className="text-[11px] uppercase text-emerald-700">Total neto del día</dt>
+                                    <dd className="text-base font-semibold">
+                                        ${lastSavedResponse.totals.netAfterDeductions.toLocaleString("es-CL")}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-[11px] uppercase text-emerald-700">Transbank</dt>
+                                    <dd className="text-base font-semibold">
+                                        ${lastSavedResponse.totals.transbankAmount.toLocaleString("es-CL")}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-[11px] uppercase text-emerald-700">Deducciones</dt>
+                                    <dd className="text-base font-semibold">
+                                        ${lastSavedResponse.totals.deductionsAmount.toLocaleString("es-CL")}
+                                    </dd>
+                                </div>
+                                {lastSavedResponse.pendingTotals ? (
+                                    <div>
+                                        <dt className="text-[11px] uppercase text-emerald-700">Total no liquidado (acumulado)</dt>
+                                        <dd className="text-base font-semibold">
+                                            ${lastSavedResponse.pendingTotals.netAfterDeductions.toLocaleString("es-CL")}
+                                        </dd>
+                                        <p className="text-[11px] text-emerald-800">
+                                            Pendientes: {lastSavedResponse.pendingTotals.pendingCount}
+                                        </p>
+                                    </div>
+                                ) : null}
+                            </dl>
+                            <p className="mt-2 text-xs text-emerald-800">
+                                El calendario ya marca este día como pendiente; avanza al dashboard para liquidarlo cuando corresponda.
+                            </p>
+                        </div>
+                    ) : null}
+
                     {hasIneligibleStaff ? (
                         <div
                             role="status"
@@ -289,8 +331,21 @@ const CierreDiarioPage = () => {
                                                         <span>{poolDateLabel}</span>
                                                     </Button>
                                                 </PopoverTrigger>
-                                                <PopoverContent className="p-2" align="start">
-                                                    <Calendar mode="single" selected={poolDate} onSelect={setPoolDate} initialFocus />
+                                                <PopoverContent className="space-y-2 p-2" align="start">
+                                                    <Calendar
+                                                        mode="single"
+                                                        selected={poolDate}
+                                                        onSelect={setPoolDate}
+                                                        initialFocus
+                                                        modifiers={calendarModifiers}
+                                                        modifiersClassNames={calendarModifiersClassNames}
+                                                        disabled={disabledDates}
+                                                    />
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        <span className="font-medium text-emerald-700">Verde</span> = cierre pendiente •
+                                                        <span className="ml-1 font-medium text-foreground/70"> Gris</span> = cierre liquidado •
+                                                        <span className="ml-1 font-medium text-primary">Borde</span> = último cierre guardado
+                                                    </p>
                                                 </PopoverContent>
                                             </Popover>
                                         </div>
@@ -377,8 +432,21 @@ const CierreDiarioPage = () => {
                                                         <span>{directDateLabel}</span>
                                                     </Button>
                                                 </PopoverTrigger>
-                                                <PopoverContent className="p-2" align="start">
-                                                    <Calendar mode="single" selected={directDate} onSelect={setDirectDate} initialFocus />
+                                                <PopoverContent className="space-y-2 p-2" align="start">
+                                                    <Calendar
+                                                        mode="single"
+                                                        selected={directDate}
+                                                        onSelect={setDirectDate}
+                                                        initialFocus
+                                                        modifiers={calendarModifiers}
+                                                        modifiersClassNames={calendarModifiersClassNames}
+                                                        disabled={disabledDates}
+                                                    />
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        <span className="font-medium text-emerald-700">Verde</span> = cierre pendiente •
+                                                        <span className="ml-1 font-medium text-foreground/70"> Gris</span> = cierre liquidado •
+                                                        <span className="ml-1 font-medium text-primary">Borde</span> = último cierre guardado
+                                                    </p>
                                                 </PopoverContent>
                                             </Popover>
                                         </div>

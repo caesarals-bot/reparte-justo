@@ -140,12 +140,21 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
         void loadClosure()
     }, [loadClosure])
 
-    const handleAdjustmentDialogOpenChange = useCallback((open: boolean) => {
-        setIsAdjustmentDialogOpen(open)
-        if (!open) {
-            resetAdjustmentForm()
-        }
-    }, [resetAdjustmentForm])
+    const isClosurePaid = closure?.estado === "pagado"
+
+    const handleAdjustmentDialogOpenChange = useCallback(
+        (open: boolean) => {
+            if (open && isClosurePaid) {
+                return
+            }
+
+            setIsAdjustmentDialogOpen(open)
+            if (!open) {
+                resetAdjustmentForm()
+            }
+        },
+        [isClosurePaid, resetAdjustmentForm],
+    )
 
     const handleAdjustmentMemberChange = useCallback((value: string) => {
         setAdjustmentForm((previous) => ({ ...previous, staffKey: value }))
@@ -440,5 +449,6 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
         handleAdjustmentMotivoChange,
         handleAdjustmentSubmit,
         handleRetry: loadClosure,
+        isClosurePaid,
     }
 }

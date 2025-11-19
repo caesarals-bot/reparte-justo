@@ -138,6 +138,15 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Monto del descuento en pesos.
   - Etiqueta corta con porcentaje (si lo hay) y primeras palabras del motivo.
 
+### Regla de fechas para ajustes y liquidación
+
+- Cada ajuste se asocia siempre a un **cierre diario específico** (la "foto" del día) mediante su `closureId`.
+- La fecha que **manda para la liquidación** es la `referenceDate` del cierre:
+  - Si se registra un ajuste el día 14 sobre un cierre del día 11, ese ajuste pertenece al cierre del **11**.
+  - Cuando se liquida un rango que incluye el 11, el cierre entra con su neto ya ajustado (incluyendo ese ajuste creado el 14).
+- La propiedad `createdAt` del ajuste es **solo informativa** y se usa para el historial (orden cronológico, trazabilidad), pero **no cambia** a qué período de liquidación pertenece el ajuste.
+- Esto garantiza que todas las correcciones sobre un cierre pasado se vean reflejadas en la siguiente liquidación que incluya la fecha de ese cierre, sin importar el día en que se registró el ajuste.
+
 ## Flujo propuesto: Liquidar y Generar Reporte
 
 > Estado actual: el botón "Liquidar y Generar Reporte" aún no ejecuta lógica de negocio real; este apartado define el comportamiento esperado para una futura implementación.
@@ -170,3 +179,20 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Integración con medios de pago o registro manual de que la propina fue efectivamente entregada.
   - Notificaciones opcionales al staff (email o canal interno) una vez ejecutada la liquidación.
   - Reglas de auditoría para modificaciones posteriores a una liquidación (ej. cierres reajustados).
+
+## Estado actual de la página de Liquidación
+
+- Existe una página dedicada de **Liquidación** accesible desde el dashboard mediante el botón "Liquidar y Generar Reporte".
+- Esta pantalla funciona actualmente en modo **solo lectura** sobre los cierres en estado `pendiente`:
+  - Permite seleccionar un **rango de fechas** usando un `DateRangePicker`.
+  - El filtro se aplica sobre `metadata.referenceDate` de cada cierre (regla de fechas descrita más arriba).
+  - Se muestran totales del período:
+    - `Total a liquidar` (suma de `netAfterDeductions` de los cierres filtrados).
+    - `Total descuentos` (suma de `deductionsAmount`).
+    - Número de integrantes únicos presentes en el período.
+- La sección "Detalle por integrante" resume, para el rango seleccionado:
+  - Neto acumulado ya ajustado (`netAmountAdjusted ?? netAmount`) por persona y grupo.
+  - Penalizaciones directas, deducciones y ajustes (porcentaje + monto) acumulados por integrante.
+  - Todos los montos se muestran redondeados a pesos chilenos.
+- El calendario de selección de rango destaca, con un color diferente, los días que tienen cierres pendientes (a partir de `referenceDate`), para facilitar elegir períodos con movimiento.
+- El botón de **Confirmar liquidación** está deshabilitado por ahora; no se marcan cierres como liquidados ni se generan reportes automáticos todavía.
