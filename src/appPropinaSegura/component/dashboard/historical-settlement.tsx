@@ -22,18 +22,29 @@ export function HistoricalSettlement({ settlement }: HistoricalSettlementProps) 
     console.log("Ver detalles de liquidación:", settlement.id)
   }
 
+  const statusLabel = settlement.status?.toUpperCase()
+  const statusVariant = settlement.status === "pagado" ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"
+
   return (
     <Card className="group transition-colors hover:border-primary/50">
       <CardContent className="p-4">
         <div className="flex flex-col gap-3">
-          <div className="flex items-start gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-start gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
+                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-muted-foreground">Período</div>
+                <div className="mt-0.5 text-sm font-medium text-pretty">{settlement.dateRange}</div>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs text-muted-foreground">Período</div>
-              <div className="mt-0.5 text-sm font-medium text-pretty">{settlement.dateRange}</div>
-            </div>
+
+            {statusLabel ? (
+              <span className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusVariant}`}>
+                {statusLabel}
+              </span>
+            ) : null}
           </div>
 
           <div className="rounded-lg bg-muted/50 p-3">

@@ -1,38 +1,53 @@
 # Plan de trabajo para mañana
 
+> Actualizado: 18 de noviembre de 2025
+
+## Tareas del día (hoy · 18/11/2025)
+
+1. **Backend – `guardarCierreDiario`:**
+   - Cerrar contrato definitivo del payload y validar duplicados por `referenceDateKey`.
+   - Implementar normalización + cálculo (penalizaciones, redistribución, netos por integrante).
+   - Persistir snapshot completo y actualizar agregados del restaurante.
+   - Preparar respuesta (`totals`, `pendingTotals`, `contactEmailStatus`) y casos de error estandarizados.
+2. **QA y pruebas manuales:**
+   - Escenarios con penalizaciones porcentuales, ajustes generales y correos opcionales.
+   - Confirmar que el frontend actual recibe los nuevos totales sin romper el flujo de liquidación (PDF y bloqueo de fechas ya funcionales).
+3. **Seguimiento post-backend:**
+   - Documentar endpoints/herramientas para que el frontend conecte (`useCierreDiario` y dashboard).
+   - Coordinar la habilitación del indicador "Total no liquidado" en el dashboard una vez que `pendingTotals` esté vivo.
+
 ## 1. Backend: Guardado de Cierre Diario
-- Definir payload y contrato de la Cloud Function `guardarCierreDiario`.
-- Modelar colección `registros_diarios` con snapshot completo (montos por persona, descuentos, estado `pendiente`).
-- Implementar lógica de cálculo segura en el backend (aplicar deducciones, separar cocina/garzones, reparto individual según asistencia y ponderaciones).
-- Actualizar los acumulados del restaurante tras guardar el registro (totales no liquidados, días registrados).
-- Incluir en el snapshot porcentajes y montos de cada deducción, destacando Transbank para conciliación.
-- Retornar identificador del registro, totales acumulados actualizados y errores de validación estandarizados.
+- Cerrar el diseño del payload de `guardarCierreDiario` incorporando los nuevos campos documentados (totales diarios, penalizaciones listadas, email opcional).
+- Modelar la colección `registros_diarios` asegurando snapshots con: montos por persona, desglose diario, transbank, penalizaciones/ajustes y correo del restaurante que recibirá la liquidación.
+- Implementar la lógica de cálculo en backend alineada con el reparto actual (descuentos globales redistribuidos sólo entre quienes no tienen penalizaciones activas).
+- Actualizar acumulados del restaurante tras cada registro (totales no liquidados, días pendientes, histórico de correos enviados).
+- Retornar identificador del registro, totales acumulados y errores de validación estandarizados.
 
 ## 2. Frontend: Integración con la nueva API
-- Ajustar formulario de Cierre Diario para enviar datos crudos (montos, deducciones, presentes/ausentes, modo).
-- Manejar respuesta del backend: confirmar guardado, mostrar errores y refrescar totales del dashboard.
+- Ajustar el formulario de Cierre Diario para enviar datos crudos y el email opcional del restaurante cuando corresponda.
+- Manejar respuesta del backend (guardar vs. pagar): mostrar errores, refrescar totales y preparar payload para correos/CSV.
 - Añadir botón "Guardar" (estado pendiente) además del flujo "Pagar".
-- Validar responsive y accesibilidad de las tarjetas de resumen, incluyendo la tarjeta de Transbank.
+- Validar responsive y accesibilidad de las nuevas tablas (desglose diario y penalizaciones).
 
 ## 3. Dashboard de Liquidación (Fase 3)
-- Diseñar card de "Total No Liquidado" y tabla/desglose por miembro.
-- Crear modal de selección de rango de fechas para ejecutar pago.
-- Definir interacción con Cloud Function `liquidarPeriodo` (pendiente de implantar).
+- Card de "Total No Liquidado" con totales del rango seleccionado y resaltado del saldo enviado por correo.
+- Modal de selección de rango para ejecutar pago/descarga y disparar correo al email del restaurante.
+- Definir interacción con `liquidarPeriodo` para marcar cierres liquidados y registrar evidencia (correos enviados, archivo CSV/PDF generado).
 
 ## 4. Trazabilidad y Auditoría
-- Versionar configuración usada (porcentajes, staff, deducciones) dentro del snapshot.
+- Versionar configuración usada (porcentajes, staff, deducciones y correo receptor) dentro del snapshot.
 - Registrar quién guardó cada cierre y timestamps.
-- Planificar estrategia para notificaciones/emails post liquidación.
+- Definir estrategia para disparar correos automáticos (staff y correo del restaurante) con adjunto CSV/PDF.
 
 ## 5. Ajustes paralelos y ponderaciones
-- Definir cómo permitir que un ajuste puntual modifique la ponderación diaria de un integrante (regla de negocio, límites y formato de entrada).
-- Calcular y documentar qué porcentaje/monto debe reducirse de la ponderación al aplicar el ajuste para mantener consistencia con el neto final.
-- Prototipar validaciones en el formulario de ajustes para evitar ponderaciones negativas o inconsistentes.
+- Diseñar el flujo para aplicar ajustes puntuales sobre ponderaciones diarias (inputs, límites, validaciones).
+- Calcular efecto real sobre `netAmountAdjusted` y actualizar `useClosuresDashboard` para mostrarlo.
+- Validar formularios para evitar ponderaciones negativas o inconsistentes.
 
 ## 6. Pendientes adicionales de frontend
-- Exponer en el dashboard un indicador de ajustes recientes y su impacto en el total no liquidado.
-- Revisar accesibilidad de los nuevos badges y cards en `ClosureDetailPage` (contraste y navegación por teclado).
-- Planificar pruebas manuales específicas para ajustes generales vs. por persona (guía rápida para QA).
+- Indicador en dashboard para mostrar ajustes recientes y su impacto en el total no liquidado.
+- Revisar accesibilidad de las nuevas tablas (penalizaciones, desglose diario) y badges en `ClosureDetailPage`.
+- Planificar pruebas manuales para ajustes generales vs. individuales (guía QA).
 
 ## 7. Estado al cierre del día (ajustes porcentuales)
 - Se extendieron los tipos en `useClosuresDashboard` para soportar:
@@ -57,20 +72,19 @@
 ## 8. Micro-tareas para la página de Liquidación
 
 - **Exportar datos de liquidación**
-  - Diseñar un payload tipo `LiquidacionMemberSummary` con la información que se muestra en la tabla (neto, penalizaciones, deducciones, ajustes) para poder exportar a CSV o enviar a un backend.
-  - Añadir un botón de "Exportar resumen" que por ahora solo haga `console.log` del payload generado.
+  - Exponer un helper que construya el payload `LiquidacionMemberSummary[]` + penalizaciones para CSV y correo.
+  - Añadir botón de "Exportar resumen" que por ahora registre por consola o descargue CSV.
 
-- **Preparar resumen para correos al staff**
-  - Definir la forma del resumen por integrante para email (nombre, rol, rango de fechas, monto total a pagar, desglose básico).
-  - Identificar desde dónde se obtendrán los correos de cada integrante (`staffId` → documento de staff en Firestore).
+- **Preparar resumen para correos**
+  - Definir el template por integrante (nombre, rol, rango, monto total, desglose de descuentos, penalizaciones, transbank).
+  - Confirmar origen de los correos del staff (`staffId` → documento en Firestore) y usar el nuevo email opcional del restaurante como copia.
 
-- **Flujo futuro de confirmación de liquidación**
-  - Especificar la API/Cloud Function que marcará como `liquidado` un conjunto de cierres (por `closureId`) y generará un reporte persistente.
-  - Definir el comportamiento de la UI tras confirmar: recarga del dashboard, estado de éxito y bloqueo de modificaciones sobre cierres liquidados.
+- **Confirmación de liquidación**
+  - Diseñar API/Cloud Function `liquidarPeriodo` para marcar cierres y generar reporte (CSV/PDF) + registro de correo enviado.
+  - Definir la UX posterior (estado de éxito, bloqueo de cierres liquidados, refresco del dashboard).
 
-- **Mejoras UX del calendario de liquidación**
-  - Evaluar si se debe restringir el rango seleccionable a días que tengan cierres pendientes (evitar rangos vacíos).
-  - Ajustar la leyenda del calendario para explicar el color de los días con movimiento y el comportamiento del filtro.
+- **Mejoras de calendario**
+  - Restringir selección a días con cierres pendientes y actualizar la leyenda para explicar colores/estados.
 
 ## 9. Gestión centralizada de personal
 
@@ -82,3 +96,31 @@
   - Añadir confirmación al eliminar integrantes (modal ligero) para evitar eliminaciones accidentales.
 - **Permisos**
   - Analizar si conviene admitir más de un `staffEditor` y exponerlo en esta misma vista (evitar volver al setup).
+
+## Nuevas tareas identificadas (19/11/2025)
+
+1. **Dashboard principal**
+   - Cambiar el CTA de "Editar personal" por "Añadir personal".
+   - Agregar un segundo botón para "Editar personal" que abra la vista existente.
+   - Definir navegación con parámetros (section=add|edit) para aterrizar en la sección deseada.
+
+2. **Gestión de personal (`/dashboard/personal`)**
+   - Implementar accesos rápidos dentro de la página que permitan alternar entre añadir y editar integrantes.
+   - Mostrar listado completo de personal con acciones para editar correos adicionales por integrante.
+   - Diseñar flujo para actualizar ponderaciones a partir de una fecha específica (o plan alternativo si no se puede modificar el histórico).
+
+3. **Ajustes avanzados**
+   - Evaluar soporte para añadir múltiples correos por integrante para notificaciones futuras.
+   - Documentar reglas de negocio para ajustar ponderaciones "post fecha" y su impacto en cálculos históricos.
+
+4. **Dashboard administrativo (propietario)**
+   - Bocetar secciones: overview económico, permisos, auditorías y métricas de uso.
+   - Identificar datos necesarios desde Firestore para alimentar este dashboard.
+
+5. **Plan de commits y build**
+   - Ejecutar `npm run build` antes de cualquier commit.
+   - Preparar **Commit A**: documentación UI (ej. `docs/dark-serenity-ui-guide.md`) + ajustes relacionados.
+   - Preparar **Commit B**: resto de cambios funcionales del día (dashboard, hooks, etc.).
+   - Confirmar que cada commit se acompaña de notas de QA/manual (capturas o descripciones en README/DOCUMENTACION).
+
+> Nota: hasta implementar las tareas anteriores, no volver a tocar `StaffManagementPage.tsx` para evitar corrupción del componente original.

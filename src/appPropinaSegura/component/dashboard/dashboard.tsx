@@ -38,8 +38,12 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, histor
     navigate("/dashboard/liquidacion")
   }
 
-  const handleManageStaff = () => {
-    navigate("/dashboard/personal")
+  const handleAddStaff = () => {
+    navigate("/dashboard/personal?section=add")
+  }
+
+  const handleEditStaff = () => {
+    navigate("/dashboard/personal?section=edit")
   }
 
   return (
@@ -105,8 +109,17 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, histor
               <Button
                 variant="outline"
                 className="gap-2 px-6"
-                onClick={handleManageStaff}
-                aria-label="Gestionar personal"
+                onClick={handleAddStaff}
+                aria-label="Añadir personal"
+              >
+                <Users className="h-5 w-5" />
+                Añadir personal
+              </Button>
+              <Button
+                variant="secondary"
+                className="gap-2 px-6"
+                onClick={handleEditStaff}
+                aria-label="Editar personal"
               >
                 <Users className="h-5 w-5" />
                 Editar personal
