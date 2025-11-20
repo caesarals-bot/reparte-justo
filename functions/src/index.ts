@@ -4,18 +4,34 @@ import { ZodError } from "zod"
 import { guardarCierreDiarioHandler } from "./handlers/guardarCierreDiario"
 import { liquidarPeriodoHandler } from "./handlers/liquidarPeriodo"
 
-const setCorsHeaders = (res: functions.Response) => {
-    res.set("Access-Control-Allow-Origin", "*")
+const allowedOrigins = new Set([
+    "http://localhost:5173",
+    "https://repartejusto.netlify.app",
+])
+
+const resolveOrigin = (incomingOrigin: string | undefined) => {
+    if (!incomingOrigin) {
+        return "*"
+    }
+
+    return allowedOrigins.has(incomingOrigin) ? incomingOrigin : "*"
+}
+
+const setCorsHeaders = (req: functions.Request, res: functions.Response) => {
+    const origin = resolveOrigin(req.headers.origin)
+    res.set("Access-Control-Allow-Origin", origin)
+    res.set("Vary", "Origin")
     res.set("Access-Control-Allow-Methods", "POST, OPTIONS")
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    res.set("Access-Control-Max-Age", "3600")
 }
 
 export const guardarCierreDiario = functions
     .region("us-central1")
     .https.onRequest(async (req, res): Promise<void> => {
-        functions.logger.info("guardarCierreDiario request", { method: req.method })
+        functions.logger.info("guardarCierreDiario request", { method: req.method, origin: req.headers.origin })
 
-        setCorsHeaders(res)
+        setCorsHeaders(req, res)
 
         if (req.method === "OPTIONS") {
             res.status(204).send("")
@@ -43,9 +59,9 @@ export const guardarCierreDiario = functions
 export const liquidarPeriodo = functions
     .region("us-central1")
     .https.onRequest(async (req, res): Promise<void> => {
-        functions.logger.info("liquidarPeriodo request", { method: req.method })
+        functions.logger.info("liquidarPeriodo request", { method: req.method, origin: req.headers.origin })
 
-        setCorsHeaders(res)
+        setCorsHeaders(req, res)
 
         if (req.method === "OPTIONS") {
             res.status(204).send("")
