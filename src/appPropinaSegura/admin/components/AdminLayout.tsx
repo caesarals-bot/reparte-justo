@@ -123,6 +123,31 @@ const AdminLayout = () => {
     )
   }
 
+  const renderUserCard = () => (
+    <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-white shadow-[0_25px_60px_rgba(3,6,23,0.45)]">
+      <div className="flex items-center gap-3">
+        <Avatar className="h-10 w-10">
+          <AvatarFallback>{userInitials}</AvatarFallback>
+        </Avatar>
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold leading-tight">{userDisplayName}</span>
+          <span className="text-xs text-white/70">Sesión activa</span>
+        </div>
+      </div>
+      <div className="h-px w-full bg-white/10" aria-hidden />
+      <Button
+        asChild
+        size="sm"
+        variant="secondary"
+        className="h-9 justify-center gap-2 bg-white/15 text-[#cdd9ff] hover:bg-white/25"
+      >
+        <Link to="/" aria-label="Volver al inicio">
+          ← Volver al inicio
+        </Link>
+      </Button>
+    </div>
+  )
+
   if (!isAuthenticated) {
     return <Navigate to="/auth/login" replace state={{ from: location.pathname }} />
   }
@@ -130,8 +155,9 @@ const AdminLayout = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 py-8 sm:px-6 lg:flex-row lg:gap-10 lg:px-10 lg:py-12">
-        <aside className="hidden lg:block lg:w-64 xl:w-72">
+        <aside className="hidden lg:block lg:w-64 xl:w-72 lg:border-r lg:border-white/10 lg:pr-8">
           <div className="sticky top-20 flex flex-col gap-6">
+            {renderUserCard()}
             <div className="flex flex-col gap-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Panel administrativo
@@ -157,20 +183,6 @@ const AdminLayout = () => {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-              <Button asChild variant="ghost" size="sm" className="order-2 sm:order-1">
-                <Link to="/" aria-label="Volver al inicio">
-                  ← Volver al inicio
-                </Link>
-              </Button>
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-card/60 px-4 py-2 shadow-sm">
-                <Avatar className="h-9 w-9">
-                  <AvatarFallback>{userInitials}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold leading-tight text-foreground">{userDisplayName}</span>
-                  <span className="text-xs text-muted-foreground">Sesión activa</span>
-                </div>
-              </div>
               <Sheet>
                 <SheetTrigger asChild>
                   <Button
@@ -189,11 +201,14 @@ const AdminLayout = () => {
                     <SheetDescription>Selecciona una sección para gestionar la plataforma.</SheetDescription>
                   </SheetHeader>
                   <ScrollArea className="flex-1">
-                    <nav className="flex flex-col gap-1.5 px-4 pb-6 pt-4" aria-label="Secciones del panel administrativo">
-                      {adminSections.map((section) => (
-                        <Fragment key={section.id}>{renderNavLink(section, true)}</Fragment>
-                      ))}
-                    </nav>
+                    <div className="flex flex-col gap-4 px-4 pb-6 pt-4">
+                      {renderUserCard()}
+                      <nav className="flex flex-col gap-1.5" aria-label="Secciones del panel administrativo">
+                        {adminSections.map((section) => (
+                          <Fragment key={section.id}>{renderNavLink(section, true)}</Fragment>
+                        ))}
+                      </nav>
+                    </div>
                   </ScrollArea>
                 </SheetContent>
               </Sheet>

@@ -116,6 +116,9 @@ const LiquidacionPage = () => {
                             <p className="text-xs text-muted-foreground">
                                 Incluye propinas, descuentos globales y penalizaciones registradas.
                             </p>
+                            <p className="text-xs text-muted-foreground">
+                                Gasto general acumulado: {formatCurrency(pendingSummary.totalGeneralExpense)}
+                            </p>
                             {notificationContact?.email ? (
                                 <p className="mt-2 text-xs text-muted-foreground">
                                     {isFallbackContact
@@ -192,7 +195,7 @@ const LiquidacionPage = () => {
                                 </div>
                             </div>
 
-                            <div className="grid gap-3 rounded-md border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="grid gap-3 rounded-md border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
                                 <div>
                                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Netos a pagar</p>
                                     <p className="text-lg font-semibold text-foreground">
@@ -209,6 +212,12 @@ const LiquidacionPage = () => {
                                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Descuentos globales</p>
                                     <p className="text-lg font-semibold text-foreground">
                                         {formatCurrency(selectedTotals.totalDeductions)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Gasto general</p>
+                                    <p className="text-lg font-semibold text-foreground">
+                                        {formatCurrency(selectedTotals.totalGeneralExpense)}
                                     </p>
                                 </div>
                                 <div>
@@ -295,7 +304,7 @@ const LiquidacionPage = () => {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm text-muted-foreground">
-                        <div className="grid gap-2 sm:grid-cols-3">
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
                                 <p className="text-xs uppercase tracking-wide">Total a liquidar</p>
                                 <p className="text-lg font-semibold text-foreground">
@@ -306,6 +315,12 @@ const LiquidacionPage = () => {
                                 <p className="text-xs uppercase tracking-wide">Total descuentos</p>
                                 <p className="text-lg font-semibold text-foreground">
                                     ${Math.round(resumen.totalDeductions).toLocaleString("es-CL")}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs uppercase tracking-wide">Gasto general</p>
+                                <p className="text-lg font-semibold text-foreground">
+                                    ${Math.round(resumen.totalGeneralExpense).toLocaleString("es-CL")}
                                 </p>
                             </div>
                             <div>
@@ -341,6 +356,7 @@ const LiquidacionPage = () => {
                                             <th className="py-2 pr-4">Fecha</th>
                                             <th className="py-2 pr-4 text-right">Total neto</th>
                                             <th className="py-2 pr-4 text-right">Propinas</th>
+                                            <th className="py-2 pr-4 text-right">Gasto general</th>
                                             <th className="py-2 pr-0 text-right">Transbank / descuentos globales</th>
                                         </tr>
                                     </thead>
@@ -362,8 +378,11 @@ const LiquidacionPage = () => {
                                                 <td className="py-1.5 pr-4 text-right">
                                                     ${Math.round(day.propinas).toLocaleString("es-CL")}
                                                 </td>
+                                                <td className="py-1.5 pr-4 text-right">
+                                                    ${Math.round(day.generalExpense).toLocaleString("es-CL")}
+                                                </td>
                                                 <td className="py-1.5 pr-0 text-right">
-                                                    ${Math.round(day.deductionsAmount).toLocaleString("es-CL")}
+                                                    ${Math.round(day.deductionsAmount + day.transbankAmount).toLocaleString("es-CL")}
                                                 </td>
                                             </tr>
                                         ))}

@@ -1,5 +1,14 @@
 import type { ClosureDocument, StaffAssignment } from "../hooks/useClosuresDashboard"
 
+export type ClosuresTotalsSnapshot = {
+    totalNetAfterDeductions: number
+    totalDeductions: number
+    totalPropinas: number
+    totalTransbank: number
+    totalGeneralExpense: number
+    memberCount: number
+}
+
 export type LiquidacionMemberSummary = {
     id: string
     nombre: string
@@ -85,6 +94,7 @@ export type DailyClosureSummary = {
     deductionsAmount: number
     propinas: number
     transbankAmount: number
+    generalExpense: number
 }
 
 export type PenaltyAdjustmentEntry = {
@@ -159,13 +169,14 @@ export const buildClosureHighlights = (closures: ClosureDocument[]) => {
     }
 }
 
-export const summarizeClosures = (closures: ClosureDocument[]) => {
+export const summarizeClosures = (closures: ClosureDocument[]): ClosuresTotalsSnapshot => {
     if (!closures.length) {
         return {
             totalNetAfterDeductions: 0,
             totalDeductions: 0,
             totalPropinas: 0,
             totalTransbank: 0,
+            totalGeneralExpense: 0,
             memberCount: 0,
         }
     }
@@ -174,6 +185,7 @@ export const summarizeClosures = (closures: ClosureDocument[]) => {
     let totalDeductions = 0
     let totalPropinas = 0
     let totalTransbank = 0
+    let totalGeneralExpense = 0
     const memberIds = new Set<string>()
 
     closures.forEach((closure) => {
@@ -181,6 +193,7 @@ export const summarizeClosures = (closures: ClosureDocument[]) => {
         totalDeductions += closure.totals.deductionsAmount
         totalPropinas += closure.totals.propinas
         totalTransbank += closure.totals.transbankAmount
+        totalGeneralExpense += closure.totals.generalExpense
 
         collectAssignments(closure).forEach((assignment) => {
             if (!assignment.present) {
@@ -199,6 +212,7 @@ export const summarizeClosures = (closures: ClosureDocument[]) => {
         totalDeductions,
         totalPropinas,
         totalTransbank,
+        totalGeneralExpense,
         memberCount: memberIds.size,
     }
 }
@@ -216,6 +230,7 @@ export const buildDailyClosureSummaries = (closures: ClosureDocument[]): DailyCl
         deductionsAmount: closure.totals.deductionsAmount,
         propinas: closure.totals.propinas,
         transbankAmount: closure.totals.transbankAmount,
+        generalExpense: closure.totals.generalExpense,
     }))
 
     return summary.sort((a, b) => {

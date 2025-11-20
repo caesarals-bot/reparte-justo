@@ -30,16 +30,21 @@ export const mapStoredStaffMember = (member: StoredStaffMember): StaffMember => 
 export const mapStaffMemberForStorage = (member: StaffMember): StoredStaffMember => {
     const normalizedEmail = member.email.trim()
 
-    return {
+    const storedMember: StoredStaffMember = {
         id: member.id,
         name: member.name,
-        email: normalizedEmail || undefined,
         role: member.role,
         weight: parseNumberInput(member.weight),
         startDate: member.startDate ? member.startDate.toISOString() : null,
         isActive: member.isActive,
         inactiveSince: member.inactiveSince ? member.inactiveSince.toISOString() : null,
     }
+
+    if (normalizedEmail) {
+        storedMember.email = normalizedEmail
+    }
+
+    return storedMember
 }
 
 export const normalizeEmailValue = (value: string) => value.trim().toLowerCase()

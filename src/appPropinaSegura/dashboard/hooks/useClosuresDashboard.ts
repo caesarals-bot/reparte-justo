@@ -83,6 +83,7 @@ export type ClosureDocument = {
         netAfterDeductions: number
         transbankAmount: number
         deductionsAmount: number
+        generalExpense: number
     }
     metadata: {
         referenceDate?: string | null
@@ -101,6 +102,7 @@ export type ClosuresSummary = {
     totalNetAfterDeductions: number
     totalTransbank: number
     totalDeductions: number
+    totalGeneralExpense: number
     pendingCount: number
 }
 
@@ -109,6 +111,7 @@ const emptySummary: ClosuresSummary = {
     totalNetAfterDeductions: 0,
     totalTransbank: 0,
     totalDeductions: 0,
+    totalGeneralExpense: 0,
     pendingCount: 0,
 }
 
@@ -372,6 +375,7 @@ export const mapSnapshotToClosure = (
             netAfterDeductions: toNumber(totalsFromDoc.netAfterDeductions),
             transbankAmount: toNumber(totalsFromDoc.transbankAmount),
             deductionsAmount: toNumber(totalsFromDoc.deductionsAmount),
+            generalExpense: toNumber(totalsFromDoc.generalExpense),
         },
         metadata: {
             referenceDate: metadataFromDoc.referenceDate as string | null | undefined,
@@ -557,6 +561,7 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
                     accumulator.totalNetAfterDeductions + closure.totals.netAfterDeductions,
                 totalTransbank: accumulator.totalTransbank + closure.totals.transbankAmount,
                 totalDeductions: accumulator.totalDeductions + closure.totals.deductionsAmount,
+                totalGeneralExpense: accumulator.totalGeneralExpense + closure.totals.generalExpense,
                 pendingCount: accumulator.pendingCount + 1,
             }),
             emptySummary,

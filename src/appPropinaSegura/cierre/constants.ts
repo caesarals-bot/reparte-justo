@@ -19,6 +19,7 @@ const mapToStaffEntry = (member: BaseStaffMember): StaffEntry => ({
 export const createDefaultCierreValues = (): CierreFormValues => ({
     asistenciaServicio: serviceStaffData.map(mapToStaffEntry),
     asistenciaCocina: kitchenStaffData.map(mapToStaffEntry),
+    gastoGeneral: 0,
     ventaDirecta: serviceStaffData.map((member) => ({
         ...mapToStaffEntry(member),
         montoIndividual: 0,

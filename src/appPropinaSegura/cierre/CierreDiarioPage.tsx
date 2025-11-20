@@ -64,6 +64,8 @@ const CierreDiarioPage = () => {
         },
     })
 
+    const { register } = formMethods
+
     const { asistenciaServicio, asistenciaCocina, ventaDirecta, pocilloSecundario } = fieldArrays
     const { closures, refresh: refreshClosures } = useClosuresDashboard({ uid })
     const [hasSavedPendingClosure, setHasSavedPendingClosure] = useState(false)
@@ -357,6 +359,22 @@ const CierreDiarioPage = () => {
                                                 value={poolTotalInput}
                                                 onChange={handlePoolTotalChange}
                                             />
+                                        </div>
+                                        <div className="space-y-2 max-w-[220px]">
+                                            <Label htmlFor="general-expense">Gasto general (part-time / anfitriona)</Label>
+                                            <input
+                                                id="general-expense"
+                                                type="number"
+                                                min="0"
+                                                max="999999"
+                                                step="1000"
+                                                placeholder="Ej. 20000"
+                                                className={amountInputClassName}
+                                                {...register("gastoGeneral", { valueAsNumber: true, min: 0, max: 999999 })}
+                                            />
+                                            <p className="text-xs text-white/60">
+                                                Valor máximo permitido: 6 cifras. Se descuenta antes de repartir propinas.
+                                            </p>
                                         </div>
                                     </div>
 

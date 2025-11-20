@@ -24,7 +24,8 @@ export type GuardarCierreDiarioError = {
 }
 
 export const getApiBaseUrl = () => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api"
+    const fallbackBaseUrl = "/api"
+    const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || fallbackBaseUrl
     return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl
 }
 

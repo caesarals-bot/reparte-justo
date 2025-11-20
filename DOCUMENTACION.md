@@ -273,3 +273,15 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 1. Repasar componentes secundarios (staff modals, ajustes en `ClosureDetailPage`) para aplicar las mismas gradientes.
 2. Incorporar iluminación suave en los `Dialog`/`AlertDialog` (aplicar `shadow-[0_30px_60px_rgba(3,6,23,0.65)]`).
 3. Actualizar screenshots o mockups internos para QA visual y mantener consistencia con la guía Dark Serenity.
+
+## Bitácora · 19/11/2025
+
+- **Staff Management & Setup**
+  - `/dashboard/personal` ahora detecta el query param `?section=add|edit` para separar flujos de alta y edición, con botones tipo píldora que respetan el tema Dark Serenity.
+  - Se sumó confirmación de eliminación y guardado inmediato (Firestore) en ediciones dentro del modal.
+  - `InitialSetupPage` exige completar los datos del restaurante antes de pasar al tab "Personal" y requiere registrar al menos un garzón antes de guardar la configuración.
+  - La tarjeta de permisos ahora lista a los garzones registrados y permite seleccionar al responsable de datos sensibles desde un `Select`, evitando correos escritos manualmente.
+- **Build & QA**
+  - `npm run build` ejecutado a las 22:35 (UTC-03). Resultado exitoso con el warning habitual de chunks > 500 kB (pendiente de `manualChunks`).
+  - Commit generado: `ef23e66` — _"chore: UI tweaks and staff flow adjustments"_.
+  - Próximo paso: documentar capturas/QA del nuevo flujo y validar navegación desde el dashboard.

@@ -76,10 +76,11 @@ export const StaffPermissionsCard = ({
                     <SelectContent>
                         {availableStaff.map((member) => {
                             const normalizedEmail = member.email?.trim()
+                            const selectValue = normalizedEmail ? normalizedEmail : member.id
                             return (
                                 <SelectItem
                                     key={member.id}
-                                    value={normalizedEmail ?? member.id}
+                                    value={selectValue}
                                     disabled={!normalizedEmail}
                                 >
                                     <div className="flex flex-col">

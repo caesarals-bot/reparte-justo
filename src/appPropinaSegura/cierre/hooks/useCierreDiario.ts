@@ -20,6 +20,8 @@ export type SummaryItem = {
     value: string
 }
 
+type StaffFieldName = "asistenciaServicio" | "asistenciaCocina" | "ventaDirecta" | "pocilloSecundario"
+
 export type StaffAssignmentSnapshot = {
     staffId: string
     nombre: string
@@ -73,6 +75,7 @@ export type ClosureSnapshotPayload = {
         netAfterDeductions: number
         kitchenShare: number
         garzonShare: number
+        generalExpense: number
     }
     deductions: {
         additionalPercentages: number[]
@@ -98,6 +101,7 @@ export type ClosureSnapshotPayload = {
         propinas: number
         transbankAmount: number
         deductionsAmount: number
+        generalExpense: number
     }
     restaurantContact?: {
         email?: string
@@ -225,6 +229,7 @@ const defaultCierreValues: CierreFormValues = {
     asistenciaCocina: [],
     ventaDirecta: [],
     pocilloSecundario: [],
+    gastoGeneral: 0,
 }
 
 const formatWeight = (weight?: number | string) => {
@@ -390,6 +395,16 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     const asistenciaCocinaValues = useWatch({ control, name: "asistenciaCocina" }) ?? []
     const ventaDirectaValues = useWatch({ control, name: "ventaDirecta" }) ?? []
     const pocilloSecundarioValues = useWatch({ control, name: "pocilloSecundario" }) ?? []
+    const generalExpenseValue = useWatch({ control, name: "gastoGeneral" })
+
+    const generalExpense = useMemo(() => {
+        const parsed = Number(generalExpenseValue ?? 0)
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return 0
+        }
+
+        return parsed
+    }, [generalExpenseValue])
 
     const buildInitialFormValues = useCallback(
         (serviceStaff: StoredStaffMember[], supportStaff: StoredStaffMember[], mode: "pool" | "directa") => ({
@@ -397,6 +412,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
             asistenciaCocina: supportStaff.map(mapStaffMemberToEntry),
             ventaDirecta: mode === "directa" ? serviceStaff.map(mapStaffMemberToDirectEntry) : [],
             pocilloSecundario: supportStaff.map(mapStaffMemberToEntry),
+            gastoGeneral: 0,
         }),
         [],
     )
@@ -459,7 +475,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     }, [additionalDeductionPercents, effectiveTransbankPercentage])
 
     const deductionsAmount = totalPropinasGeneradas * (totalDeductionsPercentage / 100)
-    const netAfterDeductions = Math.max(totalPropinasGeneradas - deductionsAmount, 0)
+    const netAfterDeductions = Math.max(totalPropinasGeneradas - deductionsAmount - generalExpense, 0)
     const transbankAmount = totalPropinasGeneradas * (effectiveTransbankPercentage / 100)
 
     const totalKitchenShare = settlementModeConfig === "pool" ? netAfterDeductions * (poolPercentages.kitchen / 100) : 0
@@ -468,6 +484,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     const formattedKitchenShare = currencyFormatter.format(totalKitchenShare)
     const formattedGarzonShare = currencyFormatter.format(totalGarzonShare)
     const formattedTransbankAmount = currencyFormatter.format(transbankAmount)
+    const formattedGeneralExpense = currencyFormatter.format(generalExpense)
 
     const summaryItems = useMemo<SummaryItem[]>(() => {
         const items: SummaryItem[] = [{ key: "propinas", label: "Propinas", value: formattedTotalPropinas }]
@@ -479,6 +496,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
             items.push({ key: "garzones", label: "Propina garzones", value: formattedGarzonShare })
         }
 
+        items.push({ key: "gastoGeneral", label: "Gasto general", value: formattedGeneralExpense })
         items.push({ key: "transbank", label: "Transbank", value: formattedTransbankAmount })
         items.push({ key: "dias", label: "Días sin liquidar", value: daysWithoutSettlement.toString() })
 
@@ -488,6 +506,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         formattedTotalPropinas,
         formattedKitchenShare,
         formattedGarzonShare,
+        formattedGeneralExpense,
         formattedTransbankAmount,
         daysWithoutSettlement,
         settlementModeConfig,
@@ -714,6 +733,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 netAfterDeductions,
                 kitchenShare: totalKitchenShare,
                 garzonShare: totalGarzonShare,
+                generalExpense,
             },
             deductions: {
                 additionalPercentages: additionalDeductionPercents,
@@ -739,6 +759,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 propinas: totalPropinasGeneradas,
                 transbankAmount,
                 deductionsAmount,
+                generalExpense,
             },
             restaurantContact,
             configurationSnapshot,
@@ -761,6 +782,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         netAfterDeductions,
         totalKitchenShare,
         totalGarzonShare,
+        generalExpense,
         settlementModeConfig,
         referenceDate,
         daysWithoutSettlement,
@@ -803,7 +825,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         const referenceDay = startOfDay(referenceDate)
         const updatedIneligible = new Set<string>()
 
-        const evaluateEntries = (entries: StaffEntry[], fieldName: keyof CierreFormValues) => {
+        const evaluateEntries = (entries: StaffEntry[], fieldName: StaffFieldName) => {
             entries.forEach((entry, index) => {
                 const parsedEntryDate = entry.fechaIngreso ? startOfDay(new Date(entry.fechaIngreso)) : null
                 const parsedInactiveDate = entry.inactiveSince ? startOfDay(new Date(entry.inactiveSince)) : null

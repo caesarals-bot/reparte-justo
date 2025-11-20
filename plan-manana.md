@@ -1,6 +1,23 @@
 # Plan de trabajo
 
-> Actualizado: 19 de noviembre de 2025
+> Actualizado: 20 de noviembre de 2025
+
+## Mañana · 20/11/2025
+
+1. **QA y documentación del nuevo flujo de personal**
+   - Capturar evidencia del toggle `Añadir/Editar` y del formulario en `InitialSetupPage`.
+   - Actualizar `DOCUMENTACION.md` / README con capturas y notas de validación.
+2. **Validar navegación parametrizada**
+   - Desde el dashboard probar los CTA “Añadir personal” y “Editar personal” asegurando que respetan `?section=add|edit`.
+   - Registrar hallazgos o bugs en el tablero.
+3. **Refinar permisos y experiencia Dark Serenity**
+   - Ajustar estados vacíos e interacción del `StaffPermissionsCard` (hover, focus, textos).
+   - Evaluar si se necesita admitir más de un editor y documentar backlog.
+4. **Optimización de build**
+   - Revisar warning de bundles >500 kB y proponer `manualChunks` o `dynamic import()` para los módulos más pesados.
+5. **Seguimiento de Cierre Diario**
+   - Revisar cards pendientes del tema Dark Serenity en `ClosureDetailPage`.
+   - Preparar checklist para integrar próximamente los ajustes porcentuales en los netos mostrados.
 
 ## Enfoque de hoy · 19/11/2025
 

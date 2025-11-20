@@ -23,6 +23,7 @@ export const cierreSchema = z
         asistenciaCocina: z.array(staffEntrySchema),
         ventaDirecta: z.array(staffEntrySchema),
         pocilloSecundario: z.array(staffEntrySchema),
+        gastoGeneral: z.number().nonnegative(),
     })
     .superRefine((values, ctx) => {
         values.ventaDirecta.forEach((item, index) => {

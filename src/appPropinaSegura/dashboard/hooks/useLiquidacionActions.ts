@@ -21,6 +21,7 @@ export type LiquidacionPayload = {
         propinas: number
         transbank: number
         deductions: number
+        generalExpense: number
     }
     members: ReturnType<typeof aggregateMembersFromClosures>
     contact?: {
@@ -82,6 +83,7 @@ export const useLiquidacionActions = () => {
                     propinas: totals.totalPropinas,
                     transbank: totals.totalTransbank,
                     deductions: totals.totalDeductions,
+                    generalExpense: totals.totalGeneralExpense,
                 },
                 members,
                 contact,

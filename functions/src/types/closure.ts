@@ -51,6 +51,7 @@ export const totalsSchema = z.object({
     netAfterDeductions: z.number().finite(),
     kitchenShare: z.number().finite(),
     garzonShare: z.number().finite(),
+    generalExpense: z.number().finite(),
 })
 
 export const metadataSchema = z.object({
@@ -131,6 +132,7 @@ export const guardarCierreDiarioSchema = z.object({
         propinas: z.number().finite(),
         transbankAmount: z.number().finite(),
         deductionsAmount: z.number().finite(),
+        generalExpense: z.number().finite(),
     }),
     restaurantContact: restaurantContactSchema,
     configurationSnapshot: configurationSnapshotSchema,
