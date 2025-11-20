@@ -1,8 +1,26 @@
-# Plan de trabajo para mañana
+# Plan de trabajo
 
-> Actualizado: 18 de noviembre de 2025
+> Actualizado: 19 de noviembre de 2025
 
-## Tareas del día (hoy · 18/11/2025)
+## Enfoque de hoy · 19/11/2025
+
+1. **Dashboard & Staff Management**
+   - Re-implementar los botones "Añadir personal" / "Editar personal" en el dashboard con navegación parametrizada.
+   - Añadir accesos rápidos dentro de `/dashboard/personal` que respeten permisos y permitan editar correos adicionales.
+2. **Ponderaciones y correos adicionales**
+   - Diseñar flujo para cambiar ponderaciones a partir de fechas específicas y documentar reglas.
+   - Evaluar soporte multi-correo por integrante + validaciones.
+3. **Dashboard administrativo (propietario)**
+   - Definir secciones mínimas y fuentes de datos para llevar el prototipo a Netlify.
+4. **Deploy & QA**
+   - Preparar build de frontend y desplegar en Netlify para validar integración con Cloud Functions.
+   - Documentar resultados de QA (capturas, hallazgos) en README/DOCUMENTACION.
+5. **Seguimiento Dark Serenity**
+   - Priorizar componentes críticos (navbar, cards, badges) según la guía `docs/dark-serenity-ui-guide.md`.
+
+---
+
+## Tareas previas (18/11/2025)
 
 1. **Backend – `guardarCierreDiario`:**
    - Cerrar contrato definitivo del payload y validar duplicados por `referenceDateKey`.

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react"
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
     Card,
@@ -43,9 +43,9 @@ import { StaffPermissionsCard } from "./components/StaffPermissionsCard.tsx"
 import { StaffFormCard, type StaffPopoverId, getStaffCategoryFromRole } from "./components/StaffFormCard.tsx"
 
 const percentageInputClassName =
-    "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+    "w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-[rgba(5,8,21,0.85)]"
 const baseInputClass =
-    "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+    "w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-[rgba(5,8,21,0.85)]"
 const MAX_STAFF_EDITORS = 1
 
 const InitialSetupPage = () => {
@@ -64,6 +64,7 @@ const InitialSetupPage = () => {
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
     const [hasExistingConfig, setHasExistingConfig] = useState(false)
+    const [activeTab, setActiveTab] = useState<"restaurante" | "personal">("restaurante")
     const {
         staffForm,
         formattedStartDate,
@@ -81,10 +82,23 @@ const InitialSetupPage = () => {
         canManageStaffEditors,
         staffInputsDisabled,
         reachedStaffEditorsLimit,
-        handleNewStaffEditorChange,
+        setNewStaffEditorValue,
         handleAddStaffEditor,
         handleRemoveStaffEditor,
     } = useStaffEditors({ normalizedUserEmail, maxEditors: MAX_STAFF_EDITORS })
+
+    const availableStaffForPermissions = useMemo(
+        () =>
+            serviceStaff.map((member) => ({
+                id: member.id,
+                name: member.name,
+                email: member.email,
+            })),
+        [serviceStaff],
+    )
+
+    const hasServiceStaff = serviceStaff.length > 0
+    const canContinueToStaff = Boolean(restaurantForm.restaurantName.trim())
 
     useEffect(() => {
         const authName = displayName ?? email ?? ""
@@ -143,6 +157,15 @@ const InitialSetupPage = () => {
 
     const handleRemoveAdditionalDeduction = (deductionId: string) => {
         setAdditionalDeductions((previousState) => previousState.filter((item) => item.id !== deductionId))
+    }
+
+    const handleContinueToStaffSection = () => {
+        if (!canContinueToStaff) {
+            return
+        }
+
+        setSaveError(null)
+        setActiveTab("personal")
     }
 
     const handleAddStaffMember = () => {
@@ -279,10 +302,9 @@ const InitialSetupPage = () => {
             return
         }
 
-        if (settlementMode === "directa" && !serviceStaff.length) {
-            setSaveError(
-                "Añade al menos un integrante del staff de servicio para el modo de venta directa.",
-            )
+        if (!hasServiceStaff) {
+            setSaveError("Añade al menos un integrante del staff de servicio antes de guardar la configuración.")
+            setActiveTab("personal")
             return
         }
 
@@ -333,241 +355,285 @@ const InitialSetupPage = () => {
     }
 
     return (
-        <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-muted/30 px-4 py-12">
+        <main className="flex min-h-screen items-center justify-center bg-transparent px-4 py-14 text-white">
             <section className="w-full max-w-5xl">
-                <form className="space-y-8" onSubmit={handleSaveConfiguration}>
-                    <header className="text-center space-y-3">
-                        <p className="text-sm font-medium uppercase tracking-wide text-primary">Primeros pasos</p>
-                        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Configuración Inicial</h1>
-                        <p className="text-sm text-muted-foreground sm:text-base">
-                            Completa estos datos básicos para adaptar ReparteJusto al funcionamiento de tu restaurante.
+                <form className="space-y-10" onSubmit={handleSaveConfiguration}>
+                    <header className="rounded-3xl border border-white/10 bg-[rgba(8,11,25,0.85)] p-8 text-center shadow-[0_30px_65px_rgba(3,6,23,0.55)] backdrop-blur-xl">
+                        <p className="text-xs font-semibold uppercase tracking-[0.45em] text-white/60">Primeros pasos</p>
+                        <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">Configuración Inicial</h1>
+                        <p className="mt-3 text-sm text-white/70 sm:text-base">
+                            Completa estos datos para alinear ReparteJusto con tu operación y comenzar a distribuir propinas con claridad.
                         </p>
                     </header>
 
-                    <Tabs defaultValue="restaurante" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="restaurante">Restaurante</TabsTrigger>
-                        <TabsTrigger value="personal">Personal</TabsTrigger>
-                    </TabsList>
+                    <Tabs
+                        value={activeTab}
+                        onValueChange={(value) => setActiveTab(value as "restaurante" | "personal")}
+                        className="w-full"
+                    >
+                        <TabsList className="flex w-full overflow-hidden rounded-full border border-white/20 bg-transparent p-0.5 text-white shadow-[0_12px_30px_rgba(2,4,15,0.65)]">
+                            <TabsTrigger
+                                value="restaurante"
+                                className="flex-1 rounded-full px-6 py-3 text-sm font-semibold text-white/70 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 data-[state=active]:bg-linear-to-r data-[state=active]:from-white/65 data-[state=active]:to-white/25 data-[state=active]:text-[#0b0f1d] data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] data-[state=inactive]:hover:text-white"
+                            >
+                                Restaurante
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="personal"
+                                className="flex-1 rounded-full px-6 py-3 text-sm font-semibold text-white/70 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 data-[state=active]:bg-linear-to-r data-[state=active]:from-white/65 data-[state=active]:to-white/25 data-[state=active]:text-[#0b0f1d] data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] data-[state=inactive]:hover:text-white"
+                            >
+                                Personal
+                            </TabsTrigger>
+                        </TabsList>
 
-                    <TabsContent value="restaurante" className="mt-6">
-                        <Card className="border bg-background/95 shadow-sm">
-                            <CardHeader>
-                                <CardTitle>Configuración General</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="restaurant-name">Nombre del Restaurante</Label>
-                                    <input
-                                        id="restaurant-name"
-                                        name="restaurant-name"
-                                        type="text"
-                                        placeholder="Ej. Restaurante La Transparencia"
-                                        value={restaurantForm.restaurantName}
-                                        onChange={handleRestaurantNameChange}
-                                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                        tabIndex={0}
-                                    />
-                                </div>
+                        <TabsContent value="restaurante" className="mt-6">
+                            <Card className="border border-white/10 bg-[rgba(9,12,24,0.9)] text-white shadow-[0_30px_65px_rgba(3,6,23,0.45)] backdrop-blur-xl">
+                                <CardHeader>
+                                    <CardTitle>Configuración General</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="restaurant-name">Nombre del Restaurante</Label>
+                                        <input
+                                            id="restaurant-name"
+                                            name="restaurant-name"
+                                            type="text"
+                                            placeholder="Ej. Restaurante La Transparencia"
+                                            value={restaurantForm.restaurantName}
+                                            onChange={handleRestaurantNameChange}
+                                            className={baseInputClass}
+                                            tabIndex={0}
+                                        />
+                                    </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="restaurant-manager">Encargado de la liquidación</Label>
-                                    <input
-                                        id="restaurant-manager"
-                                        name="restaurant-manager"
-                                        type="text"
-                                        value={responsibleName}
-                                        onChange={handleResponsibleChange}
-                                        placeholder="Nombre del encargado"
-                                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                        tabIndex={0}
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Por defecto usamos el usuario autenticado, pero puedes indicar a otra persona responsable del cierre.
-                                    </p>
-                                </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="restaurant-manager">Encargado de la liquidación</Label>
+                                        <input
+                                            id="restaurant-manager"
+                                            name="restaurant-manager"
+                                            type="text"
+                                            value={responsibleName}
+                                            onChange={handleResponsibleChange}
+                                            placeholder="Nombre del encargado"
+                                            className={baseInputClass}
+                                            tabIndex={0}
+                                        />
+                                        <p className="text-xs text-white/60">
+                                            Por defecto usamos el usuario autenticado, pero puedes indicar a otra persona responsable del cierre.
+                                        </p>
+                                    </div>
 
-                                <div className="space-y-3">
-                                    <Label>Modo de Liquidación</Label>
-                                    <RadioGroup
-                                        value={settlementMode}
-                                        onValueChange={handleSettlementModeChange}
-                                        className="grid gap-3 sm:grid-cols-2"
-                                    >
-                                        <div className="flex items-center space-x-3 rounded-md border p-3">
-                                            <RadioGroupItem id="modo-pool" value="pool" />
-                                            <Label htmlFor="modo-pool" className="flex-1">
-                                                Pocillo / Pozo Común
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center space-x-3 rounded-md border p-3">
-                                            <RadioGroupItem id="modo-directa" value="directa" />
-                                            <Label htmlFor="modo-directa" className="flex-1">
-                                                Venta Directa del Garzón
-                                            </Label>
-                                        </div>
-                                    </RadioGroup>
-                                </div>
-
-                                {settlementMode === "pool" ? (
-                                    <div className="space-y-5 rounded-lg border bg-background/80 p-5">
-                                        <h4 className="text-lg font-semibold">Configuración del Pocillo</h4>
-                                        <div className="grid gap-4 sm:grid-cols-2">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="pool-kitchen">Porcentaje de Cocina (%)</Label>
-                                                <input
-                                                    id="pool-kitchen"
-                                                    type="number"
-                                                    inputMode="decimal"
-                                                    value={poolConfig.kitchenPercentage}
-                                                    onChange={handlePoolConfigChange("kitchenPercentage")}
-                                                    className={percentageInputClassName}
-                                                    tabIndex={0}
-                                                />
+                                    <div className="space-y-3">
+                                        <Label>Modo de Liquidación</Label>
+                                        <RadioGroup
+                                            value={settlementMode}
+                                            onValueChange={handleSettlementModeChange}
+                                            className="grid gap-4 sm:grid-cols-2"
+                                        >
+                                            <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 p-4 text-sm text-white/80 shadow-inner shadow-black/20">
+                                                <RadioGroupItem id="modo-pool" value="pool" />
+                                                <Label htmlFor="modo-pool" className="flex-1">
+                                                    Pocillo / Pozo Común
+                                                </Label>
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="pool-transbank">Porcentaje de Transbank (%)</Label>
-                                                <input
-                                                    id="pool-transbank"
-                                                    type="number"
-                                                    inputMode="decimal"
-                                                    value={poolConfig.transbankPercentage}
-                                                    onChange={handlePoolConfigChange("transbankPercentage")}
-                                                    className={percentageInputClassName}
-                                                    tabIndex={0}
-                                                />
+                                            <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 p-4 text-sm text-white/80 shadow-inner shadow-black/20">
+                                                <RadioGroupItem id="modo-directa" value="directa" />
+                                                <Label htmlFor="modo-directa" className="flex-1">
+                                                    Venta Directa del Garzón
+                                                </Label>
                                             </div>
-                                        </div>
+                                        </RadioGroup>
+                                    </div>
 
-                                        <div className="space-y-3">
-                                            <Label>Otros Descuentos</Label>
-                                            <div className="grid gap-3 sm:grid-cols-[1fr_minmax(0,140px)_auto] sm:items-end">
+                                    {settlementMode === "pool" ? (
+                                        <div className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-inner shadow-black/30">
+                                            <h4 className="text-lg font-semibold text-white">Configuración del Pocillo</h4>
+                                            <div className="grid gap-4 sm:grid-cols-2">
                                                 <div className="space-y-2">
-                                                    <Label htmlFor="additional-discount-name" className="sr-only">
-                                                        Nombre del descuento
-                                                    </Label>
+                                                    <Label htmlFor="pool-kitchen">Porcentaje de Cocina (%)</Label>
                                                     <input
-                                                        id="additional-discount-name"
-                                                        type="text"
-                                                        placeholder="Nombre del descuento"
-                                                        value={additionalDeductionForm.name}
-                                                        onChange={handleAdditionalDeductionChange("name")}
-                                                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                                        tabIndex={0}
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="additional-discount-percentage" className="sr-only">
-                                                        Porcentaje
-                                                    </Label>
-                                                    <input
-                                                        id="additional-discount-percentage"
+                                                        id="pool-kitchen"
                                                         type="number"
                                                         inputMode="decimal"
-                                                        placeholder="%"
-                                                        value={additionalDeductionForm.percentage}
-                                                        onChange={handleAdditionalDeductionChange("percentage")}
+                                                        value={poolConfig.kitchenPercentage}
+                                                        onChange={handlePoolConfigChange("kitchenPercentage")}
                                                         className={percentageInputClassName}
                                                         tabIndex={0}
                                                     />
                                                 </div>
-                                                <Button
-                                                    type="button"
-                                                    variant="secondary"
-                                                    className="h-10 w-full sm:w-auto"
-                                                    onClick={handleAddAdditionalDeduction}
-                                                    aria-label="Añadir descuento"
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                </Button>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="pool-transbank">Porcentaje de Transbank (%)</Label>
+                                                    <input
+                                                        id="pool-transbank"
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        value={poolConfig.transbankPercentage}
+                                                        onChange={handlePoolConfigChange("transbankPercentage")}
+                                                        className={percentageInputClassName}
+                                                        tabIndex={0}
+                                                    />
+                                                </div>
                                             </div>
 
-                                            <div className="space-y-2">
-                                                {additionalDeductions.length === 0 ? (
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Agrega descuentos adicionales que quieras considerar en el reparto.
-                                                    </p>
-                                                ) : (
-                                                    <ul className="space-y-2">
-                                                        {additionalDeductions.map((deduction) => (
-                                                            <li
-                                                                key={deduction.id}
-                                                                className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm"
-                                                            >
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-medium">{deduction.name}</span>
-                                                                    <span className="text-muted-foreground">{deduction.percentage}%</span>
-                                                                </div>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    aria-label={`Eliminar ${deduction.name}`}
-                                                                    onClick={() => handleRemoveAdditionalDeduction(deduction.id)}
+                                            <div className="space-y-3">
+                                                <Label>Otros Descuentos</Label>
+                                                <div className="grid gap-3 sm:grid-cols-[1fr_minmax(0,140px)_auto] sm:items-end">
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="additional-discount-name" className="sr-only">
+                                                            Nombre del descuento
+                                                        </Label>
+                                                        <input
+                                                            id="additional-discount-name"
+                                                            type="text"
+                                                            placeholder="Nombre del descuento"
+                                                            value={additionalDeductionForm.name}
+                                                            onChange={handleAdditionalDeductionChange("name")}
+                                                            className={baseInputClass}
+                                                            tabIndex={0}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="additional-discount-percentage" className="sr-only">
+                                                            Porcentaje
+                                                        </Label>
+                                                        <input
+                                                            id="additional-discount-percentage"
+                                                            type="number"
+                                                            inputMode="decimal"
+                                                            placeholder="%"
+                                                            value={additionalDeductionForm.percentage}
+                                                            onChange={handleAdditionalDeductionChange("percentage")}
+                                                            className={percentageInputClassName}
+                                                            tabIndex={0}
+                                                        />
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        className="h-11 w-full rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/15 sm:w-auto"
+                                                        onClick={handleAddAdditionalDeduction}
+                                                        aria-label="Añadir descuento"
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    {additionalDeductions.length === 0 ? (
+                                                        <p className="text-sm text-white/60">
+                                                            Agrega descuentos adicionales que quieras considerar en el reparto.
+                                                        </p>
+                                                    ) : (
+                                                        <ul className="space-y-2">
+                                                            {additionalDeductions.map((deduction) => (
+                                                                <li
+                                                                    key={deduction.id}
+                                                                    className="flex items-center justify-between rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm"
                                                                 >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                )}
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-medium">{deduction.name}</span>
+                                                                        <span className="text-white/60">{deduction.percentage}%</span>
+                                                                    </div>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="rounded-full text-white hover:bg-white/10"
+                                                                        aria-label={`Eliminar ${deduction.name}`}
+                                                                        onClick={() => handleRemoveAdditionalDeduction(deduction.id)}
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col gap-3 pt-2">
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleContinueToStaffSection}
+                                                        disabled={!canContinueToStaff}
+                                                        className="w-full rounded-full border border-white/25 bg-white/10 py-3 text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:text-white/40"
+                                                    >
+                                                        Continuar para añadir garzones
+                                                    </Button>
+                                                    {!canContinueToStaff ? (
+                                                        <p className="text-center text-xs text-white/60">
+                                                            Ingresa el nombre del restaurante para poder continuar.
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-center text-xs text-white/60">
+                                                            Revisa los datos y continúa para registrar a tu staff antes de guardar.
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <StaffPermissionsCard
-                            staffEditors={staffEditors}
-                            maxStaffEditors={MAX_STAFF_EDITORS}
-                            canManageStaffEditors={canManageStaffEditors}
-                            newStaffEditor={newStaffEditor}
-                            staffEditorError={staffEditorError}
-                            reachedStaffEditorsLimit={reachedStaffEditorsLimit}
-                            onNewEditorChange={handleNewStaffEditorChange}
-                            onAddEditor={handleAddStaffEditor}
-                            onRemoveEditor={handleRemoveStaffEditor}
-                        />
                                         </div>
-                                    </div>
-                                ) : null}
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                                    ) : null}
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
-                    <TabsContent value="personal" className="mt-6">
-                        <StaffFormCard
-                            settlementMode={settlementMode}
-                            formValues={staffForm}
-                            formattedStartDate={formattedStartDate}
-                            formattedInactiveDate={formattedInactiveDate}
-                            activePopover={activePopover}
-                            onActivePopoverChange={setActivePopover}
-                            onFieldChange={handleStaffFormChange}
-                            onAddMember={handleAddStaffMember}
-                            serviceStaff={serviceStaff}
-                            supportStaff={supportStaff}
-                            onRemoveMember={handleRemoveMember}
-                            staffInputsDisabled={staffInputsDisabled}
-                            baseInputClassName={baseInputClass}
-                            formatInactiveDateLabel={formatInactiveDateLabel}
-                        />
-                    </TabsContent>
-                </Tabs>
+                        <TabsContent value="personal" className="mt-6 space-y-6">
+                            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+                                <StaffFormCard
+                                    settlementMode={settlementMode}
+                                    formValues={staffForm}
+                                    formattedStartDate={formattedStartDate}
+                                    formattedInactiveDate={formattedInactiveDate}
+                                    activePopover={activePopover}
+                                    onActivePopoverChange={setActivePopover}
+                                    onFieldChange={handleStaffFormChange}
+                                    onAddMember={handleAddStaffMember}
+                                    serviceStaff={serviceStaff}
+                                    supportStaff={supportStaff}
+                                    onRemoveMember={handleRemoveMember}
+                                    staffInputsDisabled={staffInputsDisabled}
+                                    baseInputClassName={baseInputClass}
+                                    formatInactiveDateLabel={formatInactiveDateLabel}
+                                />
+                                <div className="rounded-2xl border border-white/12 bg-white/5 p-4">
+                                    <StaffPermissionsCard
+                                        staffEditors={staffEditors}
+                                        maxStaffEditors={MAX_STAFF_EDITORS}
+                                        canManageStaffEditors={canManageStaffEditors}
+                                        newStaffEditor={newStaffEditor}
+                                        staffEditorError={staffEditorError}
+                                        reachedStaffEditorsLimit={reachedStaffEditorsLimit}
+                                        availableStaff={availableStaffForPermissions}
+                                        onSelectStaff={setNewStaffEditorValue}
+                                        onAddEditor={handleAddStaffEditor}
+                                        onRemoveEditor={handleRemoveStaffEditor}
+                                    />
+                                </div>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
 
                     {saveError ? (
                         <div
                             role="alert"
-                            className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                            className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-[0_15px_35px_rgba(82,8,23,0.35)]"
                         >
                             {saveError}
                         </div>
                     ) : null}
 
-                    <CardFooter className="flex justify-center">
+                    <CardFooter className="flex flex-col items-center gap-3 border-none bg-transparent p-0">
                         <Button
                             size="lg"
-                            className="w-full max-w-md py-6 text-base"
+                            className="w-full max-w-md gap-2 rounded-full bg-linear-to-r from-primary to-accent py-6 text-base text-primary-foreground shadow-[0_20px_45px_rgba(26,31,77,0.55)] transition hover:opacity-90"
                             type="submit"
-                            disabled={isSaving}
+                            disabled={isSaving || !hasServiceStaff}
                             aria-busy={isSaving}
                         >
                             {isSaving ? "Guardando configuración..." : "Guardar configuración y continuar"}
                         </Button>
+                        {!hasServiceStaff ? (
+                            <p className="text-center text-sm text-white/60">
+                                Añade al menos un garzón antes de guardar la configuración.
+                            </p>
+                        ) : null}
                     </CardFooter>
                 </form>
             </section>

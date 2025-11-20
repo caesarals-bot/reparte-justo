@@ -2,8 +2,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { X } from "lucide-react"
-import type { ChangeEvent } from "react"
+
+import type { StaffMember } from "../staffTypes.ts"
+
+type SelectableStaffMember = Pick<StaffMember, "id" | "name" | "email">
 
 interface StaffPermissionsCardProps {
     staffEditors: string[]
@@ -12,7 +16,8 @@ interface StaffPermissionsCardProps {
     newStaffEditor: string
     staffEditorError: string | null
     reachedStaffEditorsLimit: boolean
-    onNewEditorChange: (event: ChangeEvent<HTMLInputElement>) => void
+    availableStaff: SelectableStaffMember[]
+    onSelectStaff: (email: string) => void
     onAddEditor: () => void
     onRemoveEditor: (email: string) => void
 }
@@ -32,14 +37,19 @@ export const StaffPermissionsCard = ({
     newStaffEditor,
     staffEditorError,
     reachedStaffEditorsLimit,
-    onNewEditorChange,
+    availableStaff = [],
+    onSelectStaff,
     onAddEditor,
     onRemoveEditor,
 }: StaffPermissionsCardProps) => (
     <Card className="border bg-background/95 shadow-sm">
         <CardHeader>
             <CardTitle>Permisos para editar datos sensibles</CardTitle>
-            <CardDescription>{buildDescription(maxStaffEditors)}</CardDescription>
+            <CardDescription>
+                {availableStaff.length === 0
+                    ? "Primero agrega garzones para poder asignar un responsable de edición."
+                    : buildDescription(maxStaffEditors)}
+            </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
             <div className="flex flex-wrap items-center gap-3">
@@ -54,24 +64,51 @@ export const StaffPermissionsCard = ({
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="staff-editor-email">Correo autorizado</Label>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                    <input
-                        id="staff-editor-email"
-                        type="email"
-                        value={newStaffEditor}
-                        onChange={onNewEditorChange}
-                        placeholder="admin@turestaurante.com"
-                        disabled={!canManageStaffEditors || reachedStaffEditorsLimit}
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                    />
+                <Label>Selecciona al garzón autorizado</Label>
+                <Select
+                    value={newStaffEditor || undefined}
+                    onValueChange={onSelectStaff}
+                    disabled={!canManageStaffEditors || reachedStaffEditorsLimit || availableStaff.length === 0}
+                >
+                    <SelectTrigger className="w-full rounded-md border border-input bg-background px-3 py-2 text-left text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+                        <SelectValue placeholder="Elige entre los garzones registrados" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableStaff.map((member) => {
+                            const normalizedEmail = member.email?.trim()
+                            return (
+                                <SelectItem
+                                    key={member.id}
+                                    value={normalizedEmail ?? member.id}
+                                    disabled={!normalizedEmail}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="font-medium">{member.name}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            {normalizedEmail ?? "Sin correo registrado"}
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                            )
+                        })}
+                    </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                    Solo se pueden autorizar garzones con un correo electrónico registrado.
+                </p>
+                <div className="flex items-center gap-3 pt-2">
                     <Button
                         type="button"
                         onClick={onAddEditor}
-                        disabled={!canManageStaffEditors || reachedStaffEditorsLimit}
-                        className="sm:w-48"
+                        disabled={
+                            !canManageStaffEditors ||
+                            reachedStaffEditorsLimit ||
+                            availableStaff.length === 0 ||
+                            !newStaffEditor
+                        }
+                        className="flex-1 sm:flex-none sm:w-48"
                     >
-                        Añadir editor
+                        Autorizar
                     </Button>
                 </div>
                 {staffEditorError ? <p className="text-sm text-destructive">{staffEditorError}</p> : null}
@@ -81,7 +118,7 @@ export const StaffPermissionsCard = ({
                 <Label>Correos con permiso</Label>
                 {staffEditors.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                        El usuario autenticado ya cuenta como editor. Puedes designar una persona adicional.
+                        El usuario autenticado ya cuenta como editor. Puedes designar un garzón adicional.
                     </p>
                 ) : (
                     <ul className="space-y-2">

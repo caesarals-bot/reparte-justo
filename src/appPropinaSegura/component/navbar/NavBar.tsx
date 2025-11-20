@@ -1,15 +1,24 @@
 import { useEffect, useMemo, useState } from "react"
-import { Link, useNavigate } from "react-router"
+import { Link, useLocation, useNavigate } from "react-router"
 import { Menu, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth } from "@/context/AuthContext"
 
+const NAV_LINKS = [
+    { label: "Inicio", path: "/" },
+    { label: "Ajustes", path: "/setup" },
+    { label: "Cierres", path: "/cierre" },
+    { label: "Dashboard", path: "/dashboard" },
+    { label: "Admin", path: "/admin" },
+]
+
 const NavBar = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const { isAuthenticated, isLoading, displayName, email, signOutUser } = useAuth()
     const navigate = useNavigate()
+    const location = useLocation()
 
     const userInitials = useMemo(() => {
         const source = displayName || email || ""
@@ -47,6 +56,21 @@ const NavBar = () => {
             console.error("Error al cerrar sesión", error)
         }
     }
+
+    const isActivePath = (path: string) => {
+        if (path === "/") {
+            return location.pathname === "/"
+        }
+
+        return location.pathname.startsWith(path)
+    }
+
+    const desktopLinkClassName = (path: string) =>
+        `group relative text-base font-semibold tracking-wide text-white/80 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-[2px] after:rounded-full after:bg-white after:opacity-0 after:transition ${
+            isActivePath(path)
+                ? "text-white after:opacity-100"
+                : "hover:text-white hover:after:opacity-100"
+        }`
 
     useEffect(() => {
         if (typeof window === "undefined") {
@@ -101,91 +125,66 @@ const NavBar = () => {
     }, [isMenuOpen])
 
     return (
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-            <div className="container mx-auto flex h-16 items-center justify-between px-4">
-                <a
-                    href="#hero"
-                    className="font-bold text-xl tracking-tight"
-                    aria-label="Ir a la sección principal"
+        <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-linear-to-r from-slate-950/90 via-slate-900/80 to-slate-950/90 backdrop-blur-xl shadow-[0_10px_35px_rgba(8,15,40,0.55)]">
+            <div className="container mx-auto flex h-[72px] items-center justify-between px-4">
+                <Link
+                    to="/"
+                    className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white"
+                    aria-label="Ir al inicio"
                     tabIndex={0}
                 >
-                    ReparteJusto
-                </a>
+                    <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-bold text-slate-900">RJ</span>
+                    <span className="text-xl font-bold text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.35)]">
+                        ReparteJusto
+                    </span>
+                </Link>
                 <nav className="hidden items-center gap-6 md:flex">
-                    <Link
-                        to="/"
-                        className="text-sm font-medium text-muted-foreground transition hover:text-primary"
-                        aria-label="Ir al inicio"
-                        tabIndex={0}
-                    >
-                        Inicio
-                    </Link>
-                    <Link
-                        to="/setup"
-                        className="text-sm font-medium text-muted-foreground transition hover:text-primary"
-                        aria-label="Ir a ajustes"
-                        tabIndex={0}
-                    >
-                        Ajustes
-                    </Link>
-                    <Link
-                        to="/cierre"
-                        className="text-sm font-medium text-muted-foreground transition hover:text-primary"
-                        aria-label="Ir a cierres diarios"
-                        tabIndex={0}
-                    >
-                        Cierres
-                    </Link>
-                    <Link
-                        to="/dashboard"
-                        className="text-sm font-medium text-muted-foreground transition hover:text-primary"
-                        aria-label="Ir al dashboard"
-                        tabIndex={0}
-                    >
-                        Dashboard
-                    </Link>
-                    <Link
-                        to="/admin"
-                        className="text-sm font-medium text-muted-foreground transition hover:text-primary"
-                        aria-label="Ir al panel administrativo"
-                        tabIndex={0}
-                    >
-                        Admin
-                    </Link>
+                    {NAV_LINKS.map((link) => (
+                        <Link key={link.path} to={link.path} className={desktopLinkClassName(link.path)} tabIndex={0}>
+                            {link.label}
+                        </Link>
+                    ))}
                     <div className="flex items-center gap-3">
                         {isAuthenticated ? (
                             <>
                                 <Link
                                     to="/admin/overview"
-                                    className="hidden text-sm font-medium text-muted-foreground transition hover:text-primary lg:inline"
+                                    className="hidden text-sm font-medium text-white/70 transition hover:text-white lg:inline"
                                     aria-label="Ir al panel administrativo"
                                 >
                                     Panel
                                 </Link>
-                                <div className="flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1">
-                                    <Avatar className="h-8 w-8">
-                                        <AvatarFallback>{userInitials}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-semibold text-foreground">
-                                            {displayName || email}
-                                        </span>
-                                        <span className="text-[11px] text-muted-foreground">Sesión activa</span>
+                                <div className="group relative flex items-center">
+                                    <div className="flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-1">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarFallback>{userInitials}</AvatarFallback>
+                                        </Avatar>
+                                        <span className="sr-only">{displayName || email}</span>
+                                    </div>
+                                    <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-max -translate-x-1/2 rounded-md border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white opacity-0 backdrop-blur group-hover:opacity-100">
+                                        <p>{displayName || email}</p>
+                                        <p className="text-[11px] font-normal text-white/80">Sesión activa</p>
                                     </div>
                                 </div>
-                                <Button variant="ghost" size="sm" onClick={handleSignOut} aria-label="Cerrar sesión">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-white/80 hover:text-white"
+                                    onClick={handleSignOut}
+                                    aria-label="Cerrar sesión"
+                                >
                                     Salir
                                 </Button>
                             </>
                         ) : (
                             !isLoading && (
                                 <>
-                                    <Button variant="ghost" className="px-4" asChild>
+                                    <Button variant="ghost" className="px-4 text-white/70 hover:text-white" asChild>
                                         <Link to="/auth/login" aria-label="Ir a iniciar sesión" tabIndex={0}>
                                             Ingresar
                                         </Link>
                                     </Button>
-                                    <Button className="px-4" asChild>
+                                    <Button className="px-4 bg-linear-to-r from-primary to-accent text-primary-foreground shadow-lg shadow-primary/40" asChild>
                                         <Link to="/auth/register" aria-label="Ir a registrarse" tabIndex={0}>
                                             Registrar
                                         </Link>
@@ -200,7 +199,7 @@ const NavBar = () => {
                     onClick={handleToggleMenu}
                     aria-label={isMenuOpen ? "Cerrar menú" : "Abrir menú"}
                     aria-expanded={isMenuOpen}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-md border md:hidden"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white shadow-lg shadow-black/30 transition hover:border-primary/60 md:hidden"
                     tabIndex={0}
                 >
                     {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -215,58 +214,29 @@ const NavBar = () => {
                         className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm md:hidden"
                         aria-label="Cerrar menú"
                     />
-                    <nav className="fixed inset-x-0 top-16 z-50 border-b border-t bg-background/95 pb-6 pt-4 shadow-md md:hidden">
-                        <div className="container mx-auto flex flex-col gap-4 px-4">
-                            <Button variant="ghost" className="justify-start px-4" asChild>
-                                <Link
-                                    to="/"
-                                    aria-label="Ir al inicio"
-                                    tabIndex={0}
-                                    onClick={handleCloseMenu}
+                    <nav className="fixed inset-x-0 top-16 z-50 border-b border-t border-white/10 bg-slate-950/95 pb-6 pt-4 shadow-2xl md:hidden">
+                        <div className="container mx-auto flex flex-col gap-2 px-4">
+                            {NAV_LINKS.map((link) => (
+                                <Button
+                                    key={link.path}
+                                    variant="ghost"
+                                    className={`justify-start px-4 text-base ${
+                                        isActivePath(link.path)
+                                            ? "text-primary"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                    asChild
                                 >
-                                    Inicio
-                                </Link>
-                            </Button>
-                            <Button variant="ghost" className="justify-start px-4" asChild>
-                                <Link
-                                    to="/setup"
-                                    aria-label="Ir a ajustes"
-                                    tabIndex={0}
-                                    onClick={handleCloseMenu}
-                                >
-                                    Ajustes
-                                </Link>
-                            </Button>
-                            <Button variant="ghost" className="justify-start px-4" asChild>
-                                <Link
-                                    to="/cierre"
-                                    aria-label="Ir a cierres diarios"
-                                    tabIndex={0}
-                                    onClick={handleCloseMenu}
-                                >
-                                    Cierres
-                                </Link>
-                            </Button>
-                            <Button variant="ghost" className="justify-start px-4" asChild>
-                                <Link
-                                    to="/dashboard"
-                                    aria-label="Ir al dashboard"
-                                    tabIndex={0}
-                                    onClick={handleCloseMenu}
-                                >
-                                    Dashboard
-                                </Link>
-                            </Button>
-                            <Button variant="ghost" className="justify-start px-4" asChild>
-                                <Link
-                                    to="/admin"
-                                    aria-label="Ir al panel administrativo"
-                                    tabIndex={0}
-                                    onClick={handleCloseMenu}
-                                >
-                                    Admin
-                                </Link>
-                            </Button>
+                                    <Link
+                                        to={link.path}
+                                        aria-label={`Ir a ${link.label.toLowerCase()}`}
+                                        tabIndex={0}
+                                        onClick={handleCloseMenu}
+                                    >
+                                        {link.label}
+                                    </Link>
+                                </Button>
+                            ))}
                             {isAuthenticated ? (
                                 <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/90 p-4">
                                     <div className="flex items-center gap-3">
@@ -278,14 +248,21 @@ const NavBar = () => {
                                             <span className="text-xs text-muted-foreground">Sesión activa</span>
                                         </div>
                                     </div>
-                                    <Button size="sm" onClick={() => { handleCloseMenu(); handleSignOut() }}>
+                                    <Button
+                                        size="sm"
+                                        className="bg-linear-to-r from-primary to-accent text-primary-foreground shadow-lg shadow-primary/40"
+                                        onClick={() => {
+                                            handleCloseMenu()
+                                            void handleSignOut()
+                                        }}
+                                    >
                                         Cerrar sesión
                                     </Button>
                                 </div>
                             ) : (
                                 !isLoading && (
                                     <>
-                                        <Button variant="ghost" className="justify-start px-4" asChild>
+                                        <Button variant="ghost" className="justify-start px-4 text-muted-foreground" asChild>
                                             <Link
                                                 to="/auth/login"
                                                 aria-label="Ir a iniciar sesión"
@@ -295,7 +272,10 @@ const NavBar = () => {
                                                 Ingresar
                                             </Link>
                                         </Button>
-                                        <Button className="justify-start px-4" asChild>
+                                        <Button
+                                            className="justify-start px-4 bg-linear-to-r from-primary to-accent text-primary-foreground shadow-lg shadow-primary/40"
+                                            asChild
+                                        >
                                             <Link
                                                 to="/auth/register"
                                                 aria-label="Ir a registrarse"

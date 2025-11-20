@@ -1,3 +1,30 @@
+## Gestión de personal (StaffManagementPage)
+
+### Componentización y flujo actual
+- **Archivo**: `src/appPropinaSegura/staff/StaffManagementPage.tsx`.
+- Las acciones de edición y eliminación comparten la lógica contenida en `useStaffManagement` y solo utilizan estados locales mínimos para controlar popovers de calendario.
+- La tabla consolidada muestra tanto staff de servicio como de apoyo con etiquetas, estados y accesos a las acciones.
+
+### Hook `useStaffManagement`
+- **Archivo**: `src/appPropinaSegura/staff/hooks/useStaffManagement.ts`.
+- Encapsula:
+  - Fetch inicial desde `restaurants/{uid}` (servicio, apoyo, editores y `settlementMode`).
+  - Estado de modal (`editModal`, `modalDraft`, `modalError`) y de confirmación (`pendingDelete`).
+  - Validaciones de ponderación/correo a través de `validateMemberDraft`.
+  - Handlers de edición (`handleModal*`, `handleModalSave`) y eliminación (`openDeleteDialog`, `confirmDeleteMember`).
+  - Persistencia inmediata mediante `persistStaffChanges`, que escribe en Firestore y actualiza indicadores `isSaving`, `saveError`, `saveSuccess`.
+  - Control de permisos (`canManageStaffEditors`, `staffInputsDisabled`) reutilizando `useStaffEditors`.
+
+### Persistencia inmediata
+- Al confirmar un borrado o guardar en la modal, el hook sincroniza el estado local con Firestore de inmediato.
+- Se bloquean interacciones mientras `isSaving` está activo para evitar condiciones de carrera; el botón de confirmación en `AlertDialog` y los popovers se deshabilitan automáticamente.
+- Los mensajes de éxito/error del guardado se muestran en `StaffManagementPage` reutilizando `saveError` / `saveSuccess` y pueden consumirse también desde otros componentes si fuese necesario.
+
+### Reutilización
+- Componentes futuros que necesiten listar o administrar staff pueden importar `useStaffManagement` y reutilizar `categorizedStaff`, `openEditModal`, etc., sin replicar lógica de Firestore.
+- `persistStaffChanges` admite parámetros opcionales, lo que habilita operaciones masivas (p. ej. reordenar ponderaciones) manteniendo un único punto de escritura.
+
+- La edición y eliminación dentro de esta página se actualiza automáticamente tras confirmar, disparando `persistStaffChanges` en el hook para reflejar los cambios en Firestore sin depender de botones globales.
 # Documentación Técnica
 
 ## Resumen del Proyecto
@@ -17,6 +44,7 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 - **NavBar**: navegación sticky con comportamiento móvil (menú hamburguesa, bloqueo de scroll, cierre por *Escape*).
 - **Footer**: enlaces a secciones principales y disposición responsiva.
 - **Cards / Tabs / Calendar**: provenientes de Shadcn/UI, estilizados con Tailwind y aprovechados para formularios estructurados.
+- **useStaffManagement**: hook especializado para la página de gestión de personal (ver sección dedicada más abajo). Centraliza estados, efectos y persistencia inmediata sobre Firestore, evitando lógica duplicada en los componentes de UI.
 
 ## Flujo de Configuración Inicial
 1. **Modo de Liquidación**
@@ -196,3 +224,52 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Todos los montos se muestran redondeados a pesos chilenos.
 - El calendario de selección de rango destaca, con un color diferente, los días que tienen cierres pendientes (a partir de `referenceDate`), para facilitar elegir períodos con movimiento.
 - El botón de **Confirmar liquidación** está deshabilitado por ahora; no se marcan cierres como liquidados ni se generan reportes automáticos todavía.
+
+## Tema "Dark Serenity" — avances UI (Nov 2025)
+
+### Contexto
+- **Objetivo**: unificar la experiencia visual del dashboard y staff management bajo la estética "Dark Serenity" (fondos profundos, brillo sutil y tipografías blancas de alto contraste).
+- **Alcance actual**: NavBar, fondo global, dashboard principal (header, métricas pendientes, cards y liquidaciones históricas).
+
+### Cambios realizados
+1. **NavBar (`src/appPropinaSegura/component/navbar/NavBar.tsx`)**
+   - Gradiente `from-[#0f172a] via-[#111827] to-[#0b1120]` con blur y borde translucido.
+   - Tipografía ampliada (links a 0.95rem) y estado activo con glow `shadow-[0_0_20px_rgba(14,165,233,0.35)]`.
+   - Avatar despliega sólo iniciales; nombre completo aparece en tooltip con `Popover`. Accesibilidad mejorada con `aria-label`.
+
+2. **Fondo global (`src/index.css`)**
+   - Variables CSS redefinidas (`--background`, `--muted`, `--card-foreground`) para tonos azul oscuro.
+   - `body` aplica doble gradiente (radial + linear) y `backdrop-filter` consistente, generando contraste natural vs tarjetas.
+
+3. **Cards de distribución (`payment-group-card.tsx`)**
+   - Contenedores semitransparentes `bg-[rgba(17,20,33,0.9)]` con borde `white/12` y blur.
+   - Iconos circulares con gradiente vertical y sombras internas.
+   - Badges y textos ajustados a blanco puro, con subtítulos en `white/65` para jerarquía.
+
+4. **Bloque "Liquidaciones Pasadas" (`historical-settlement.tsx`)**
+   - Se replica el lenguaje visual de las cards principales (fondos translúcidos, insignias degradadas, botón redondeado con transición).
+   - Los estados "PAGADO"/"PENDIENTE" usan degradados verdes/ámbar en lugar de colores planos.
+
+5. **Header + métrica principal (`dashboard.tsx`)**
+   - Header ahora usa panel difuminado con borde blanco/10.
+   - Sección "Pendiente de Pago" transformada en tarjeta hero: título con tracking extendido, monto principal a 3rem, chips para descuentos y acciones.
+   - Botones rápidos convertidos en "píldoras" (bordes redondeados, gradientes), alineados con el CTA "Liquidar y Generar Reporte".
+
+### Lineamientos visuales derivados
+- **Paleta**: base `#0b1120` con acentos `#38bdf8` (primary) y `#c084fc` (accent). Se evita fondo puro negro.
+- **Tipografía**: títulos ≥ `text-2xl`, subtítulos en mayúsculas con `letter-spacing` amplio para acentuar el feel futurista.
+- **Componentes**: todas las cards relevantes deberán incluir `border-white/[0.08-0.12]`, `bg-white/[0.04-0.08]` y `backdrop-blur` mínimo de 12px.
+- **Interacción**: hover states iluminan bordes (`hover:border-primary/50`) y botones cambian el nivel de transparencia en lugar de color plano.
+
+### Cierre Diario (`src/appPropinaSegura/cierre/CierreDiarioPage.tsx`)
+- Loader/errores migrados a tarjetas translúcidas con blur y botones tipo píldora.
+- Header del cierre usa panel blur con acciones redondeadas y sombra profunda, alineado al CTA del dashboard.
+- Banners de éxito/error y alertas de staff no elegible aplican bordes y fondos semi-transparentes (rojo ámbar/verde) para mantener el glow.
+- Resumen del último cierre enviado se transformó en tarjeta "glass" con tipografía iluminada y métricas en grid.
+- Resumen numérico y cards internas (registro de pocillo, venta directa, asistencias) usan bordes `white/10`, fondos `white/5` y sombras `0_15px_35px`.
+- Popovers y calendarios reciben contenedores oscuros con bordes y texto blanco.
+
+### Próximos pasos sugeridos
+1. Repasar componentes secundarios (staff modals, ajustes en `ClosureDetailPage`) para aplicar las mismas gradientes.
+2. Incorporar iluminación suave en los `Dialog`/`AlertDialog` (aplicar `shadow-[0_30px_60px_rgba(3,6,23,0.65)]`).
+3. Actualizar screenshots o mockups internos para QA visual y mantener consistencia con la guía Dark Serenity.

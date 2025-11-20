@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react"
+import { useState } from "react"
 
 import { isValidEmail, normalizeEmailValue } from "../staffUtils.ts"
 
@@ -21,8 +21,8 @@ export const useStaffEditors = ({ normalizedUserEmail, maxEditors }: UseStaffEdi
     const staffInputsDisabled = !canEditSensitiveStaffData
     const reachedStaffEditorsLimit = staffEditors.length >= maxEditors
 
-    const handleNewStaffEditorChange = (event: ChangeEvent<HTMLInputElement>) => {
-        setNewStaffEditor(event.target.value)
+    const setNewStaffEditorValue = (value: string) => {
+        setNewStaffEditor(value)
         if (staffEditorError) {
             setStaffEditorError(null)
         }
@@ -67,7 +67,7 @@ export const useStaffEditors = ({ normalizedUserEmail, maxEditors }: UseStaffEdi
         canEditSensitiveStaffData,
         staffInputsDisabled,
         reachedStaffEditorsLimit,
-        handleNewStaffEditorChange,
+        setNewStaffEditorValue,
         handleAddStaffEditor,
         handleRemoveStaffEditor,
     }

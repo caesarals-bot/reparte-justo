@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router"
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
+import { useState } from "react"
+import { useNavigate, useSearchParams } from "react-router"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -10,359 +9,170 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { CalendarIcon, ArrowLeft, Loader2, AlertCircle, CheckCircle2, Trash2 } from "lucide-react"
 
-import { useAuth } from "@/context/AuthContext"
-import { db } from "@/firebase/config"
-import type { StaffMember, RestaurantConfigurationDocument, SettlementMode } from "../setup/staffTypes.ts"
-import {
-    mapStaffMemberForStorage,
-    mapStoredStaffMember,
-    isValidEmail,
-} from "../setup/staffUtils.ts"
-import { useStaffEditors } from "../setup/hooks/useStaffEditors.ts"
-import { StaffPermissionsCard } from "../setup/components/StaffPermissionsCard.tsx"
-import { useStaffForms } from "../setup/hooks/useStaffForms.ts"
-import { getStaffCategoryFromRole } from "../setup/components/StaffFormCard.tsx"
+import { useStaffManagement } from "./hooks/useStaffManagement"
+import type { StaffCategory } from "./hooks/useStaffManagement"
+import { StaffFormCard, type StaffPopoverId } from "../setup/components/StaffFormCard"
+import { useStaffForms } from "../setup/hooks/useStaffForms"
+import { isValidEmail } from "../setup/staffUtils"
+import type { StaffMember } from "../setup/staffTypes"
 
 const baseInputClass =
-    "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-const percentageInputClassName =
-    "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-const MAX_STAFF_EDITORS = 1
-
-type StaffCategory = "service" | "support"
-type StaffPopoverId = `${StaffCategory}-${string}-inactive` | "staff-form-start" | "staff-form-inactive"
+    "w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-[rgba(5,8,21,0.85)]"
+const weightInputClassName = baseInputClass
+const STAFF_CATEGORY_LABELS: Record<StaffCategory, string> = {
+    service: "Servicio",
+    support: "Cocina / Apoyo",
+}
 
 const StaffManagementPage = () => {
-    const { uid, email } = useAuth()
     const navigate = useNavigate()
-    const normalizedUserEmail = email ? email.toLowerCase() : null
+    const [searchParams, setSearchParams] = useSearchParams()
 
-    const [serviceStaff, setServiceStaff] = useState<StaffMember[]>([])
-    const [supportStaff, setSupportStaff] = useState<StaffMember[]>([])
-    const [activePopover, setActivePopover] = useState<StaffPopoverId | null>(null)
-    const [settlementMode, setSettlementMode] = useState<SettlementMode>("pool")
-    const [isLoading, setIsLoading] = useState(true)
-    const [isSaving, setIsSaving] = useState(false)
-    const [saveError, setSaveError] = useState<string | null>(null)
-    const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
-    const [formError, setFormError] = useState<string | null>(null)
+    const [modalPopover, setModalPopover] = useState<"start" | "inactive" | null>(null)
+    const [activePopover, setActivePopover] = useState<StaffPopoverId>(null)
+    const [addError, setAddError] = useState<string | null>(null)
+    const [addSuccess, setAddSuccess] = useState<string | null>(null)
 
-    const {
-        staffEditors,
-        setStaffEditors,
-        newStaffEditor,
-        staffEditorError,
-        canManageStaffEditors,
-        staffInputsDisabled,
-        reachedStaffEditorsLimit,
-        handleNewStaffEditorChange,
-        handleAddStaffEditor,
-        handleRemoveStaffEditor,
-    } = useStaffEditors({ normalizedUserEmail, maxEditors: MAX_STAFF_EDITORS })
     const {
         staffForm,
         formattedStartDate,
         formattedInactiveDate,
-        formatInactiveDateLabel,
         handleStaffFormChange,
         resetStaffForm,
+        formatInactiveDateLabel,
     } = useStaffForms()
 
-    const isEmptyState = useMemo(
-        () => serviceStaff.length === 0 && supportStaff.length === 0,
-        [serviceStaff.length, supportStaff.length],
-    )
+    const sectionParam = searchParams.get("section")
+    const currentSection: "add" | "edit" = sectionParam === "add" ? "add" : "edit"
+    const isAddSection = currentSection === "add"
 
-    useEffect(() => {
-        if (!uid) {
-            setSaveError("No encontramos una sesión válida. Inicia sesión nuevamente.")
-            setIsLoading(false)
-            return
-        }
+    const {
+        serviceStaff,
+        supportStaff,
+        settlementMode,
+        editModal,
+        modalDraft,
+        modalError,
+        pendingDelete,
+        isEmptyState,
+        categorizedStaff,
+        isLoading,
+        isSaving,
+        saveError,
+        saveSuccess,
+        canManageStaffEditors,
+        staffInputsDisabled,
+        openEditModal,
+        closeEditModal,
+        handleModalEmailChange,
+        handleModalWeightChange,
+        handleModalStartDateChange,
+        handleModalInactiveDateChange,
+        handleModalActiveToggle,
+        handleModalSave,
+        openDeleteDialog,
+        cancelDeleteDialog,
+        confirmDeleteMember,
+        addStaffMember,
+    } = useStaffManagement()
 
-        const fetchStaff = async () => {
-            try {
-                setIsLoading(true)
-                const restaurantReference = doc(db, "restaurants", uid)
-                const snapshot = await getDoc(restaurantReference)
-
-                if (!snapshot.exists()) {
-                    setSaveError("Aún no completas la configuración inicial. Configúrala antes de gestionar el personal.")
-                    return
-                }
-
-                const data = snapshot.data() as RestaurantConfigurationDocument
-                setServiceStaff(data.serviceStaff?.map(mapStoredStaffMember) ?? [])
-                setSupportStaff(data.supportStaff?.map(mapStoredStaffMember) ?? [])
-                setStaffEditors(data.staffEditors ?? [])
-                if (data.settlementMode) {
-                    setSettlementMode(data.settlementMode)
-                }
-                setSaveError(null)
-            } catch (error) {
-                console.error("Error al cargar el personal", error)
-                setSaveError("No pudimos cargar el personal. Intenta nuevamente en unos segundos.")
-            } finally {
-                setIsLoading(false)
-            }
-        }
-
-        void fetchStaff()
-    }, [uid, setStaffEditors])
-
-    const updateMember = (
-        category: StaffCategory,
-        memberId: string,
-        updater: (member: StaffMember) => StaffMember,
-    ) => {
-        const setter = category === "service" ? setServiceStaff : setSupportStaff
-        setter((previousMembers) => previousMembers.map((member) => (member.id === memberId ? updater(member) : member)))
+    const handleOpenEditModal = (category: StaffCategory, memberId: string) => {
+        setModalPopover(null)
+        openEditModal(category, memberId)
     }
 
-    const handleEmailChange = (category: StaffCategory, memberId: string, value: string) => {
-        updateMember(category, memberId, (member) => ({ ...member, email: value }))
-    }
-
-    const handleActiveToggle = (category: StaffCategory, memberId: string, isActive: boolean) => {
-        updateMember(category, memberId, (member) => ({
-            ...member,
-            isActive,
-            inactiveSince: isActive ? undefined : member.inactiveSince ?? new Date(),
-        }))
-    }
-
-    const handleInactiveDateChange = (category: StaffCategory, memberId: string, date?: Date) => {
-        updateMember(category, memberId, (member) => ({
-            ...member,
-            inactiveSince: date ?? undefined,
-        }))
-    }
-
-    const handleRemoveMember = (category: StaffCategory, memberId: string) => {
-        if (staffInputsDisabled) {
-            return
-        }
-
-        const setter = category === "service" ? setServiceStaff : setSupportStaff
-        setter((previousMembers) => previousMembers.filter((member) => member.id !== memberId))
-    }
-
-    const handleAddStaffMember = () => {
-        if (staffInputsDisabled) {
-            return
-        }
-
-        const { name, weight, email: memberEmail, role, isActive, inactiveSince, startDate } = staffForm
-
-        if (!name.trim()) {
-            setFormError("Ingresa el nombre del integrante")
-            return
-        }
-
-        const sanitizedEmail = memberEmail.trim()
-
-        if (sanitizedEmail && !isValidEmail(sanitizedEmail)) {
-            setFormError("El correo ingresado no parece válido")
-            return
-        }
-
-        const category = getStaffCategoryFromRole(role)
-
-        const newMember: StaffMember = {
-            id: crypto.randomUUID(),
-            name: name.trim(),
-            weight: weight.trim(),
-            email: sanitizedEmail,
-            role,
-            startDate,
-            isActive,
-            inactiveSince: isActive ? undefined : inactiveSince ?? new Date(),
-        }
-
-        if (category === "service") {
-            setServiceStaff((previous) => [...previous, newMember])
-        } else {
-            setSupportStaff((previous) => [...previous, newMember])
-        }
-
-        resetStaffForm(role)
-        setFormError(null)
-    }
-
-    const handleSaveChanges = async () => {
-        if (!uid) {
-            setSaveError("No se pudo identificar al restaurante")
-            return
-        }
-
-        setIsSaving(true)
-        setSaveError(null)
-        setSaveSuccess(null)
-
-        try {
-            const restaurantReference = doc(db, "restaurants", uid)
-            await setDoc(
-                restaurantReference,
-                {
-                    serviceStaff: serviceStaff.map(mapStaffMemberForStorage),
-                    supportStaff: supportStaff.map(mapStaffMemberForStorage),
-                    staffEditors,
-                    updatedAt: serverTimestamp(),
-                },
-                { merge: true },
-            )
-
-            setSaveSuccess("Personal actualizado correctamente.")
-        } catch (error) {
-            console.error("Error al actualizar el personal", error)
-            setSaveError("No pudimos guardar los cambios. Intenta otra vez en unos segundos.")
-        } finally {
-            setIsSaving(false)
-        }
+    const handleCloseEditModal = () => {
+        setModalPopover(null)
+        closeEditModal()
     }
 
     const handleBackToDashboard = () => {
         navigate("/dashboard")
     }
 
-    const renderStaffCard = (category: StaffCategory, members: StaffMember[]) => (
-        <Card className="border bg-background/95 shadow-sm">
-            <CardHeader>
-                <CardTitle>{category === "service" ? "Staff de Servicio" : "Staff de Cocina / Apoyo"}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {members.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                        {category === "service"
-                            ? "Aún no has añadido integrantes de servicio."
-                            : "Aún no has añadido integrantes de cocina o apoyo."}
-                    </p>
-                ) : (
-                    <div className="overflow-hidden rounded-lg border">
-                        <table className="w-full min-w-full divide-y divide-border text-left text-sm">
-                            <thead className="bg-muted/40">
-                                <tr>
-                                    <th className="px-4 py-3 font-semibold">Nombre</th>
-                                    <th className="px-4 py-3 font-semibold">Correo</th>
-                                    <th className="px-4 py-3 font-semibold">Estado</th>
-                                    <th className="px-4 py-3 font-semibold">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {members.map((member) => {
-                                    const inactivePopoverId: StaffPopoverId = `${category}-${member.id}-inactive`
-                                    return (
-                                        <tr key={member.id}>
-                                            <td className="px-4 py-3">
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium">{member.name}</span>
-                                                    <span className="text-xs text-muted-foreground capitalize">
-                                                        {member.role.replace("_", " ")}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <Label htmlFor={`email-${member.id}`} className="sr-only">
-                                                    Correo
-                                                </Label>
-                                                <input
-                                                    id={`email-${member.id}`}
-                                                    type="email"
-                                                    value={member.email}
-                                                    onChange={(event) =>
-                                                        handleEmailChange(category, member.id, event.target.value)
-                                                    }
-                                                    className={baseInputClass}
-                                                    placeholder="correo@ejemplo.com"
-                                                    disabled={staffInputsDisabled}
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex flex-col gap-2">
-                                                    <div className="flex items-center gap-3">
-                                                        <Switch
-                                                            checked={member.isActive}
-                                                            onCheckedChange={(checked) =>
-                                                                handleActiveToggle(category, member.id, checked)
-                                                            }
-                                                            disabled={staffInputsDisabled}
-                                                            aria-label={`Cambiar estado de ${member.name}`}
-                                                        />
-                                                        <span className="text-xs font-medium uppercase tracking-wide">
-                                                            {member.isActive ? "Activo" : "Inactivo"}
-                                                        </span>
-                                                    </div>
-                                                    {!member.isActive ? (
-                                                        <div className="space-y-1">
-                                                            <Label className="text-xs font-medium text-muted-foreground">
-                                                                Fecha de baja
-                                                            </Label>
-                                                            <Popover
-                                                                open={activePopover === inactivePopoverId}
-                                                                onOpenChange={(open) =>
-                                                                    setActivePopover(open ? inactivePopoverId : null)
-                                                                }
-                                                            >
-                                                                <PopoverTrigger asChild>
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        className="flex w-full items-center justify-start gap-2 px-3"
-                                                                        disabled={staffInputsDisabled}
-                                                                    >
-                                                                        <CalendarIcon className="h-4 w-4" />
-                                                                        <span>
-                                                                            {member.inactiveSince
-                                                                                ? format(member.inactiveSince, "PPP", { locale: es })
-                                                                                : "Seleccionar fecha"}
-                                                                        </span>
-                                                                    </Button>
-                                                                </PopoverTrigger>
-                                                                <PopoverContent className="p-2" align="start">
-                                                                    <Calendar
-                                                                        mode="single"
-                                                                        selected={member.inactiveSince}
-                                                                        onSelect={(date) =>
-                                                                            handleInactiveDateChange(category, member.id, date)
-                                                                        }
-                                                                        initialFocus
-                                                                    />
-                                                                </PopoverContent>
-                                                            </Popover>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {`Mostrará: ${formatInactiveDateLabel(member.inactiveSince)}`}
-                                                            </p>
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xs text-muted-foreground">
-                                                        Desde: {member.startDate ? format(member.startDate, "dd/MM/yy", { locale: es }) : "—"}
-                                                    </span>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleRemoveMember(category, member.id)}
-                                                        aria-label={`Eliminar ${member.name}`}
-                                                        disabled={staffInputsDisabled}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    )
+    const handleSectionChange = (nextSection: "add" | "edit") => {
+        const params = new URLSearchParams(searchParams)
+        if (nextSection === "edit") {
+            params.delete("section")
+        } else {
+            params.set("section", "add")
+        }
+        setSearchParams(params, { replace: true })
+        setAddError(null)
+        setAddSuccess(null)
+    }
+
+    const handleRemoveMemberFromCard = (category: "service" | "support", memberId: string) => {
+        const source = category === "service" ? serviceStaff : supportStaff
+        const member = source.find((item) => item.id === memberId)
+        if (!member) {
+            return
+        }
+        openDeleteDialog(category, memberId, member.name)
+    }
+
+    const handleAddMember = async () => {
+        if (staffInputsDisabled) {
+            return
+        }
+
+        const trimmedName = staffForm.name.trim()
+        if (!trimmedName) {
+            setAddError("Ingresa el nombre del integrante.")
+            setAddSuccess(null)
+            return
+        }
+
+        const sanitizedEmail = staffForm.email.trim()
+        if (sanitizedEmail && !isValidEmail(sanitizedEmail)) {
+            setAddError("El correo ingresado no parece válido.")
+            setAddSuccess(null)
+            return
+        }
+
+        if (!staffForm.weight.trim()) {
+            setAddError("Define la ponderación o porcentaje para este integrante.")
+            setAddSuccess(null)
+            return
+        }
+
+        const newMember: StaffMember = {
+            id: crypto.randomUUID(),
+            name: trimmedName,
+            email: sanitizedEmail,
+            role: staffForm.role,
+            weight: staffForm.weight.trim(),
+            startDate: staffForm.startDate,
+            isActive: staffForm.isActive,
+            inactiveSince: staffForm.isActive ? undefined : staffForm.inactiveSince ?? new Date(),
+        }
+
+        const saved = await addStaffMember(newMember)
+
+        if (saved) {
+            setAddError(null)
+            setAddSuccess(`${trimmedName} fue añadido correctamente.`)
+            resetStaffForm(staffForm.role)
+            setActivePopover(null)
+            return
+        }
+
+        setAddSuccess(null)
+        setAddError("No pudimos añadir al integrante. Intenta nuevamente.")
+    }
 
     if (isLoading) {
         return (
@@ -375,6 +185,11 @@ const StaffManagementPage = () => {
         )
     }
 
+    const headerTitle = isAddSection ? "Añadir personal" : "Editar integrantes"
+    const headerDescription = isAddSection
+        ? "Registra nuevos integrantes y notifícalos de inmediato."
+        : "Actualiza correos, estados e inactivaciones sin alterar la configuración inicial."
+
     return (
         <main className="min-h-screen bg-linear-to-b from-background to-muted/30 px-4 py-10">
             <section className="mx-auto w-full max-w-5xl space-y-6">
@@ -383,10 +198,8 @@ const StaffManagementPage = () => {
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             Gestión de personal
                         </p>
-                        <h1 className="text-3xl font-bold tracking-tight">Editar integrantes</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Actualiza correos, estados e inactivaciones sin alterar la configuración inicial.
-                        </p>
+                        <h1 className="text-3xl font-bold tracking-tight">{headerTitle}</h1>
+                        <p className="text-sm text-muted-foreground">{headerDescription}</p>
                     </div>
                     <Button variant="ghost" className="gap-2" onClick={handleBackToDashboard}>
                         <ArrowLeft className="h-4 w-4" />
@@ -394,141 +207,251 @@ const StaffManagementPage = () => {
                     </Button>
                 </div>
 
-                {!canManageStaffEditors ? (
-                    <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                        <AlertCircle className="mt-0.5 h-4 w-4" aria-hidden />
-                        <div>
-                            <p className="font-semibold">Sin permisos de edición</p>
-                            <p className="text-destructive/90">
-                                Solo el encargado y la persona autorizada pueden editar este listado. Pide acceso o solicita que
-                                actualicen los datos por ti.
-                            </p>
-                        </div>
-                    </div>
-                ) : null}
+                <div className="inline-flex overflow-hidden rounded-full border border-white/20 bg-transparent text-sm text-white shadow-[0_12px_30px_rgba(2,4,15,0.65)]">
+                    <button
+                        type="button"
+                        className={`px-5 py-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                            !isAddSection
+                                ? "bg-linear-to-r from-white/65 to-white/25 text-[#0b0f1d] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
+                                : "text-white/65 hover:text-white"
+                        }`}
+                        onClick={() => handleSectionChange("edit")}
+                    >
+                        Editar existentes
+                    </button>
+                    <button
+                        type="button"
+                        className={`px-5 py-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                            isAddSection
+                                ? "bg-linear-to-r from-white/65 to-white/25 text-[#0b0f1d] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
+                                : "text-white/65 hover:text-white"
+                        }`}
+                        onClick={() => handleSectionChange("add")}
+                    >
+                        Añadir personal
+                    </button>
+                </div>
 
-                <StaffPermissionsCard
-                    staffEditors={staffEditors}
-                    maxStaffEditors={MAX_STAFF_EDITORS}
-                    canManageStaffEditors={canManageStaffEditors}
-                    newStaffEditor={newStaffEditor}
-                    staffEditorError={staffEditorError}
-                    reachedStaffEditorsLimit={reachedStaffEditorsLimit}
-                    onNewEditorChange={handleNewStaffEditorChange}
-                    onAddEditor={handleAddStaffEditor}
-                    onRemoveEditor={handleRemoveStaffEditor}
-                />
+                {isAddSection ? (
+                    <>
+                        {addError ? (
+                            <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                                {addError}
+                            </div>
+                        ) : null}
+                        {addSuccess ? (
+                            <div className="rounded-2xl border border-emerald-300/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+                                {addSuccess}
+                            </div>
+                        ) : null}
 
-                <Card className="border bg-background/95 shadow-sm">
-                    <CardHeader>
-                        <CardTitle>Añadir integrante</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="staff-name">Nombre</Label>
-                                <input
-                                    id="staff-name"
-                                    type="text"
-                                    value={staffForm.name}
-                                    onChange={handleStaffFormChange("name")}
-                                    className={baseInputClass}
-                                    disabled={staffInputsDisabled}
+                        <Card className="border border-white/10 bg-[rgba(9,12,24,0.9)] text-white shadow-[0_30px_65px_rgba(3,6,23,0.45)] backdrop-blur-xl">
+                            <CardHeader>
+                                <CardTitle>Formulario de incorporación</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <StaffFormCard
+                                    settlementMode={settlementMode}
+                                    formValues={staffForm}
+                                    formattedStartDate={formattedStartDate}
+                                    formattedInactiveDate={formattedInactiveDate}
+                                    activePopover={activePopover}
+                                    onActivePopoverChange={setActivePopover}
+                                    onFieldChange={handleStaffFormChange}
+                                    onAddMember={handleAddMember}
+                                    serviceStaff={serviceStaff}
+                                    supportStaff={supportStaff}
+                                    onRemoveMember={handleRemoveMemberFromCard}
+                                    staffInputsDisabled={staffInputsDisabled}
+                                    baseInputClassName={baseInputClass}
+                                    formatInactiveDateLabel={formatInactiveDateLabel}
                                 />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="staff-email">Correo electrónico</Label>
-                                <input
-                                    id="staff-email"
-                                    type="email"
-                                    value={staffForm.email}
-                                    onChange={handleStaffFormChange("email")}
-                                    className={baseInputClass}
-                                    placeholder="correo@ejemplo.com"
-                                    disabled={staffInputsDisabled}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="staff-weight">
-                                    {settlementMode === "pool"
-                                        ? "Ponderación (ej. 1.0, 0.75, 0.5)"
-                                        : "Porcentaje de venta (%)"}
-                                </Label>
-                                <input
-                                    id="staff-weight"
-                                    type="number"
-                                    step="0.25"
-                                    value={staffForm.weight}
-                                    onChange={handleStaffFormChange("weight")}
-                                    className={percentageInputClassName}
-                                    min={settlementMode === "pool" ? 0 : 0}
-                                    max={settlementMode === "pool" ? 5 : 100}
-                                    disabled={staffInputsDisabled}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="staff-role">Rol</Label>
-                                <select
-                                    id="staff-role"
-                                    value={staffForm.role}
-                                    onChange={handleStaffFormChange("role") as unknown as React.ChangeEventHandler<HTMLSelectElement>}
-                                    className={baseInputClass}
-                                    disabled={staffInputsDisabled}
-                                >
-                                    <option value="garzon">Garzón</option>
-                                    <option value="ayudante_garzon">Ayudante de Garzón</option>
-                                    <option value="cocinero">Cocinero</option>
-                                    <option value="ayudante_cocina">Ayudante de Cocina</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label>Fecha de ingreso</Label>
-                                <Popover
-                                    open={activePopover === "staff-form-start"}
-                                    onOpenChange={(open) => setActivePopover(open ? ("staff-form-start" as StaffPopoverId) : null)}
-                                >
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            className="flex w-full items-center justify-start gap-2 px-3"
-                                            disabled={staffInputsDisabled}
-                                        >
-                                            <CalendarIcon className="h-4 w-4" />
-                                            <span>{formattedStartDate}</span>
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="p-2" align="start">
-                                        <Calendar
-                                            mode="single"
-                                            selected={staffForm.startDate}
-                                            onSelect={handleStaffFormChange("startDate") as (value: Date | undefined) => void}
-                                            initialFocus
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Estado</Label>
-                                <div className="flex items-center gap-3">
-                                    <Switch
-                                        checked={staffForm.isActive}
-                                        onCheckedChange={(checked) => handleStaffFormChange("isActive")(checked)}
-                                        disabled={staffInputsDisabled}
-                                    />
-                                    <span className="text-sm font-medium">
-                                        {staffForm.isActive ? "Activo" : "Inactivo"}
-                                    </span>
+                            </CardContent>
+                        </Card>
+                    </>
+                ) : (
+                    <>
+                        {!canManageStaffEditors ? (
+                            <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                                <AlertCircle className="mt-0.5 h-4 w-4" aria-hidden />
+                                <div>
+                                    <p className="font-semibold">Sin permisos de edición</p>
+                                    <p className="text-destructive/90">
+                                        Solo el encargado y la persona autorizada pueden editar este listado. Pide acceso o solicita que
+                                        actualicen los datos por ti.
+                                    </p>
                                 </div>
-                                {!staffForm.isActive ? (
+                            </div>
+                        ) : null}
+
+                        {isEmptyState ? (
+                            <Card className="border bg-background/95 shadow-sm">
+                                <CardContent className="space-y-4 py-8 text-center text-sm text-muted-foreground">
+                                    <p>No hay integrantes para editar todavía.</p>
+                                    <Button variant="secondary" onClick={() => navigate("/setup")}>
+                                        Ir a configuración inicial
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card className="border bg-background/95 shadow-sm">
+                                <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <CardTitle>Integrantes registrados</CardTitle>
+                                        <p className="text-sm text-muted-foreground">
+                                            {serviceStaff.length + supportStaff.length} personas entre servicio y cocina/apoyo.
+                                        </p>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="overflow-x-auto">
+                                    <table className="w-full min-w-[720px] divide-y divide-border text-left text-sm">
+                                        <thead className="bg-muted/40">
+                                            <tr>
+                                                <th className="px-4 py-3 font-semibold">Categoría</th>
+                                                <th className="px-4 py-3 font-semibold">Nombre y rol</th>
+                                                <th className="px-4 py-3 font-semibold">Correo</th>
+                                                <th className="px-4 py-3 font-semibold">
+                                                    {settlementMode === "pool" ? "Ponderación" : "% de venta"}
+                                                </th>
+                                                <th className="px-4 py-3 font-semibold">Fecha de ingreso</th>
+                                                <th className="px-4 py-3 font-semibold">Estado</th>
+                                                <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {categorizedStaff.map((member) => (
+                                                <tr key={member.id}>
+                                                    <td className="px-4 py-3 align-top text-xs font-semibold uppercase text-muted-foreground">
+                                                        {STAFF_CATEGORY_LABELS[member.category]}
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium">{member.name}</span>
+                                                            <span className="text-xs text-muted-foreground capitalize">
+                                                                {member.role.replace("_", " ")}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top">
+                                                        <p className="text-sm font-medium text-foreground">{member.email || "Sin correo"}</p>
+                                                        <p className="text-xs text-muted-foreground">Se notifica a este correo.</p>
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top">
+                                                        <div>
+                                                            <p className="text-sm font-semibold">{member.weight || "—"}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {settlementMode === "pool"
+                                                                    ? "Usa decimales (ej. 0.75) para ponderaciones parciales."
+                                                                    : "Corresponde al % de venta asignado."}
+                                                            </p>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top">
+                                                        <p className="text-sm font-medium">
+                                                            {member.startDate ? format(member.startDate, "PPP", { locale: es }) : "Sin definir"}
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top">
+                                                        <div className="space-y-1">
+                                                            <span
+                                                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                                    member.isActive
+                                                                        ? "bg-emerald-100 text-emerald-900"
+                                                                        : "bg-rose-100 text-rose-900"
+                                                                }`}
+                                                            >
+                                                                {member.isActive ? "Activo" : "Inactivo"}
+                                                            </span>
+                                                            {!member.isActive && member.inactiveSince ? (
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Baja desde {format(member.inactiveSince, "PPP", { locale: es })}
+                                                                </p>
+                                                            ) : null}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 align-top">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleOpenEditModal(member.category, member.id)}
+                                                                disabled={staffInputsDisabled}
+                                                            >
+                                                                Editar
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => openDeleteDialog(member.category, member.id, member.name)}
+                                                                aria-label={`Eliminar ${member.name}`}
+                                                                disabled={staffInputsDisabled}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </>
+                )}
+
+                <Dialog open={editModal.isOpen} onOpenChange={(open) => (!open ? handleCloseEditModal() : undefined)}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Editar integrante</DialogTitle>
+                            <DialogDescription>
+                                Actualiza el correo, ponderación, fechas y estado. Los cambios se aplican cuando guardes esta ventana.
+                            </DialogDescription>
+                        </DialogHeader>
+                        {modalDraft ? (
+                            <div className="space-y-5">
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Nombre</Label>
+                                    <p className="text-base font-semibold">{modalDraft.name}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">
+                                        {modalDraft.role.replace("_", " ")}
+                                    </p>
+                                </div>
+                                <div className="grid gap-4 md:grid-cols-2">
                                     <div className="space-y-2">
-                                        <Label>Fecha de baja</Label>
+                                        <Label htmlFor="modal-email">Correo electrónico</Label>
+                                        <input
+                                            id="modal-email"
+                                            type="email"
+                                            value={modalDraft.email}
+                                            onChange={(event) => handleModalEmailChange(event.target.value)}
+                                            className={baseInputClass}
+                                            placeholder="correo@ejemplo.com"
+                                            disabled={staffInputsDisabled}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="modal-weight">
+                                            {settlementMode === "pool" ? "Ponderación (ej. 1.0, 0.75)" : "% de venta"}
+                                        </Label>
+                                        <input
+                                            id="modal-weight"
+                                            type="number"
+                                            step="0.25"
+                                            min={0}
+                                            value={modalDraft.weight}
+                                            onChange={(event) => handleModalWeightChange(event.target.value)}
+                                            className={weightInputClassName}
+                                            disabled={staffInputsDisabled}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label>Fecha de ingreso</Label>
                                         <Popover
-                                            open={activePopover === "staff-form-inactive"}
-                                            onOpenChange={(open) =>
-                                                setActivePopover(open ? ("staff-form-inactive" as StaffPopoverId) : null)
-                                            }
+                                            open={modalPopover === "start"}
+                                            onOpenChange={(open) => setModalPopover(open ? "start" : null)}
                                         >
                                             <PopoverTrigger asChild>
                                                 <Button
@@ -537,46 +460,107 @@ const StaffManagementPage = () => {
                                                     disabled={staffInputsDisabled}
                                                 >
                                                     <CalendarIcon className="h-4 w-4" />
-                                                    <span>{formattedInactiveDate}</span>
+                                                    <span>
+                                                        {modalDraft.startDate
+                                                            ? format(modalDraft.startDate, "PPP", { locale: es })
+                                                            : "Seleccionar fecha"}
+                                                    </span>
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="p-2" align="start">
                                                 <Calendar
                                                     mode="single"
-                                                    selected={staffForm.inactiveSince}
-                                                    onSelect={handleStaffFormChange("inactiveSince") as (value: Date | undefined) => void}
+                                                    selected={modalDraft.startDate}
+                                                    onSelect={(date) => handleModalStartDateChange(date)}
                                                     initialFocus
                                                 />
                                             </PopoverContent>
                                         </Popover>
                                     </div>
-                                ) : null}
+                                    <div className="space-y-2">
+                                        <Label>Estado</Label>
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                checked={modalDraft.isActive}
+                                                onCheckedChange={(checked) => handleModalActiveToggle(checked)}
+                                                disabled={staffInputsDisabled}
+                                            />
+                                            <span className="text-sm font-medium">
+                                                {modalDraft.isActive ? "Activo" : "Inactivo"}
+                                            </span>
+                                        </div>
+                                        {!modalDraft.isActive ? (
+                                            <div className="space-y-2">
+                                                <Label>Fecha de baja</Label>
+                                                <Popover
+                                                    open={modalPopover === "inactive"}
+                                                    onOpenChange={(open) => setModalPopover(open ? "inactive" : null)}
+                                                >
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            className="flex w-full items-center justify-start gap-2 px-3"
+                                                            disabled={staffInputsDisabled}
+                                                        >
+                                                            <CalendarIcon className="h-4 w-4" />
+                                                            <span>
+                                                                {modalDraft.inactiveSince
+                                                                    ? format(modalDraft.inactiveSince, "PPP", { locale: es })
+                                                                    : "Seleccionar fecha"}
+                                                            </span>
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="p-2" align="start">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={modalDraft.inactiveSince}
+                                                            onSelect={(date) => handleModalInactiveDateChange(date)}
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {`Mostrará: ${formatInactiveDateLabel(modalDraft.inactiveSince)}`}
+                                                </p>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                {modalError ? <p className="text-sm text-destructive">{modalError}</p> : null}
                             </div>
-                        </div>
-                        {formError ? (
-                            <p className="text-sm text-destructive">{formError}</p>
                         ) : null}
-                        <div className="flex justify-end">
-                            <Button onClick={handleAddStaffMember} disabled={staffInputsDisabled}>
-                                Añadir integrante
+                        <DialogFooter>
+                            <Button variant="ghost" onClick={handleCloseEditModal} disabled={staffInputsDisabled}>
+                                Cancelar
                             </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                            <Button onClick={handleModalSave} disabled={staffInputsDisabled}>
+                                Guardar cambios
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
-                {isEmptyState ? (
-                    <Card className="border bg-background/95 shadow-sm">
-                        <CardContent className="space-y-4 py-8 text-center text-sm text-muted-foreground">
-                            <p>No hay integrantes para editar todavía.</p>
-                            <Button variant="secondary" onClick={() => navigate("/setup")}>Ir a configuración inicial</Button>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <div className="grid gap-6 lg:grid-cols-2">
-                        {renderStaffCard("service", serviceStaff)}
-                        {renderStaffCard("support", supportStaff)}
-                    </div>
-                )}
+                <AlertDialog open={Boolean(pendingDelete)} onOpenChange={(open) => (!open ? cancelDeleteDialog() : undefined)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar integrante?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Esta acción quitará permanentemente a "{pendingDelete?.memberName}" del listado. Podrás volver a
+                                añadirlo desde la configuración inicial.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={cancelDeleteDialog}>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={confirmDeleteMember}
+                                disabled={isSaving}
+                            >
+                                Eliminar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
                 {saveError ? (
                     <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -598,17 +582,6 @@ const StaffManagementPage = () => {
                     </div>
                 ) : null}
 
-                <div className="flex justify-center">
-                    <Button
-                        size="lg"
-                        className="w-full max-w-md py-6 text-base"
-                        onClick={handleSaveChanges}
-                        disabled={isSaving || staffInputsDisabled}
-                        aria-busy={isSaving}
-                    >
-                        {isSaving ? "Guardando cambios..." : "Guardar cambios"}
-                    </Button>
-                </div>
             </section>
         </main>
     )
