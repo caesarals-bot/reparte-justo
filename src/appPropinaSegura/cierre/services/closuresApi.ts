@@ -68,7 +68,7 @@ export const eliminarCierreDiario = async (params: {
 
 
 export const getApiBaseUrl = () => {
-    const fallbackBaseUrl = "/api"
+    const fallbackBaseUrl = typeof window === "undefined" ? "/api" : `${window.location.origin}/api`
     const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || fallbackBaseUrl
     return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl
 }
