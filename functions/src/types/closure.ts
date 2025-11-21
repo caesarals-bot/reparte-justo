@@ -108,6 +108,13 @@ export const submittedBySchema = z
     })
     .optional()
 
+export const eliminarCierreDiarioSchema = z.object({
+    restaurantId: z.string().min(1),
+    closureId: z.string().min(1),
+    reason: z.string().min(3).max(500).optional(),
+    deletedBy: submittedBySchema,
+})
+
 export const guardarCierreDiarioSchema = z.object({
     restaurantId: z.string().min(1),
     mode: z.enum(["pool", "directa"]),

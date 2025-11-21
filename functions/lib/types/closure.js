@@ -49,6 +49,7 @@ exports.totalsSchema = zod_1.z.object({
     netAfterDeductions: zod_1.z.number().finite(),
     kitchenShare: zod_1.z.number().finite(),
     garzonShare: zod_1.z.number().finite(),
+    generalExpense: zod_1.z.number().finite(),
 });
 exports.metadataSchema = zod_1.z.object({
     referenceDate: zod_1.z.string().nullable(),
@@ -120,6 +121,7 @@ exports.guardarCierreDiarioSchema = zod_1.z.object({
         propinas: zod_1.z.number().finite(),
         transbankAmount: zod_1.z.number().finite(),
         deductionsAmount: zod_1.z.number().finite(),
+        generalExpense: zod_1.z.number().finite(),
     }),
     restaurantContact: exports.restaurantContactSchema,
     configurationSnapshot: exports.configurationSnapshotSchema,

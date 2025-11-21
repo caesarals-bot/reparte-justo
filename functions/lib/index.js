@@ -38,16 +38,29 @@ const functions = __importStar(require("firebase-functions"));
 const zod_1 = require("zod");
 const guardarCierreDiario_1 = require("./handlers/guardarCierreDiario");
 const liquidarPeriodo_1 = require("./handlers/liquidarPeriodo");
-const setCorsHeaders = (res) => {
-    res.set("Access-Control-Allow-Origin", "*");
+const allowedOrigins = new Set([
+    "http://localhost:5173",
+    "https://repartejusto.netlify.app",
+]);
+const resolveOrigin = (incomingOrigin) => {
+    if (!incomingOrigin) {
+        return "*";
+    }
+    return allowedOrigins.has(incomingOrigin) ? incomingOrigin : "*";
+};
+const setCorsHeaders = (req, res) => {
+    const origin = resolveOrigin(req.headers.origin);
+    res.set("Access-Control-Allow-Origin", origin);
+    res.set("Vary", "Origin");
     res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.set("Access-Control-Max-Age", "3600");
 };
 exports.guardarCierreDiario = functions
     .region("us-central1")
     .https.onRequest(async (req, res) => {
-    functions.logger.info("guardarCierreDiario request", { method: req.method });
-    setCorsHeaders(res);
+    functions.logger.info("guardarCierreDiario request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
     if (req.method === "OPTIONS") {
         res.status(204).send("");
         return;
@@ -72,8 +85,8 @@ exports.guardarCierreDiario = functions
 exports.liquidarPeriodo = functions
     .region("us-central1")
     .https.onRequest(async (req, res) => {
-    functions.logger.info("liquidarPeriodo request", { method: req.method });
-    setCorsHeaders(res);
+    functions.logger.info("liquidarPeriodo request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
     if (req.method === "OPTIONS") {
         res.status(204).send("");
         return;

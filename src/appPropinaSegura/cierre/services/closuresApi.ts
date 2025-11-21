@@ -23,6 +23,50 @@ export type GuardarCierreDiarioError = {
     fields?: Record<string, string>
 }
 
+export type EliminarCierreDiarioResponse = {
+    closureId: string
+    status: "deleted"
+    pendingTotals: {
+        netAfterDeductions: number
+        deductionsAmount: number
+        transbankAmount: number
+        pendingCount: number
+    }
+}
+
+export const eliminarCierreDiario = async (params: {
+    restaurantId: string
+    closureId: string
+    reason?: string
+    deletedBy?: {
+        uid?: string
+        name?: string
+        email?: string
+    }
+}): Promise<EliminarCierreDiarioResponse> => {
+    const { restaurantId, closureId, reason, deletedBy } = params
+    const baseUrl = getApiBaseUrl()
+    const url = `${baseUrl}/eliminarCierreDiario`
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ restaurantId, closureId, reason, deletedBy }),
+    })
+
+    const body = await response.json().catch(() => null)
+
+    if (!response.ok || !body) {
+        const message = body?.message ?? "No pudimos eliminar el cierre. Intenta nuevamente en unos segundos."
+        throw new Error(message)
+    }
+
+    return body as EliminarCierreDiarioResponse
+}
+
+
 export const getApiBaseUrl = () => {
     const fallbackBaseUrl = "/api"
     const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || fallbackBaseUrl

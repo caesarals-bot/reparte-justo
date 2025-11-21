@@ -3,6 +3,7 @@ import { ZodError } from "zod"
 
 import { guardarCierreDiarioHandler } from "./handlers/guardarCierreDiario"
 import { liquidarPeriodoHandler } from "./handlers/liquidarPeriodo"
+import { eliminarCierreDiarioHandler } from "./handlers/eliminarCierreDiario"
 
 const allowedOrigins = new Set([
     "http://localhost:5173",
@@ -43,6 +44,36 @@ export const guardarCierreDiario = functions
                 code: "METHOD_NOT_ALLOWED",
                 message: "Este endpoint solo permite solicitudes POST.",
             })
+
+export const eliminarCierreDiario = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res): Promise<void> => {
+        functions.logger.info("eliminarCierreDiario request", { method: req.method, origin: req.headers.origin })
+
+        setCorsHeaders(req, res)
+
+        if (req.method === "OPTIONS") {
+            res.status(204).send("")
+            return
+        }
+
+        if (req.method !== "POST") {
+            res.status(405).json({
+                code: "METHOD_NOT_ALLOWED",
+                message: "Este endpoint solo permite solicitudes POST.",
+            })
+            return
+        }
+
+        try {
+            const result = await eliminarCierreDiarioHandler(req.body)
+            res.status(200).json(result)
+        } catch (error) {
+            const { status, body } = mapHandlerError(error)
+            functions.logger.error("eliminarCierreDiario error", { error })
+            res.status(status).json(body)
+        }
+    })
             return
         }
 

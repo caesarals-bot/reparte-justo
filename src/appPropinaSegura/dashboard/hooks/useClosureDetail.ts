@@ -4,6 +4,7 @@ import { es } from "date-fns/locale"
 import { doc, getDoc } from "firebase/firestore"
 
 import { db } from "@/firebase/config"
+import { eliminarCierreDiario } from "@/appPropinaSegura/cierre/services/closuresApi"
 import {
     useClosuresDashboard,
     type ClosureAdjustment,
@@ -57,6 +58,11 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
         type: "success" | "error"
         message: string
     } | null>(null)
+    const [deleteFeedback, setDeleteFeedback] = useState<{
+        type: "success" | "error"
+        message: string
+    } | null>(null)
+    const [isDeletingClosure, setIsDeletingClosure] = useState(false)
     const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false)
     const generalAdjustmentKey = "__general__"
     const [adjustmentForm, setAdjustmentForm] = useState({
@@ -266,14 +272,15 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
     }, [closure?.adjustments])
 
     const totalAdjustments = useMemo(
-        () => closure?.adjustments?.reduce((acc, adjustment) => {
-            if (adjustment.variant === "porcentaje") {
-                return acc
-            }
+        () =>
+            closure?.adjustments?.reduce((acc, adjustment) => {
+                if (adjustment.variant === "porcentaje") {
+                    return acc
+                }
 
-            const signedAmount = adjustment.type === "descuento" ? -adjustment.amount : adjustment.amount
-            return acc + signedAmount
-        }, 0) ?? 0,
+                const signedAmount = adjustment.type === "descuento" ? -adjustment.amount : adjustment.amount
+                return acc + signedAmount
+            }, 0) ?? 0,
         [closure?.adjustments],
     )
 
@@ -399,28 +406,75 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
                 handleAdjustmentDialogOpenChange(false)
                 void refresh()
             } catch (submitError) {
-                console.error("Error al registrar ajuste", submitError)
+                console.error("Error al crear el ajuste", submitError)
                 setAdjustmentFeedback({
                     type: "error",
-                    message: "No pudimos registrar el ajuste. Intenta nuevamente en unos segundos.",
+                    message: "No pudimos registrar el ajuste. Intenta nuevamente.",
                 })
             } finally {
                 setIsSubmittingAdjustment(false)
             }
         },
         [
-            uid,
+            adjustmentForm.amount,
+            adjustmentForm.motivo,
+            adjustmentForm.percentage,
+            adjustmentForm.type,
+            adjustmentForm.variant,
             closureId,
-            adjustmentForm,
-            generalAdjustmentKey,
-            staffMembers,
             displayName,
             email,
-            refreshClosureAdjustments,
-            resetAdjustmentForm,
+            generalAdjustmentKey,
             handleAdjustmentDialogOpenChange,
             refresh,
+            refreshClosureAdjustments,
+            resetAdjustmentForm,
+            staffMembers,
+            uid,
         ],
+    )
+
+    const handleDeleteClosure = useCallback(
+        async (reason?: string) => {
+            if (!uid || !closureId) {
+                setDeleteFeedback({ type: "error", message: "Necesitas una sesión activa para eliminar el cierre." })
+                return false
+            }
+
+            setIsDeletingClosure(true)
+            setDeleteFeedback(null)
+
+            try {
+                await eliminarCierreDiario({
+                    restaurantId: uid,
+                    closureId,
+                    reason,
+                    deletedBy: {
+                        uid,
+                        name: displayName ?? undefined,
+                        email: email ?? undefined,
+                    },
+                })
+
+                setClosure(null)
+                setDeleteFeedback({ type: "success", message: "Cierre eliminado correctamente." })
+                void refresh()
+                return true
+            } catch (deleteError) {
+                console.error("Error al eliminar el cierre", deleteError)
+                setDeleteFeedback({
+                    type: "error",
+                    message:
+                        deleteError instanceof Error
+                            ? deleteError.message
+                            : "No pudimos eliminar el cierre. Intenta nuevamente.",
+                })
+                return false
+            } finally {
+                setIsDeletingClosure(false)
+            }
+        },
+        [closureId, displayName, email, refresh, uid],
     )
 
     return {
@@ -450,5 +504,8 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
         handleAdjustmentSubmit,
         handleRetry: loadClosure,
         isClosurePaid,
+        deleteFeedback,
+        isDeletingClosure,
+        handleDeleteClosure,
     }
 }

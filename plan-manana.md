@@ -2,22 +2,18 @@
 
 > Actualizado: 20 de noviembre de 2025
 
-## Mañana · 20/11/2025
+## Mañana · 21/11/2025
 
-1. **QA y documentación del nuevo flujo de personal**
-   - Capturar evidencia del toggle `Añadir/Editar` y del formulario en `InitialSetupPage`.
-   - Actualizar `DOCUMENTACION.md` / README con capturas y notas de validación.
-2. **Validar navegación parametrizada**
-   - Desde el dashboard probar los CTA “Añadir personal” y “Editar personal” asegurando que respetan `?section=add|edit`.
-   - Registrar hallazgos o bugs en el tablero.
-3. **Refinar permisos y experiencia Dark Serenity**
-   - Ajustar estados vacíos e interacción del `StaffPermissionsCard` (hover, focus, textos).
-   - Evaluar si se necesita admitir más de un editor y documentar backlog.
-4. **Optimización de build**
-   - Revisar warning de bundles >500 kB y proponer `manualChunks` o `dynamic import()` para los módulos más pesados.
-5. **Seguimiento de Cierre Diario**
-   - Revisar cards pendientes del tema Dark Serenity en `ClosureDetailPage`.
-   - Preparar checklist para integrar próximamente los ajustes porcentuales en los netos mostrados.
+1. **Correcciones sobre cierres guardados**
+   - Diseñar endpoints y UI para eliminar un cierre diario (revirtiendo `pendingTotals`).
+   - Preparar flujo de edición (abrir cierre existente, ajustar montos y volver a guardar) con confirmaciones.
+2. **Propagar `gastoGeneral` (anfitriona/part-time)**
+   - Mostrar el campo en el formulario con su valor real y enviarlo en los payloads.
+   - Reflejar el gasto en tarjetas del dashboard, detalle del cierre y totales de liquidación/PDF.
+   - Asegurar que los totales pendientes y agregados no excedan el neto después del gasto general.
+3. **Documentación y QA**
+   - Registrar en `DOCUMENTACION.md` la gestión de cierres (guardar, editar, eliminar) y el nuevo flujo del gasto general.
+   - Preparar casos de prueba manuales para borrar/editar cierres y verificar el impacto en dashboard/liquidación.
 
 ## Enfoque de hoy · 19/11/2025
 

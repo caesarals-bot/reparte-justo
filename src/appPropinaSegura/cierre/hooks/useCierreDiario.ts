@@ -222,6 +222,19 @@ type UseCierreDiarioResult = {
     setSaveSuccessMessage: (value: string | null) => void
     resetAfterSave: () => void
     ineligibleStaffNames: string[]
+    editingState: EditingClosureState | null
+    isHydratingFromClosure: boolean
+    loadClosureForEditing: (params: { restaurantId: string; closureId: string }) => Promise<void>
+    markEditingOriginalDeleted: () => void
+    clearEditingState: () => void
+}
+
+type EditingClosureState = {
+    closureId: string
+    referenceDate?: string | null
+    referenceDateKey?: string | null
+    mode: "pool" | "directa" | null
+    hasDeletedOriginal: boolean
 }
 
 const defaultCierreValues: CierreFormValues = {
@@ -230,6 +243,49 @@ const defaultCierreValues: CierreFormValues = {
     ventaDirecta: [],
     pocilloSecundario: [],
     gastoGeneral: 0,
+}
+
+const toSafeNumber = (value: unknown, fallback = 0): number => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value
+    }
+
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const sanitizeStaffEntries = (value: unknown): StaffEntry[] => {
+    if (!Array.isArray(value)) {
+        return []
+    }
+
+    return value
+        .map((item) => {
+            if (!item || typeof item !== "object") {
+                return null
+            }
+
+            const entry = item as Partial<StaffEntry>
+
+            if (!entry.id || !entry.nombre) {
+                return null
+            }
+
+            return {
+                ...entry,
+                id: String(entry.id),
+                nombre: String(entry.nombre),
+                presente: entry.presente !== false,
+                penalizacion_pct: toSafeNumber(entry.penalizacion_pct),
+                deduccion_valor: toSafeNumber(entry.deduccion_valor),
+                montoIndividual:
+                    entry.montoIndividual !== undefined ? toSafeNumber(entry.montoIndividual) : entry.montoIndividual,
+                porcentajeVenta:
+                    entry.porcentajeVenta !== undefined ? toSafeNumber(entry.porcentajeVenta) : entry.porcentajeVenta,
+                totalVenta: entry.totalVenta !== undefined ? toSafeNumber(entry.totalVenta) : entry.totalVenta,
+            } as StaffEntry
+        })
+        .filter((entry): entry is StaffEntry => Boolean(entry))
 }
 
 const formatWeight = (weight?: number | string) => {
@@ -377,6 +433,8 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     } | null>(null)
     const [ineligibleStaffNames, setIneligibleStaffNames] = useState<string[]>([])
     const [restaurantContact, setRestaurantContact] = useState<{ email?: string; responsibleName?: string }>({})
+    const [editingState, setEditingState] = useState<EditingClosureState | null>(null)
+    const [isHydratingFromClosure, setIsHydratingFromClosure] = useState(false)
 
     const formMethods = useForm<CierreFormValues>({
         resolver: zodResolver(cierreSchema),
@@ -816,6 +874,118 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         setIneligibleStaffNames([])
     }, [buildInitialFormValues, initialStaffConfig, reset])
 
+    const loadClosureForEditing = useCallback(
+        async ({ restaurantId, closureId }: { restaurantId: string; closureId: string }) => {
+            if (!restaurantId || !closureId) {
+                return
+            }
+
+            setIsHydratingFromClosure(true)
+
+            try {
+                const closureRef = doc(db, "restaurants", restaurantId, "registros_diarios", closureId)
+                const snapshot = await getDoc(closureRef)
+
+                if (!snapshot.exists()) {
+                    setLoadError("No encontramos el cierre que intentas editar.")
+                    setEditingState(null)
+                    return
+                }
+
+                const data = snapshot.data() as Record<string, unknown>
+                const staffSnapshotRecord =
+                    (data["staffSnapshot"] as Record<string, unknown>) ??
+                    ((data["snapshot"] as Record<string, unknown>)?.["staff"] as Record<string, unknown>) ??
+                    (data["staff"] as Record<string, unknown>) ??
+                    {}
+
+                const nextValues: CierreFormValues = {
+                    asistenciaServicio: sanitizeStaffEntries(staffSnapshotRecord["asistenciaServicio"]),
+                    asistenciaCocina: sanitizeStaffEntries(staffSnapshotRecord["asistenciaCocina"]),
+                    ventaDirecta: sanitizeStaffEntries(staffSnapshotRecord["ventaDirecta"]),
+                    pocilloSecundario: sanitizeStaffEntries(staffSnapshotRecord["pocilloSecundario"]),
+                    gastoGeneral: toSafeNumber((data["totals"] as Record<string, unknown>)?.["generalExpense"], 0),
+                }
+
+                reset(nextValues)
+
+                const totalsRecord = (data["totals"] as Record<string, unknown>) ?? {}
+                const poolAmount = totalsRecord["pool"]
+                setPoolTotalInput(poolAmount === undefined ? "" : String(toSafeNumber(poolAmount)))
+
+                const referenceDateValue = (data["metadata"] as Record<string, unknown>)?.["referenceDate"] as
+                    | string
+                    | null
+                    | undefined
+                const parsedReferenceDate = referenceDateValue ? new Date(referenceDateValue) : new Date()
+                setPoolDate(parsedReferenceDate)
+                setDirectDate(parsedReferenceDate)
+
+                const configurationSnapshot = data["configurationSnapshot"] as ConfigurationVersionSnapshot | undefined
+                if (configurationSnapshot?.poolPercentages) {
+                    setPoolPercentages({
+                        kitchen: toSafeNumber(configurationSnapshot.poolPercentages.kitchen),
+                        transbank: toSafeNumber(configurationSnapshot.poolPercentages.transbank),
+                    })
+                }
+
+                if (Array.isArray(configurationSnapshot?.additionalDeductions)) {
+                    setAdditionalDeductionPercents(
+                        configurationSnapshot.additionalDeductions.map((value) => toSafeNumber(value)),
+                    )
+                }
+
+                if (configurationSnapshot?.contact || data["restaurantContact"]) {
+                    setRestaurantContact(
+                        configurationSnapshot?.contact ??
+                            ((data["restaurantContact"] as { email?: string; responsibleName?: string }) ?? {}),
+                    )
+                }
+
+                const editingMode = (data["mode"] as "pool" | "directa" | null | undefined) ??
+                    configurationSnapshot?.settlementMode ??
+                    null
+                setSettlementModeConfig(editingMode)
+
+                setIneligibleStaffNames([])
+                setLoadError(null)
+
+                const metadataRecord = (data["metadata"] as Record<string, unknown>) ?? {}
+                setEditingState({
+                    closureId,
+                    referenceDate: (metadataRecord["referenceDate"] as string | null | undefined) ?? null,
+                    referenceDateKey: (metadataRecord["referenceDateKey"] as string | null | undefined) ?? null,
+                    mode: editingMode,
+                    hasDeletedOriginal: false,
+                })
+            } catch (error) {
+                console.error("Error al cargar el cierre para edición", error)
+                setLoadError("No pudimos cargar el cierre para edición. Intenta nuevamente en unos segundos.")
+                setEditingState(null)
+            } finally {
+                setIsHydratingFromClosure(false)
+            }
+        }, [
+            reset,
+            setLoadError,
+            setPoolTotalInput,
+            setPoolDate,
+            setDirectDate,
+            setPoolPercentages,
+            setAdditionalDeductionPercents,
+            setSettlementModeConfig,
+            setRestaurantContact,
+            setIneligibleStaffNames,
+        ])
+
+    const markEditingOriginalDeleted = useCallback(() => {
+        setEditingState((previous) => (previous ? { ...previous, hasDeletedOriginal: true } : previous))
+    }, [])
+
+    const clearEditingState = useCallback(() => {
+        setEditingState(null)
+    }, [])
+
     useEffect(() => {
         if (!referenceDate) {
             setIneligibleStaffNames([])
@@ -880,8 +1050,8 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         poolTotalAmount,
         totalDirectSales,
         currencyFormatter,
-        summaryItems,
         formattedDirectSales,
+        summaryItems,
         serviceAssignedAmounts,
         supportAssignedAmounts,
         directAssignedAmounts,
@@ -904,5 +1074,10 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         setSaveSuccessMessage,
         resetAfterSave,
         ineligibleStaffNames,
+        editingState,
+        isHydratingFromClosure,
+        loadClosureForEditing,
+        markEditingOriginalDeleted,
+        clearEditingState,
     }
 }

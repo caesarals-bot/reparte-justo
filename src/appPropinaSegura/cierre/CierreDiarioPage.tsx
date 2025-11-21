@@ -10,11 +10,15 @@ import { CalendarIcon } from "lucide-react"
 import StaffAsistenciaCard from "./StaffAsistenciaCard"
 import { amountInputClassName } from "./constants"
 import { useAuth } from "@/context/AuthContext"
-import { useNavigate } from "react-router"
+import { useNavigate, useSearchParams } from "react-router"
 import { useCierreDiario } from "./hooks/useCierreDiario"
 import { useClosuresDashboard } from "@/appPropinaSegura/dashboard/hooks/useClosuresDashboard"
 import { buildClosureHighlights } from "@/appPropinaSegura/dashboard/utils/closureCalculations"
-import { guardarCierreDiario, type GuardarCierreDiarioResponse } from "./services/closuresApi"
+import {
+    guardarCierreDiario,
+    type GuardarCierreDiarioResponse,
+    eliminarCierreDiario,
+} from "./services/closuresApi"
 
 const calendarModifiersClassNames = {
     pendingClosure:
@@ -27,6 +31,7 @@ const calendarModifiersClassNames = {
 const CierreDiarioPage = () => {
     const { uid, displayName, email } = useAuth()
     const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
     const {
         formMethods,
         fieldArrays,
@@ -56,6 +61,11 @@ const CierreDiarioPage = () => {
         setSaveSuccessMessage,
         resetAfterSave,
         ineligibleStaffNames,
+        editingState,
+        isHydratingFromClosure,
+        loadClosureForEditing,
+        markEditingOriginalDeleted,
+        clearEditingState,
     } = useCierreDiario({
         uid,
         userInfo: {
@@ -103,6 +113,20 @@ const CierreDiarioPage = () => {
         setSaveSuccessMessage(null)
     }, [formMethods.formState.isDirty, setSaveSuccessMessage])
 
+    const closureIdParam = searchParams.get("closureId")
+
+    useEffect(() => {
+        if (!uid) {
+            return
+        }
+
+        if (closureIdParam) {
+            void loadClosureForEditing({ restaurantId: uid, closureId: closureIdParam })
+        } else {
+            clearEditingState()
+        }
+    }, [uid, closureIdParam, loadClosureForEditing, clearEditingState])
+
     const handleSaveClosure = async () => {
         if (isSavingClosure) {
             return
@@ -119,6 +143,21 @@ const CierreDiarioPage = () => {
 
         try {
             setIsSavingClosure(true)
+
+            if (editingState && !editingState.hasDeletedOriginal) {
+                await eliminarCierreDiario({
+                    restaurantId: uid,
+                    closureId: editingState.closureId,
+                    reason: "Reemplazo por edición del cierre",
+                    deletedBy: {
+                        uid,
+                        name: displayName ?? undefined,
+                        email: email ?? undefined,
+                    },
+                })
+                markEditingOriginalDeleted()
+            }
+
             const snapshotPayload = buildClosureSnapshotPayload()
 
             if (!snapshotPayload.metadata.referenceDateKey) {
@@ -131,9 +170,21 @@ const CierreDiarioPage = () => {
             await refreshClosures()
 
             setLastSavedResponse(response)
-            setSaveSuccessMessage(`Cierre ${response.closureId} guardado correctamente. Ya aparece como pendiente.`)
+            const successMessage = editingState
+                ? `Cierre ${response.closureId} actualizado correctamente. Ya aparece como pendiente.`
+                : `Cierre ${response.closureId} guardado correctamente. Ya aparece como pendiente.`
+            setSaveSuccessMessage(successMessage)
             setHasSavedPendingClosure(true)
             resetAfterSave()
+
+            if (editingState) {
+                clearEditingState()
+                if (closureIdParam) {
+                    const nextParams = new URLSearchParams(searchParams)
+                    nextParams.delete("closureId")
+                    setSearchParams(nextParams, { replace: true })
+                }
+            }
         } catch (error) {
             console.error("Error al guardar el cierre", error)
             setSaveError(error instanceof Error ? error.message : "No pudimos guardar el cierre. Intenta nuevamente en unos segundos.")
@@ -203,11 +254,11 @@ const CierreDiarioPage = () => {
                                 type="button"
                                 variant="ghost"
                                 onClick={handleSaveClosure}
-                                disabled={isSavingClosure}
-                                aria-disabled={isSavingClosure}
+                                disabled={isSavingClosure || isHydratingFromClosure}
+                                aria-disabled={isSavingClosure || isHydratingFromClosure}
                                 className="w-full gap-2 rounded-full border border-white/20 bg-white/10 px-5 text-white transition hover:bg-white/15 sm:w-auto"
                             >
-                                {isSavingClosure ? "Guardando..." : "Guardar"}
+                                {isHydratingFromClosure ? "Cargando cierre..." : isSavingClosure ? "Guardando..." : "Guardar"}
                             </Button>
                             {showPayButton ? (
                                 <Button
@@ -220,6 +271,13 @@ const CierreDiarioPage = () => {
                             ) : null}
                         </div>
                     </div>
+
+                    {editingState ? (
+                        <div className="rounded-2xl border border-amber-300/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                            Estás editando el cierre original {editingState.referenceDateKey ?? editingState.closureId}. Se eliminará el
+                            cierre previo y se volverá a crear con la información actualizada.
+                        </div>
+                    ) : null}
 
                     {saveError ? (
                         <div

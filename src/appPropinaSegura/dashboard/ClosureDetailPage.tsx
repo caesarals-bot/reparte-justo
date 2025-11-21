@@ -1,3 +1,4 @@
+import { useState, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -17,9 +18,20 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Loader2, Users } from "lucide-react"
+import { ArrowLeft, Loader2, Users, Trash2, Pencil } from "lucide-react"
 
 import { useAuth } from "@/context/AuthContext"
 import { buildMemberIdentifier, useClosureDetail } from "./hooks/useClosureDetail"
@@ -92,7 +104,26 @@ const ClosureDetailPage = () => {
         handleAdjustmentMotivoChange,
         handleAdjustmentSubmit,
         handleRetry,
+        handleDeleteClosure,
+        deleteFeedback,
+        isDeletingClosure,
+        isClosurePaid,
     } = useClosureDetail({ uid, closureId, displayName, email })
+
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+    const [deleteReason, setDeleteReason] = useState("")
+
+    const handleDeleteConfirm = async () => {
+        const success = await handleDeleteClosure(deleteReason.trim() ? deleteReason.trim() : undefined)
+        if (success) {
+            setIsDeleteDialogOpen(false)
+            navigate("/dashboard")
+        }
+    }
+
+    const handleDeleteReasonChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+        setDeleteReason(event.target.value)
+    }
 
     if (isLoading) {
         return (
@@ -153,6 +184,74 @@ const ClosureDetailPage = () => {
                         <Badge variant={getStatusBadgeVariant(estado)} className="w-fit text-xs uppercase tracking-wide">
                             {estado}
                         </Badge>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="gap-2"
+                                onClick={() => navigate(`/cierre?closureId=${closure?.id ?? ""}`)}
+                                disabled={!closure || isClosurePaid}
+                                aria-label="Editar cierre"
+                            >
+                                <Pencil className="h-4 w-4" /> Editar
+                            </Button>
+
+                            <AlertDialog
+                                open={isDeleteDialogOpen}
+                                onOpenChange={(open) => {
+                                    setIsDeleteDialogOpen(open)
+                                    if (!open) {
+                                        setDeleteReason("")
+                                    }
+                                }}
+                            >
+                                <AlertDialogTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="destructive"
+                                        className="gap-2"
+                                        disabled={isClosurePaid}
+                                        aria-label="Eliminar cierre"
+                                    >
+                                        <Trash2 className="h-4 w-4" /> Eliminar
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="bg-[rgba(10,13,25,0.95)] border-white/10 text-white">
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Eliminar cierre pendiente</AlertDialogTitle>
+                                        <AlertDialogDescription className="text-white/70">
+                                            Esta acción no se puede deshacer. Al confirmar, el cierre se eliminará y los totales
+                                            pendientes se recalcularán. Describe brevemente el motivo para auditoría.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <textarea
+                                        placeholder="Motivo (opcional)"
+                                        value={deleteReason}
+                                        onChange={handleDeleteReasonChange}
+                                        className="min-h-[96px] w-full rounded-md border border-white/20 bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                                    />
+                                    {deleteFeedback ? (
+                                        <p
+                                            className={`text-sm ${deleteFeedback.type === "error" ? "text-destructive" : "text-emerald-400"}`}
+                                        >
+                                            {deleteFeedback.message}
+                                        </p>
+                                    ) : null}
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                            onClick={handleDeleteConfirm}
+                                            disabled={isDeletingClosure}
+                                        >
+                                            {isDeletingClosure ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                            Confirmar eliminación
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
 
                         <Dialog open={isAdjustmentDialogOpen} onOpenChange={handleAdjustmentDialogOpenChange}>
                             <DialogTrigger asChild>

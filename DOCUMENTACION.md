@@ -64,6 +64,22 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Calendar, registro de montos individuales por garzón con penalización y deducción; asistencia del staff secundario con ponderaciones y descuentos monetarios.
 - **Botón global** para guardar (pendiente de link a API real).
 
+### Guardar un cierre
+- **Archivo principal**: `src/appPropinaSegura/cierre/CierreDiarioPage.tsx` con lógica central en `useCierreDiario`.
+- Los totales y snapshots se generan a través de `buildClosureSnapshotPayload`. El payload incluye: configuraciones vigentes, snapshot de staff, asignaciones y metadatos (`referenceDateKey`, `daysWithoutSettlement`).
+- La función `guardarCierreDiario` (cliente en `src/appPropinaSegura/cierre/services/closuresApi.ts`) llama al Cloud Function homónimo para persistir el cierre y recalcular los totales pendientes del restaurante.
+
+### Eliminar un cierre
+- **Backend**: Cloud Function `eliminarCierreDiario` (`functions/src/handlers/eliminarCierreDiario.ts`) valida que el cierre esté pendiente, revierte los pendientes diarios y escribe un registro de auditoría.
+- **Frontend**: `ClosureDetailPage` utiliza `useClosureDetail` para disparar `eliminarCierreDiario` mostrando un `AlertDialog` con motivo obligatorio. Tras eliminar, refresca el dashboard y redirige a `/dashboard`.
+
+### Editar un cierre (delete + replace)
+- **Motivación**: modificar cierres históricos requiere mantener trazabilidad; por ello se aplica un flujo "eliminar y volver a crear" para evitar inconsistencias en agregados.
+- **Carga para edición**: desde `ClosureDetailPage` se navega a `/cierre?closureId=XYZ`. `useCierreDiario` lee dicho parámetro, consulta el cierre en Firestore y rellena el formulario con los snapshots almacenados (asistencia, montos, gasto general, configuraciones y modo).
+- **Guardado**: al presionar "Guardar" en modo edición, `CierreDiarioPage` invoca `eliminarCierreDiario` sobre el cierre original (con un motivo fijo) y luego vuelve a llamar `guardarCierreDiario` con el nuevo snapshot. Si el borrado falla no se crea un duplicado, manteniendo atomicidad lógica.
+- **Estado UI**: se muestran banners y estados de carga específicos (`isHydratingFromClosure`, `editingState.hasDeletedOriginal`) para prevenir acciones duplicadas y comunicar al usuario que el cierre previo será reemplazado.
+- **Post-proceso**: tras un guardado exitoso se limpian los parámetros de búsqueda, se resetea la forma y se obliga a un `refreshClosures()` para reflejar el cierre recién creado en el dashboard.
+
 ## Estado y Datos
 - Se utilizan `useState` y estructuras mock para formularios y tablas.
 - No hay integración con API aún; se recomienda conectar con backend o contexto global en próximas iteraciones.
@@ -273,6 +289,16 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 1. Repasar componentes secundarios (staff modals, ajustes en `ClosureDetailPage`) para aplicar las mismas gradientes.
 2. Incorporar iluminación suave en los `Dialog`/`AlertDialog` (aplicar `shadow-[0_30px_60px_rgba(3,6,23,0.65)]`).
 3. Actualizar screenshots o mockups internos para QA visual y mantener consistencia con la guía Dark Serenity.
+
+## Bitácora · 20/11/2025
+
+- **Funciones Cloud (guardarCierreDiario)**
+  - Se agregó control de CORS con lista blanca de orígenes (`localhost:5173`, `repartejusto.netlify.app`) devolviendo `Access-Control-Allow-Origin` dinámico y `Vary: Origin`.
+  - Se desplegó la función con Firebase CLI y se habilitaron invocaciones públicas (`allUsers → Cloud Functions Invoker`).
+  - QA de preflight: `OPTIONS https://us-central1-reparte-justo.cloudfunctions.net/guardarCierreDiario` respondió `204` con los headers esperados.
+- **Problemas detectados**
+  - El campo `gastoGeneral` (anfitriona/part-time) no se muestra ni impacta los totales en dashboard, detalle de cierre ni liquidación.
+  - No existen acciones para editar o eliminar cierres almacenados; cualquier error obliga a duplicar el día.
 
 ## Bitácora · 19/11/2025
 
