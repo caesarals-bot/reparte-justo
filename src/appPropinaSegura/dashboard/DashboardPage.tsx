@@ -95,6 +95,7 @@ const DashboardPage = () => {
 
         const servicioMembersMap = new Map<string, DashboardMember>()
         const cocinaMembersMap = new Map<string, DashboardMember>()
+        const generalExpensesMap = new Map<string, DashboardMember>()
         const ajustesRows: DashboardMember[] = []
 
         const accumulateAssignment = (
@@ -133,6 +134,7 @@ const DashboardPage = () => {
         }
 
         let transbankTotal = 0
+        let generalExpensesTotal = 0
         let ajustesTotal = 0
 
         pendingClosures.forEach((closure) => {
@@ -141,6 +143,24 @@ const DashboardPage = () => {
 
             const transbankAmount = Math.max(0, closure.totals.transbankAmount)
             transbankTotal += transbankAmount
+
+            closure.generalExpenses.forEach((expense) => {
+                const key = `${expense.nombre}|${expense.tipo ?? "general"}`
+                const existing = generalExpensesMap.get(key)
+                generalExpensesTotal += expense.monto
+
+                if (existing) {
+                    existing.amount += expense.monto
+                } else {
+                    generalExpensesMap.set(key, {
+                        id: key,
+                        name: expense.nombre,
+                        amount: expense.monto,
+                        totalDescuentos: 0,
+                        deductionLabel: expense.tipo ?? undefined,
+                    })
+                }
+            })
 
             const findBaseNetForAdjustment = (staffId?: string, staffName?: string): number => {
                 if (!staffId && !staffName) {
@@ -270,6 +290,16 @@ const DashboardPage = () => {
                         deductionLabel: "Cargo transaccional",
                     },
                 ],
+                category: "deduction",
+            })
+        }
+
+        if (generalExpensesTotal > 0) {
+            nextGroups.push({
+                groupName: "Gasto general",
+                description: "Montos restados antes de repartir al staff.",
+                totalAmount: generalExpensesTotal,
+                breakdown: Array.from(generalExpensesMap.values()).sort((a, b) => b.amount - a.amount),
                 category: "deduction",
             })
         }

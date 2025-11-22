@@ -64,6 +64,31 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Calendar, registro de montos individuales por garzón con penalización y deducción; asistencia del staff secundario con ponderaciones y descuentos monetarios.
 - **Botón global** para guardar (pendiente de link a API real).
 
+### Hook `useCierreDiario`
+- **Archivo**: `src/appPropinaSegura/cierre/hooks/useCierreDiario.ts`.
+- Responsabilidades principales:
+  - Inicializar el formulario del cierre (staff, fechas, totales, configuraciones versionadas) con `react-hook-form` y `useFieldArray` para cada tipo de asistencia.
+  - Calcular totales derivados (`poolTotalAmount`, `totalDirectSales`, `netAfterDeductions`, `generalExpenseTotal`, montos asignados por staff) y exponerlos para UI/resumen.
+  - Construir el payload (`buildClosureSnapshotPayload`) que se envía a `guardarCierreDiario`, incluyendo snapshots de staff, configuraciones, `generalExpenses` y metadatos (`referenceDateKey`, `daysWithoutSettlement`).
+  - Administrar el flujo de edición (cargar cierre existente, marcar cuando el original se elimina, limpiar estado al terminar) mediante `editingState`, `isHydratingFromClosure` y helpers (`loadClosureForEditing`, `markEditingOriginalDeleted`, `clearEditingState`).
+  - Exponer banderas de guardado (`isSavingClosure`, `saveError`, `saveSuccessMessage`), reseteo (`resetAfterSave`) e información auxiliar (`ineligibleStaffNames`).
+
+#### Soporte para gastos generales múltiples
+- `generalExpenses` es un `useFieldArray` con entradas `{ entryId, nombre, tipo, monto }` Validadas por Zod.
+- `generalExpenseEntries` y `generalExpenseTotal` se calculan con `useWatch` + `useMemo` y se restan del reparto a garzones/kitchen antes de construir el snapshot.
+- Cuando se edita un cierre antiguo que solo tenía `gastoGeneral` numérico, el hook genera un fallback con una entrada única para mantener compatibilidad.
+- Cada snapshot guardado expone tanto el total (`totals.generalExpense`) como el arreglo completo `generalExpenses`, lo que habilita mostrar el desglose en dashboard, detalle y futuros reportes.
+
+### Visualización de gastos generales en dashboard y detalle
+- `ClosureDetailPage` muestra ahora una tarjeta dedicada con el total de gasto general y el listado de cada partida (nombre, tipo, monto), manteniendo trazabilidad aunque el cierre se haya creado antes de la nueva UI.
+- `DashboardPage` agrega un grupo de deducción "Gasto general" dentro de la sección de pendientes, acumulando los montos registrados por día y mostrando un breakdown resumido.
+- Esta información se alimenta directamente desde `useClosuresDashboard`, que normaliza las entradas históricas para evitar duplicados y preservar compatibilidad hacia atrás.
+
+#### Advertencia cuando el neto ≤ 0
+- `buildClosureSnapshotPayload` calcula `dailySummary.netAfterDeductions`; en la página, antes de guardar se revisa este valor.
+- Si el neto es cero o negativo, la UI abre un `AlertDialog` que muestra el monto resultante y exige confirmación explícita antes de llamar a `guardarCierreDiario`.
+- El hook no bloquea el guardado, pero expone `netAfterDeductions` para que la capa de presentación implemente las políticas necesarias.
+
 ### Guardar un cierre
 - **Archivo principal**: `src/appPropinaSegura/cierre/CierreDiarioPage.tsx` con lógica central en `useCierreDiario`.
 - Los totales y snapshots se generan a través de `buildClosureSnapshotPayload`. El payload incluye: configuraciones vigentes, snapshot de staff, asignaciones y metadatos (`referenceDateKey`, `daysWithoutSettlement`).

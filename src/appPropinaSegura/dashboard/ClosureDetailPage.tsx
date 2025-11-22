@@ -402,6 +402,45 @@ const ClosureDetailPage = () => {
                     </CardContent>
                 </Card>
 
+                <Card className="border bg-background/95 shadow-lg">
+                    <CardHeader className="pb-4">
+                        <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+                            <span>Gastos generales</span>
+                            <Badge variant="secondary" className="text-xs">
+                                Total: {formatCurrency(closure.totals.generalExpense)}
+                            </Badge>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {closure.generalExpenses.length ? (
+                            <div className="space-y-3">
+                                {closure.generalExpenses.map((expense) => (
+                                    <div
+                                        key={expense.entryId}
+                                        className="rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground"
+                                    >
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                                <p className="font-medium text-foreground">{expense.nombre}</p>
+                                                <p className="text-xs uppercase tracking-wide">
+                                                    {expense.tipo ?? "General"}
+                                                </p>
+                                            </div>
+                                            <Badge variant="outline" className="text-xs">
+                                                {formatCurrency(expense.monto)}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Este cierre no registró gastos generales adicionales.
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+
                 {adjustmentFeedback ? (
                     <Card
                         className={

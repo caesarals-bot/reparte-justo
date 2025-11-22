@@ -10,6 +10,7 @@ import {
     type ClosureAdjustment,
     type ClosureAdjustmentVariant,
     type ClosureDocument,
+    type GeneralExpenseEntry,
     type StaffAssignment,
     createClosureAdjustment,
     fetchClosureAdjustments,
@@ -30,6 +31,8 @@ export type ClosureSummaryItem = {
     label: string
     value: number
 }
+
+export type ClosureGeneralExpense = GeneralExpenseEntry
 
 export type AssignmentSection = {
     key: string
@@ -322,6 +325,7 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
             { label: "Total neto ajustado", value: closure.totals.netAfterDeductions + totalAdjustments },
             { label: "Deducciones", value: closure.totals.deductionsAmount },
             { label: "Transbank", value: closure.totals.transbankAmount },
+            { label: "Gasto general", value: closure.totals.generalExpense },
         ]
     }, [closure, totalAdjustments])
 

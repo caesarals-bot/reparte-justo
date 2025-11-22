@@ -74,6 +74,13 @@ type RestaurantContact = {
     responsibleName?: string
 }
 
+export type GeneralExpenseEntry = {
+    entryId: string
+    nombre: string
+    tipo?: "part-time" | "anfitriona" | string
+    monto: number
+}
+
 export type ClosureDocument = {
     id: string
     estado: string
@@ -91,6 +98,7 @@ export type ClosureDocument = {
         daysWithoutSettlement?: number
     }
     assignments: StaffAssignments
+    generalExpenses: GeneralExpenseEntry[]
     adjustments: ClosureAdjustment[]
     createdAt?: Timestamp | null
     updatedAt?: Timestamp | null
@@ -196,6 +204,29 @@ const mapAdjustment = (value: Record<string, unknown> & { id: string }): Closure
         motivo: typeof value.motivo === "string" ? value.motivo : undefined,
         createdAt: (value.createdAt as Timestamp | undefined) ?? null,
         createdBy: typeof value.createdBy === "string" ? value.createdBy : undefined,
+    }
+}
+
+const mapGeneralExpense = (value: unknown): GeneralExpenseEntry | null => {
+    const record = extractRecord(value)
+
+    if (!record) {
+        return null
+    }
+
+    const entryId = typeof record.entryId === "string" ? record.entryId : undefined
+    const nombre = typeof record.nombre === "string" ? record.nombre : undefined
+    const monto = toNumber(record.monto)
+
+    if (!entryId || !nombre || monto < 0) {
+        return null
+    }
+
+    return {
+        entryId,
+        nombre,
+        tipo: typeof record.tipo === "string" ? record.tipo : undefined,
+        monto,
     }
 }
 
@@ -364,6 +395,27 @@ export const mapSnapshotToClosure = (
     const buildAssignments = (key: keyof StaffAssignments): StaffAssignment[] =>
         extractArray(assignmentsRecord?.[key]).map((item) => mapAssignment(item))
 
+    const generalExpensesFromDoc = extractArray(data["generalExpenses"])
+    const generalExpensesFromSnapshot = extractArray(snapshotRecord?.["generalExpenses"])
+    const mappedGeneralExpenses = generalExpensesFromDoc.length
+        ? generalExpensesFromDoc.map(mapGeneralExpense).filter(Boolean)
+        : generalExpensesFromSnapshot.map(mapGeneralExpense).filter(Boolean)
+
+    const totalGeneralExpenseValue = toNumber(totalsFromDoc.generalExpense)
+
+    const safeGeneralExpenses = mappedGeneralExpenses.length
+        ? (mappedGeneralExpenses as GeneralExpenseEntry[])
+        : totalGeneralExpenseValue > 0
+            ? [
+                {
+                    entryId: "general-expense-fallback",
+                    nombre: "Gasto general",
+                    tipo: "part-time",
+                    monto: totalGeneralExpenseValue,
+                },
+            ]
+            : []
+
     return {
         id: snapshot.id,
         estado: (data.estado as string) ?? "pendiente",
@@ -382,6 +434,7 @@ export const mapSnapshotToClosure = (
             referenceDateKey: metadataFromDoc.referenceDateKey as string | null | undefined,
             daysWithoutSettlement: metadataFromDoc.daysWithoutSettlement as number | undefined,
         },
+        generalExpenses: safeGeneralExpenses,
         assignments: {
             servicio: buildAssignments("servicio"),
             cocina: buildAssignments("cocina"),
