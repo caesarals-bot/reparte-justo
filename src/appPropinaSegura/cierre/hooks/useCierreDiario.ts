@@ -11,13 +11,41 @@ import {
     type UseFormReturn,
 } from "react-hook-form"
 
-import { cierreSchema, type CierreFormValues, type StaffEntry } from "../schema"
+import { cierreSchema, type CierreFormValues, type GeneralExpenseEntry, type StaffEntry } from "../schema"
 import { db } from "@/firebase/config"
 
 export type SummaryItem = {
     key: string
     label: string
     value: string
+}
+
+const sanitizeGeneralExpenseEntries = (value: unknown): GeneralExpenseEntry[] => {
+    if (!Array.isArray(value)) {
+        return []
+    }
+
+    return value
+        .map((item) => {
+            if (!item || typeof item !== "object") {
+                return null
+            }
+
+            const record = item as Partial<GeneralExpenseEntry>
+            const amount = toSafeNumber(record.monto)
+
+            if (!record.nombre || !record.tipo || amount < 0) {
+                return null
+            }
+
+            return {
+                entryId: record.entryId ?? generateExpenseId(),
+                nombre: String(record.nombre),
+                tipo: record.tipo === "anfitriona" ? "anfitriona" : "part-time",
+                monto: amount,
+            }
+        })
+        .filter((entry): entry is GeneralExpenseEntry => Boolean(entry))
 }
 
 type StaffFieldName = "asistenciaServicio" | "asistenciaCocina" | "ventaDirecta" | "pocilloSecundario"
@@ -88,6 +116,7 @@ export type ClosureSnapshotPayload = {
         ventaDirecta: StaffEntry[]
         pocilloSecundario: StaffEntry[]
     }
+    generalExpenses: GeneralExpenseEntry[]
     assignments: StaffAssignmentsSnapshot
     metadata: {
         referenceDate: string | null
@@ -182,6 +211,7 @@ type UseCierreDiarioFieldArrays = {
     asistenciaCocina: UseFieldArrayReturn<CierreFormValues, "asistenciaCocina", "id">
     ventaDirecta: UseFieldArrayReturn<CierreFormValues, "ventaDirecta", "id">
     pocilloSecundario: UseFieldArrayReturn<CierreFormValues, "pocilloSecundario", "id">
+    generalExpenses: UseFieldArrayReturn<CierreFormValues, "generalExpenses", "id">
 }
 
 type UseCierreDiarioResult = {
@@ -203,6 +233,8 @@ type UseCierreDiarioResult = {
     serviceAssignedAmounts: number[]
     supportAssignedAmounts: number[]
     directAssignedAmounts: number[]
+    generalExpenseEntries: GeneralExpenseEntry[]
+    generalExpenseTotal: number
     isLoadingConfig: boolean
     loadError: string | null
     setLoadError: (value: string | null) => void
@@ -242,7 +274,19 @@ const defaultCierreValues: CierreFormValues = {
     asistenciaCocina: [],
     ventaDirecta: [],
     pocilloSecundario: [],
-    gastoGeneral: 0,
+    generalExpenses: [],
+}
+
+const generateExpenseId = () => {
+    try {
+        if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+            return crypto.randomUUID()
+        }
+    } catch (error) {
+        console.warn("No crypto.randomUUID available", error)
+    }
+
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 const toSafeNumber = (value: unknown, fallback = 0): number => {
@@ -448,21 +492,20 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     const asistenciaCocina = useFieldArray({ control, name: "asistenciaCocina" })
     const ventaDirecta = useFieldArray({ control, name: "ventaDirecta" })
     const pocilloSecundario = useFieldArray({ control, name: "pocilloSecundario" })
+    const generalExpenses = useFieldArray({ control, name: "generalExpenses" })
 
     const asistenciaServicioValues = useWatch({ control, name: "asistenciaServicio" }) ?? []
     const asistenciaCocinaValues = useWatch({ control, name: "asistenciaCocina" }) ?? []
     const ventaDirectaValues = useWatch({ control, name: "ventaDirecta" }) ?? []
     const pocilloSecundarioValues = useWatch({ control, name: "pocilloSecundario" }) ?? []
-    const generalExpenseValue = useWatch({ control, name: "gastoGeneral" })
+    const generalExpenseEntries = useWatch({ control, name: "generalExpenses" }) ?? []
 
-    const generalExpense = useMemo(() => {
-        const parsed = Number(generalExpenseValue ?? 0)
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            return 0
-        }
-
-        return parsed
-    }, [generalExpenseValue])
+    const generalExpenseTotal = useMemo(() => {
+        return generalExpenseEntries.reduce((sum, entry) => {
+            const amount = Number(entry?.monto ?? 0)
+            return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0)
+        }, 0)
+    }, [generalExpenseEntries])
 
     const buildInitialFormValues = useCallback(
         (serviceStaff: StoredStaffMember[], supportStaff: StoredStaffMember[], mode: "pool" | "directa") => ({
@@ -470,7 +513,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
             asistenciaCocina: supportStaff.map(mapStaffMemberToEntry),
             ventaDirecta: mode === "directa" ? serviceStaff.map(mapStaffMemberToDirectEntry) : [],
             pocilloSecundario: supportStaff.map(mapStaffMemberToEntry),
-            gastoGeneral: 0,
+            generalExpenses: [],
         }),
         [],
     )
@@ -533,16 +576,18 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     }, [additionalDeductionPercents, effectiveTransbankPercentage])
 
     const deductionsAmount = totalPropinasGeneradas * (totalDeductionsPercentage / 100)
-    const netAfterDeductions = Math.max(totalPropinasGeneradas - deductionsAmount - generalExpense, 0)
+    const netBeforeGeneralExpense = Math.max(totalPropinasGeneradas - deductionsAmount, 0)
+    const kitchenShareBase = settlementModeConfig === "pool" ? netBeforeGeneralExpense * (poolPercentages.kitchen / 100) : 0
+    const totalKitchenShare = Math.max(kitchenShareBase, 0)
+    const serviceShareBeforeGeneralExpense = Math.max(netBeforeGeneralExpense - totalKitchenShare, 0)
+    const totalGarzonShare = Math.max(serviceShareBeforeGeneralExpense - generalExpenseTotal, 0)
+    const netAfterDeductions = Math.max(netBeforeGeneralExpense - generalExpenseTotal, 0)
     const transbankAmount = totalPropinasGeneradas * (effectiveTransbankPercentage / 100)
-
-    const totalKitchenShare = settlementModeConfig === "pool" ? netAfterDeductions * (poolPercentages.kitchen / 100) : 0
-    const totalGarzonShare = Math.max(netAfterDeductions - totalKitchenShare, 0)
 
     const formattedKitchenShare = currencyFormatter.format(totalKitchenShare)
     const formattedGarzonShare = currencyFormatter.format(totalGarzonShare)
     const formattedTransbankAmount = currencyFormatter.format(transbankAmount)
-    const formattedGeneralExpense = currencyFormatter.format(generalExpense)
+    const formattedGeneralExpense = currencyFormatter.format(generalExpenseTotal)
 
     const summaryItems = useMemo<SummaryItem[]>(() => {
         const items: SummaryItem[] = [{ key: "propinas", label: "Propinas", value: formattedTotalPropinas }]
@@ -791,7 +836,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 netAfterDeductions,
                 kitchenShare: totalKitchenShare,
                 garzonShare: totalGarzonShare,
-                generalExpense,
+                generalExpense: generalExpenseTotal,
             },
             deductions: {
                 additionalPercentages: additionalDeductionPercents,
@@ -804,6 +849,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 ventaDirecta: ventaDirectaValues,
                 pocilloSecundario: pocilloSecundarioValues,
             },
+            generalExpenses: sanitizeGeneralExpenseEntries(generalExpenseEntries),
             assignments: assignmentsSnapshot,
             metadata: {
                 referenceDate: referenceDateIso,
@@ -817,7 +863,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 propinas: totalPropinasGeneradas,
                 transbankAmount,
                 deductionsAmount,
-                generalExpense,
+                generalExpense: generalExpenseTotal,
             },
             restaurantContact,
             configurationSnapshot,
@@ -840,7 +886,8 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         netAfterDeductions,
         totalKitchenShare,
         totalGarzonShare,
-        generalExpense,
+        generalExpenseEntries,
+        generalExpenseTotal,
         settlementModeConfig,
         referenceDate,
         daysWithoutSettlement,
@@ -899,12 +946,29 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                     (data["staff"] as Record<string, unknown>) ??
                     {}
 
+                const generalExpensesRecord = data["generalExpenses"]
+                const existingGeneralExpenses = sanitizeGeneralExpenseEntries(generalExpensesRecord)
+                const fallbackGeneralExpenseTotal = toSafeNumber((data["totals"] as Record<string, unknown>)?.["generalExpense"], 0)
+
+                const fallbackExpenseEntries: GeneralExpenseEntry[] =
+                    fallbackGeneralExpenseTotal > 0
+                        ? [
+                              {
+                                  entryId: generateExpenseId(),
+                                  nombre: "Gasto general",
+                                  tipo: "part-time",
+                                  monto: fallbackGeneralExpenseTotal,
+                              },
+                          ]
+                        : []
+
                 const nextValues: CierreFormValues = {
                     asistenciaServicio: sanitizeStaffEntries(staffSnapshotRecord["asistenciaServicio"]),
                     asistenciaCocina: sanitizeStaffEntries(staffSnapshotRecord["asistenciaCocina"]),
                     ventaDirecta: sanitizeStaffEntries(staffSnapshotRecord["ventaDirecta"]),
                     pocilloSecundario: sanitizeStaffEntries(staffSnapshotRecord["pocilloSecundario"]),
-                    gastoGeneral: toSafeNumber((data["totals"] as Record<string, unknown>)?.["generalExpense"], 0),
+                    generalExpenses:
+                        existingGeneralExpenses.length > 0 ? existingGeneralExpenses : fallbackExpenseEntries,
                 }
 
                 reset(nextValues)
@@ -1038,6 +1102,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
             asistenciaCocina,
             ventaDirecta,
             pocilloSecundario,
+            generalExpenses,
         },
         poolDate,
         setPoolDate,
@@ -1055,6 +1120,8 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         serviceAssignedAmounts,
         supportAssignedAmounts,
         directAssignedAmounts,
+        generalExpenseEntries,
+        generalExpenseTotal,
         isLoadingConfig,
         loadError,
         setLoadError,

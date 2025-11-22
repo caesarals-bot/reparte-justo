@@ -28,8 +28,6 @@ const setCorsHeaders = (req: functions.Request, res: functions.Response) => {
 }
 
 const handlePreflight = (req: functions.Request, res: functions.Response) => {
-    setCorsHeaders(req, res)
-
     if (req.method === "OPTIONS") {
         res.status(204).send("")
         return true
@@ -51,6 +49,7 @@ export const guardarCierreDiario = functions
     .https.onRequest(async (req, res): Promise<void> => {
         functions.logger.info("guardarCierreDiario request", { method: req.method, origin: req.headers.origin })
 
+        setCorsHeaders(req, res)
         if (handlePreflight(req, res)) {
             return
         }
@@ -70,6 +69,7 @@ export const eliminarCierreDiario = functions
     .https.onRequest(async (req, res): Promise<void> => {
         functions.logger.info("eliminarCierreDiario request", { method: req.method, origin: req.headers.origin })
 
+        setCorsHeaders(req, res)
         if (handlePreflight(req, res)) {
             return
         }
@@ -89,6 +89,7 @@ export const liquidarPeriodo = functions
     .https.onRequest(async (req, res): Promise<void> => {
         functions.logger.info("liquidarPeriodo request", { method: req.method, origin: req.headers.origin })
 
+        setCorsHeaders(req, res)
         if (handlePreflight(req, res)) {
             return
         }

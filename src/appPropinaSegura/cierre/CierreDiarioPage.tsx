@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
-import { CalendarIcon } from "lucide-react"
+import { ArrowLeft, CalendarIcon } from "lucide-react"
 import StaffAsistenciaCard from "./StaffAsistenciaCard"
 import { amountInputClassName } from "./constants"
 import { useAuth } from "@/context/AuthContext"
@@ -74,8 +74,6 @@ const CierreDiarioPage = () => {
         },
     })
 
-    const { register } = formMethods
-
     const { asistenciaServicio, asistenciaCocina, ventaDirecta, pocilloSecundario } = fieldArrays
     const { closures, refresh: refreshClosures } = useClosuresDashboard({ uid })
     const [hasSavedPendingClosure, setHasSavedPendingClosure] = useState(false)
@@ -126,6 +124,24 @@ const CierreDiarioPage = () => {
             clearEditingState()
         }
     }, [uid, closureIdParam, loadClosureForEditing, clearEditingState])
+
+    const handleCancelEditing = () => {
+        if (editingState) {
+            const redirectClosureId = editingState.closureId || closureIdParam
+            clearEditingState()
+            if (closureIdParam) {
+                const nextParams = new URLSearchParams(searchParams)
+                nextParams.delete("closureId")
+                setSearchParams(nextParams, { replace: true })
+            }
+            if (redirectClosureId) {
+                navigate(`/dashboard/closures/${redirectClosureId}`)
+                return
+            }
+        }
+
+        navigate(-1)
+    }
 
     const handleSaveClosure = async () => {
         if (isSavingClosure) {
@@ -273,9 +289,21 @@ const CierreDiarioPage = () => {
                     </div>
 
                     {editingState ? (
-                        <div className="rounded-2xl border border-amber-300/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-                            Estás editando el cierre original {editingState.referenceDateKey ?? editingState.closureId}. Se eliminará el
-                            cierre previo y se volverá a crear con la información actualizada.
+                        <div className="flex flex-col gap-3 rounded-2xl border border-amber-300/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+                            <p>
+                                Estás editando el cierre original {editingState.referenceDateKey ?? editingState.closureId}. Se eliminará el
+                                cierre previo y se volverá a crear con la información actualizada.
+                            </p>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="inline-flex items-center gap-2 border border-amber-200/80 text-amber-50 hover:bg-amber-200/10"
+                                onClick={handleCancelEditing}
+                                disabled={isSavingClosure || isHydratingFromClosure}
+                            >
+                                <ArrowLeft className="h-4 w-4" /> Volver sin editar
+                            </Button>
                         </div>
                     ) : null}
 
@@ -418,22 +446,7 @@ const CierreDiarioPage = () => {
                                                 onChange={handlePoolTotalChange}
                                             />
                                         </div>
-                                        <div className="space-y-2 max-w-[220px]">
-                                            <Label htmlFor="general-expense">Gasto general (part-time / anfitriona)</Label>
-                                            <input
-                                                id="general-expense"
-                                                type="number"
-                                                min="0"
-                                                max="999999"
-                                                step="1000"
-                                                placeholder="Ej. 20000"
-                                                className={amountInputClassName}
-                                                {...register("gastoGeneral", { valueAsNumber: true, min: 0, max: 999999 })}
-                                            />
-                                            <p className="text-xs text-white/60">
-                                                Valor máximo permitido: 6 cifras. Se descuenta antes de repartir propinas.
-                                            </p>
-                                        </div>
+                                        {/* TODO: Implement dynamic general expenses UI with multiple entries for part-time/anfitriona */}
                                     </div>
 
                                     <Separator className="border-white/10" />

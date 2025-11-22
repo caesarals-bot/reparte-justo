@@ -17,13 +17,20 @@ export const staffEntrySchema = z.object({
     inactiveSince: z.string().optional(),
 })
 
+export const generalExpenseEntrySchema = z.object({
+    entryId: z.string(),
+    nombre: z.string().min(1, "Ingresa el nombre"),
+    tipo: z.enum(["part-time", "anfitriona"]),
+    monto: z.number().nonnegative(),
+})
+
 export const cierreSchema = z
     .object({
         asistenciaServicio: z.array(staffEntrySchema),
         asistenciaCocina: z.array(staffEntrySchema),
         ventaDirecta: z.array(staffEntrySchema),
         pocilloSecundario: z.array(staffEntrySchema),
-        gastoGeneral: z.number().nonnegative(),
+        generalExpenses: z.array(generalExpenseEntrySchema),
     })
     .superRefine((values, ctx) => {
         values.ventaDirecta.forEach((item, index) => {
@@ -53,3 +60,4 @@ export const cierreSchema = z
 
 export type StaffEntry = z.infer<typeof staffEntrySchema>
 export type CierreFormValues = z.infer<typeof cierreSchema>
+export type GeneralExpenseEntry = z.infer<typeof generalExpenseEntrySchema>

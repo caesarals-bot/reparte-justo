@@ -33,11 +33,12 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liquidarPeriodo = exports.guardarCierreDiario = void 0;
-const functions = __importStar(require("firebase-functions"));
+exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.guardarCierreDiario = void 0;
+const functions = __importStar(require("firebase-functions/v1"));
 const zod_1 = require("zod");
 const guardarCierreDiario_1 = require("./handlers/guardarCierreDiario");
 const liquidarPeriodo_1 = require("./handlers/liquidarPeriodo");
+const eliminarCierreDiario_1 = require("./handlers/eliminarCierreDiario");
 const allowedOrigins = new Set([
     "http://localhost:5173",
     "https://repartejusto.netlify.app",
@@ -56,20 +57,26 @@ const setCorsHeaders = (req, res) => {
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.set("Access-Control-Max-Age", "3600");
 };
-exports.guardarCierreDiario = functions
-    .region("us-central1")
-    .https.onRequest(async (req, res) => {
-    functions.logger.info("guardarCierreDiario request", { method: req.method, origin: req.headers.origin });
+const handlePreflight = (req, res) => {
     setCorsHeaders(req, res);
     if (req.method === "OPTIONS") {
         res.status(204).send("");
-        return;
+        return true;
     }
     if (req.method !== "POST") {
         res.status(405).json({
             code: "METHOD_NOT_ALLOWED",
             message: "Este endpoint solo permite solicitudes POST.",
         });
+        return true;
+    }
+    return false;
+};
+exports.guardarCierreDiario = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res) => {
+    functions.logger.info("guardarCierreDiario request", { method: req.method, origin: req.headers.origin });
+    if (handlePreflight(req, res)) {
         return;
     }
     try {
@@ -82,20 +89,28 @@ exports.guardarCierreDiario = functions
         res.status(status).json(body);
     }
 });
+exports.eliminarCierreDiario = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res) => {
+    functions.logger.info("eliminarCierreDiario request", { method: req.method, origin: req.headers.origin });
+    if (handlePreflight(req, res)) {
+        return;
+    }
+    try {
+        const result = await (0, eliminarCierreDiario_1.eliminarCierreDiarioHandler)(req.body);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        const { status, body } = mapHandlerError(error);
+        functions.logger.error("eliminarCierreDiario error", { error });
+        res.status(status).json(body);
+    }
+});
 exports.liquidarPeriodo = functions
     .region("us-central1")
     .https.onRequest(async (req, res) => {
     functions.logger.info("liquidarPeriodo request", { method: req.method, origin: req.headers.origin });
-    setCorsHeaders(req, res);
-    if (req.method === "OPTIONS") {
-        res.status(204).send("");
-        return;
-    }
-    if (req.method !== "POST") {
-        res.status(405).json({
-            code: "METHOD_NOT_ALLOWED",
-            message: "Este endpoint solo permite solicitudes POST.",
-        });
+    if (handlePreflight(req, res)) {
         return;
     }
     try {

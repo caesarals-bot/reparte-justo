@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.guardarCierreDiarioSchema = exports.submittedBySchema = exports.configurationSnapshotSchema = exports.restaurantContactSchema = exports.metadataSchema = exports.totalsSchema = exports.adjustmentEntrySchema = exports.penaltyEntrySchema = exports.staffAssignmentsSchema = exports.staffAssignmentSnapshotSchema = void 0;
+exports.guardarCierreDiarioSchema = exports.eliminarCierreDiarioSchema = exports.submittedBySchema = exports.configurationSnapshotSchema = exports.restaurantContactSchema = exports.metadataSchema = exports.totalsSchema = exports.adjustmentEntrySchema = exports.penaltyEntrySchema = exports.staffAssignmentsSchema = exports.staffAssignmentSnapshotSchema = void 0;
 const zod_1 = require("zod");
 exports.staffAssignmentSnapshotSchema = zod_1.z.object({
     staffId: zod_1.z.string().min(1),
@@ -97,6 +97,12 @@ exports.submittedBySchema = zod_1.z
     email: zod_1.z.string().optional(),
 })
     .optional();
+exports.eliminarCierreDiarioSchema = zod_1.z.object({
+    restaurantId: zod_1.z.string().min(1),
+    closureId: zod_1.z.string().min(1),
+    reason: zod_1.z.string().min(3).max(500).optional(),
+    deletedBy: exports.submittedBySchema,
+});
 exports.guardarCierreDiarioSchema = zod_1.z.object({
     restaurantId: zod_1.z.string().min(1),
     mode: zod_1.z.enum(["pool", "directa"]),
