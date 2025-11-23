@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { addDoc, collection, getDocs, orderBy, query, serverTimestamp, type Timestamp } from "firebase/firestore"
 
+import { buildDailyClosureSummaries, summarizeClosures } from "../utils/closureCalculations"
+
 import { db } from "@/firebase/config"
 
 export type ClosureAdjustmentVariant = "monto" | "porcentaje"
@@ -30,12 +32,12 @@ const mapConfigurationSnapshot = (value: unknown): ClosureConfigurationSnapshot 
     const poolPercentagesRecord = extractRecord(record.poolPercentages)
     const poolPercentages = poolPercentagesRecord
         ? {
-              kitchen: typeof poolPercentagesRecord.kitchen !== "undefined" ? toNumber(poolPercentagesRecord.kitchen) : undefined,
-              transbank:
-                  typeof poolPercentagesRecord.transbank !== "undefined"
-                      ? toNumber(poolPercentagesRecord.transbank)
-                      : undefined,
-          }
+            kitchen: typeof poolPercentagesRecord.kitchen !== "undefined" ? toNumber(poolPercentagesRecord.kitchen) : undefined,
+            transbank:
+                typeof poolPercentagesRecord.transbank !== "undefined"
+                    ? toNumber(poolPercentagesRecord.transbank)
+                    : undefined,
+        }
         : undefined
 
     return {
@@ -131,13 +133,35 @@ export type ClosureDocument = {
         referenceDateKey?: string | null
         daysWithoutSettlement?: number
     }
+    liquidacionRange?: {
+        from?: string | null
+        to?: string | null
+    } | null
+    liquidacionId?: string | null
     assignments: StaffAssignments
     generalExpenses: GeneralExpenseEntry[]
     adjustments: ClosureAdjustment[]
     createdAt?: Timestamp | null
     updatedAt?: Timestamp | null
+    liquidatedAt?: Timestamp | null
     restaurantContact?: RestaurantContact
     configurationSnapshot?: ClosureConfigurationSnapshot | null
+}
+
+export type PaidSettlementPeriod = {
+    id: string
+    label: string
+    rangeLabel: string
+    from?: string | null
+    to?: string | null
+    closures: ClosureDocument[]
+    totals: {
+        netAfterDeductions: number
+        deductionsAmount: number
+        generalExpense: number
+        propinas: number
+    }
+    dailySummaries: ReturnType<typeof buildDailyClosureSummaries>
 }
 
 export type ClosuresSummary = {
@@ -506,6 +530,9 @@ export const mapSnapshotToClosure = (
         adjustments,
         createdAt: (data.createdAt as Timestamp | undefined) ?? null,
         updatedAt: (data.updatedAt as Timestamp | undefined) ?? null,
+        liquidatedAt: (data.liquidatedAt as Timestamp | undefined) ?? null,
+        liquidacionRange: (data.liquidacionRange as { from?: string | null; to?: string | null } | undefined) ?? null,
+        liquidacionId: typeof data.liquidacionId === "string" ? data.liquidacionId : null,
         restaurantContact,
         configurationSnapshot,
     }
@@ -670,25 +697,152 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
             return emptySummary
         }
 
-        return pendingClosures.reduce<ClosuresSummary>(
-            (accumulator, closure) => ({
-                totalPropinas: accumulator.totalPropinas + closure.totals.propinas,
-                totalNetAfterDeductions:
-                    accumulator.totalNetAfterDeductions + closure.totals.netAfterDeductions,
-                totalTransbank: accumulator.totalTransbank + closure.totals.transbankAmount,
-                totalDeductions: accumulator.totalDeductions + closure.totals.deductionsAmount,
-                totalGeneralExpense: accumulator.totalGeneralExpense + closure.totals.generalExpense,
-                pendingCount: accumulator.pendingCount + 1,
-            }),
-            emptySummary,
-        )
+        return summarizeClosures(pendingClosures)
     }, [pendingClosures])
+
+    const paidSettlementGroups = useMemo(() => {
+        const paidClosures = closures.filter((closure) => closure.estado === "pagado")
+
+        if (!paidClosures.length) {
+            return [] as PaidSettlementPeriod[]
+        }
+
+        const groups = new Map<
+            string,
+            {
+                id: string
+                from?: string | null
+                to?: string | null
+                closures: ClosureDocument[]
+            }
+        >()
+
+        const resolveGroupId = (closure: ClosureDocument) => {
+            if (closure.liquidacionId) {
+                return closure.liquidacionId
+            }
+
+            if (closure.liquidacionRange) {
+                return `${closure.liquidacionRange.from ?? ""}|${closure.liquidacionRange.to ?? ""}`
+            }
+
+            return `closure|${closure.id}`
+        }
+
+        paidClosures.forEach((closure) => {
+            const groupId = resolveGroupId(closure)
+            if (!groups.has(groupId)) {
+                groups.set(groupId, {
+                    id: groupId,
+                    from: closure.liquidacionRange?.from ?? closure.metadata.referenceDate ?? null,
+                    to: closure.liquidacionRange?.to ?? closure.metadata.referenceDate ?? null,
+                    closures: [closure],
+                })
+                return
+            }
+
+            const bucket = groups.get(groupId)!
+            bucket.closures.push(closure)
+
+            if (!bucket.from) {
+                bucket.from = closure.liquidacionRange?.from ?? closure.metadata.referenceDate ?? null
+            } else if (closure.liquidacionRange?.from) {
+                bucket.from = bucket.from ?? closure.liquidacionRange.from
+            }
+
+            if (!bucket.to) {
+                bucket.to = closure.liquidacionRange?.to ?? closure.metadata.referenceDate ?? null
+            } else if (closure.liquidacionRange?.to) {
+                bucket.to = bucket.to ?? closure.liquidacionRange.to
+            }
+        })
+
+        const dateFormatter = new Intl.DateTimeFormat("es-CL", {
+            year: "numeric",
+            month: "long",
+            day: "2-digit",
+        })
+
+        const parseDate = (value?: string | null) => {
+            if (!value) {
+                return null
+            }
+
+            const parsed = new Date(value)
+            return Number.isNaN(parsed.getTime()) ? null : parsed
+        }
+
+        const formatRangeLabel = (from?: string | null, to?: string | null, fallback?: string | null) => {
+            const fromDate = parseDate(from) ?? parseDate(fallback)
+            const toDate = parseDate(to)
+
+            if (fromDate && toDate) {
+                if (fromDate.getTime() === toDate.getTime()) {
+                    return dateFormatter.format(fromDate)
+                }
+
+                return `${dateFormatter.format(fromDate)} – ${dateFormatter.format(toDate)}`
+            }
+
+            if (fromDate) {
+                return dateFormatter.format(fromDate)
+            }
+
+            return fallback ?? "Sin rango registrado"
+        }
+
+        const resolveSortDate = (value?: string | null, closuresInGroup: ClosureDocument[] = []) => {
+            const parsed = parseDate(value)
+            if (parsed) {
+                return parsed.getTime()
+            }
+
+            const dates = closuresInGroup
+                .map((closure) => parseDate(closure.metadata.referenceDate))
+                .filter((date): date is Date => Boolean(date))
+
+            if (!dates.length) {
+                return 0
+            }
+
+            return dates[dates.length - 1]!.getTime()
+        }
+
+        return Array.from(groups.values())
+            .map((group) => {
+                const totalSnapshot = summarizeClosures(group.closures)
+                const dailySummaries = buildDailyClosureSummaries(group.closures)
+
+                const primaryLabel = formatRangeLabel(group.from, group.to, group.closures[0]?.metadata.referenceDate)
+
+                return {
+                    id: group.id,
+                    label:
+                        group.closures.length > 1
+                            ? `Liquidación de ${group.closures.length} días`
+                            : "Liquidación de 1 día",
+                    rangeLabel: primaryLabel,
+                    from: group.from,
+                    to: group.to,
+                    closures: group.closures,
+                    totals: {
+                        netAfterDeductions: totalSnapshot.totalNetAfterDeductions,
+                        deductionsAmount: totalSnapshot.totalDeductions,
+                        generalExpense: totalSnapshot.totalGeneralExpense,
+                        propinas: totalSnapshot.totalPropinas,
+                    },
+                    dailySummaries,
+                }
+            })
+            .sort((a, b) => resolveSortDate(b.to, b.closures) - resolveSortDate(a.to, a.closures))
+    }, [closures])
 
     return {
         closures,
         pendingClosures,
         historicalClosures,
         summary,
+        paidSettlementGroups,
         isLoading,
         error,
         refresh: fetchClosures,

@@ -1,59 +1,51 @@
-import { useMemo } from "react"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
+import { useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { useAuth } from "@/context/AuthContext"
 import { useClosuresDashboard } from "./hooks/useClosuresDashboard"
 import { Loader2, ArrowLeft, EyeIcon } from "lucide-react"
 
-const formatReferenceDate = (value?: string | null) => {
+const formatDateLabel = (value?: Date | null) => {
     if (!value) {
-        return "Sin fecha definida"
+        return "Sin fecha"
     }
 
-    const parsedDate = new Date(value)
-
-    if (Number.isNaN(parsedDate.getTime())) {
-        return "Fecha no válida"
-    }
-
-    return format(parsedDate, "d 'de' MMMM yyyy", { locale: es })
-}
-
-const formatClosureLabel = (referenceDate?: string | null, fallbackId?: string) => {
-    const formattedDate = formatReferenceDate(referenceDate)
-
-    if (formattedDate === "Sin fecha definida" && fallbackId) {
-        return `Cierre ${fallbackId.slice(0, 6)}`
-    }
-
-    return `Cierre del ${formattedDate}`
+    return new Intl.DateTimeFormat("es-CL", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    }).format(value)
 }
 
 const PaidSettlementsPage = () => {
     const { uid } = useAuth()
     const navigate = useNavigate()
-    const { historicalClosures, isLoading, error } = useClosuresDashboard({ uid })
+    const { paidSettlementGroups, isLoading, error } = useClosuresDashboard({ uid })
+    const [selectedSettlementId, setSelectedSettlementId] = useState<string | null>(null)
 
-    const paidSettlements = useMemo(
-        () =>
-            historicalClosures
-                .filter((closure) => closure.estado === "pagado")
-                .map((closure) => ({
-                    id: closure.id,
-                    label: formatClosureLabel(closure.metadata.referenceDate, closure.id),
-                    totalRepartido: closure.totals.netAfterDeductions,
-                    totalDescuentos: closure.totals.deductionsAmount,
-                    estado: closure.estado,
-                })),
-        [historicalClosures],
+    const selectedSettlement = useMemo(
+        () => paidSettlementGroups.find((group) => group.id === selectedSettlementId) ?? null,
+        [paidSettlementGroups, selectedSettlementId],
     )
 
-    const isEmpty = !paidSettlements.length && !isLoading && !error
+    const isEmpty = !paidSettlementGroups.length && !isLoading && !error
 
     if (!uid) {
         return (
@@ -114,55 +106,127 @@ const PaidSettlementsPage = () => {
                     </Card>
                 ) : null}
 
-                {!isLoading && !error && paidSettlements.length ? (
-                    <Card className="border border-white/10 bg-[rgba(21,24,40,0.9)]">
-                        <CardHeader className="border-b border-white/10">
-                            <CardTitle className="text-lg font-semibold">Historial completo</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <Table className="text-sm text-white">
-                                <TableHeader>
-                                    <TableRow className="border-white/10 text-white/60">
-                                        <TableHead className="text-white/70">Período</TableHead>
-                                        <TableHead className="text-right text-white/70">Total repartido</TableHead>
-                                        <TableHead className="text-right text-white/70">Descuentos</TableHead>
-                                        <TableHead className="text-right text-white/70">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {paidSettlements.map((settlement) => (
-                                        <TableRow key={settlement.id} className="border-white/5">
-                                            <TableCell>
-                                                <div className="font-medium text-white">{settlement.label}</div>
-                                                <div className="text-xs uppercase tracking-wide text-emerald-300/80">{settlement.estado}</div>
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-base">
-                                                ${settlement.totalRepartido.toLocaleString("es-CL")}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-sm text-white/80">
-                                                {settlement.totalDescuentos > 0
-                                                    ? `$${settlement.totalDescuentos.toLocaleString("es-CL")}`
-                                                    : "—"}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="gap-2 rounded-full border border-white/10 px-3 text-white transition hover:bg-white/10"
-                                                    onClick={() => navigate(`/dashboard/closures/${settlement.id}`)}
-                                                >
-                                                    <EyeIcon className="h-4 w-4" />
-                                                    Ver detalles
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
+                {!isLoading && !error && paidSettlementGroups.length ? (
+                    <section className="space-y-4">
+                        {paidSettlementGroups.map((settlement) => (
+                            <Card key={settlement.id} className="border border-white/10 bg-[rgba(21,24,40,0.9)]">
+                                <CardHeader className="flex flex-col gap-1 border-b border-white/10">
+                                    <CardTitle className="text-lg font-semibold">
+                                        {settlement.label}
+                                    </CardTitle>
+                                    <p className="text-sm text-white/70">{settlement.rangeLabel}</p>
+                                </CardHeader>
+                                <CardContent className="flex flex-col gap-4 py-6">
+                                    <div className="grid gap-4 sm:grid-cols-3">
+                                        <div>
+                                            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Total repartido</p>
+                                            <p className="font-mono text-2xl text-white">
+                                                ${settlement.totals.netAfterDeductions.toLocaleString("es-CL")}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Descuentos</p>
+                                            <p className="font-mono text-2xl text-white">
+                                                ${settlement.totals.deductionsAmount.toLocaleString("es-CL")}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Gasto general</p>
+                                            <p className="font-mono text-2xl text-white">
+                                                ${settlement.totals.generalExpense.toLocaleString("es-CL")}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center justify-between gap-4">
+                                        <p className="text-sm text-white/70">
+                                            Incluye {settlement.closures.length} cierre(s) con un total de $
+                                            {settlement.totals.propinas.toLocaleString("es-CL")} en propinas brutas.
+                                        </p>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="gap-2 rounded-full border border-white/10 px-4 text-white transition hover:bg-white/10"
+                                            onClick={() => setSelectedSettlementId(settlement.id)}
+                                        >
+                                            <EyeIcon className="h-4 w-4" />
+                                            Ver detalles
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </section>
                 ) : null}
             </div>
+
+            <Dialog open={Boolean(selectedSettlement)} onOpenChange={(open) => !open && setSelectedSettlementId(null)}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>{selectedSettlement?.label ?? "Liquidación"}</DialogTitle>
+                        <DialogDescription>
+                            {selectedSettlement?.rangeLabel ?? "Selecciona una liquidación para revisar su detalle."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {selectedSettlement ? (
+                        <div className="space-y-6">
+                            <div className="grid gap-4 rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-white/70">Total repartido</span>
+                                    <strong className="font-mono text-base">
+                                        ${selectedSettlement.totals.netAfterDeductions.toLocaleString("es-CL")}
+                                    </strong>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-white/70">Descuentos</span>
+                                    <strong className="font-mono text-base">
+                                        ${selectedSettlement.totals.deductionsAmount.toLocaleString("es-CL")}
+                                    </strong>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-white/70">Gasto general</span>
+                                    <strong className="font-mono text-base">
+                                        ${selectedSettlement.totals.generalExpense.toLocaleString("es-CL")}
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="mb-3 text-sm uppercase tracking-[0.3em] text-white/60">Días incluidos</p>
+                                <Table className="text-sm text-white">
+                                    <TableHeader>
+                                        <TableRow className="border-white/10 text-white/70">
+                                            <TableHead>Fecha</TableHead>
+                                            <TableHead className="text-right">Total neto</TableHead>
+                                            <TableHead className="text-right">Descuentos</TableHead>
+                                            <TableHead className="text-right">Gasto general</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {selectedSettlement.dailySummaries.map((summary) => (
+                                            <TableRow key={summary.id} className="border-white/5">
+                                                <TableCell>{formatDateLabel(summary.referenceDate)}</TableCell>
+                                                <TableCell className="text-right font-mono">
+                                                    ${summary.netAfterDeductions.toLocaleString("es-CL")}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-white/80">
+                                                    {summary.deductionsAmount > 0
+                                                        ? `$${summary.deductionsAmount.toLocaleString("es-CL")}`
+                                                        : "—"}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-white/80">
+                                                    {summary.generalExpense > 0
+                                                        ? `$${summary.generalExpense.toLocaleString("es-CL")}`
+                                                        : "—"}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
         </main>
     )
 }

@@ -37,6 +37,15 @@ export const liquidarPeriodoHandler = async (payload: unknown): Promise<Liquidar
     const closuresCollection = restaurantRef.collection("registros_diarios")
     const now = Timestamp.now()
 
+    const settlementRange = input.range ?? { from: null, to: null }
+    const settlementId = (() => {
+        if (settlementRange.from || settlementRange.to) {
+            return `${settlementRange.from ?? ""}|${settlementRange.to ?? ""}`
+        }
+
+        return `${now.toMillis()}`
+    })()
+
     const { processedCount, updatedClosureIds, settledReferenceDates } = await firestoreAdmin.runTransaction(
         async (transaction) => {
             // Fase 1: TODAS las lecturas primero (requisito de Firestore)
@@ -91,6 +100,8 @@ export const liquidarPeriodoHandler = async (payload: unknown): Promise<Liquidar
                     estado: "pagado",
                     liquidatedAt: now,
                     liquidatedBy: input.contact ?? null,
+                    liquidacionRange: settlementRange,
+                    liquidacionId: settlementId,
                     updatedAt: now,
                 })
             }

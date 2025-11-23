@@ -266,6 +266,22 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 - El calendario de selección de rango destaca, con un color diferente, los días que tienen cierres pendientes (a partir de `referenceDate`), para facilitar elegir períodos con movimiento.
 - El botón de **Confirmar liquidación** está deshabilitado por ahora; no se marcan cierres como liquidados ni se generan reportes automáticos todavía.
 
+### Metadatos persistidos por liquidación (Nov 2025)
+
+- Cada vez que `liquidarPeriodo` marca cierres como pagados, la función escribe dos campos adicionales en cada documento de `registros_diarios`:
+  - `liquidacionRange`: objeto `{ from: string | null, to: string | null }` con el ISO del rango solicitado.
+  - `liquidacionId`: hash derivado del rango (`from|to`) para agrupar cierres de la misma ejecución.
+- Estos metadatos permiten reconstruir periodos liquidados para el dashboard histórico y facilitan generar reportes retroactivos sin reconsultar parámetros originales.
+
+### Histórico de liquidaciones pagadas (PaidSettlementsPage)
+
+- La vista `/dashboard/liquidaciones-pagadas` ahora consume los metadatos anteriores desde `useClosuresDashboard`.
+- El hook expone `paidSettlementGroups`, agrupando cierres `estado = "pagado"` por `liquidacionId`/rango y consolidando totales (`netAfterDeductions`, `deductionsAmount`, `generalExpense`, `propinas`).
+- La UI muestra:
+  - Tarjetas por rango (`Liquidación de N días`) con monto repartido, descuentos y gasto general.
+  - Botón "Ver detalles" que abre un `Dialog` reutilizando `buildDailyClosureSummaries` para listar cada día liquidadito con sus montos netos, descuentos y gasto general, emulando el PDF.
+- Esta pantalla no se carga en el dashboard principal para mantenerlo liviano; solo se consulta bajo demanda.
+
 ## Tema "Dark Serenity" — avances UI (Nov 2025)
 
 ### Contexto
