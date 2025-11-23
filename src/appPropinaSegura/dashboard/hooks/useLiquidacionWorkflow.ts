@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 
 import {
+    aggregateGeneralExpensesFromClosures,
     aggregateMembersFromClosures,
     buildClosureHighlights,
     buildDailyClosureSummaries,
@@ -9,7 +10,7 @@ import {
     summarizeClosures,
 } from "../utils/closureCalculations"
 import { buildLiquidacionPdfFileName, generateLiquidacionPdf } from "../utils/liquidacionPdf"
-import { useClosuresDashboard } from "./useClosuresDashboard"
+import { useClosuresDashboard, type ClosureDocument } from "./useClosuresDashboard"
 import { useLiquidacionActions, type LiquidarPeriodoResponse } from "./useLiquidacionActions"
 
 export type DateRangeValue = { from: Date | undefined; to: Date | undefined }
@@ -84,6 +85,7 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
     const pendingSummary = useMemo(() => summarizeClosures(availablePendingClosures), [availablePendingClosures])
 
     const detalleIntegrantes = useMemo(() => aggregateMembersFromClosures(filteredClosures), [filteredClosures])
+    const detalleGastosGenerales = useMemo(() => aggregateGeneralExpensesFromClosures(filteredClosures), [filteredClosures])
 
     const detallePorDia = useMemo(() => buildDailyClosureSummaries(filteredClosures), [filteredClosures])
 
@@ -95,6 +97,20 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
     const restaurantContact = useMemo(() => {
         const closureWithContact = pendingClosures.find((closure) => closure.restaurantContact)
         return closureWithContact?.restaurantContact
+    }, [pendingClosures])
+
+    const configurationSummary = useMemo(() => {
+        const closureWithConfig = pendingClosures.find((closure) => closure.configurationSnapshot?.poolPercentages)
+        const settlementMode = closureWithConfig?.configurationSnapshot?.settlementMode ?? null
+        const poolPercentages = closureWithConfig?.configurationSnapshot?.poolPercentages
+
+        return {
+            settlementMode,
+            kitchenPercentage:
+                settlementMode === "pool" ? poolPercentages?.kitchen ?? null : null,
+            transbankPercentage:
+                settlementMode === "pool" ? poolPercentages?.transbank ?? null : null,
+        }
     }, [pendingClosures])
 
     const notificationContact = useMemo(() => {
@@ -201,6 +217,7 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
                 rangeLabel: dateRangeLabel,
                 totals: selectedTotals,
                 members: selectedMembers,
+                generalExpenses: detalleGastosGenerales,
                 closureCount: filteredClosures.length,
                 contactEmail: notificationContact?.email,
                 responsibleName: notificationContact?.responsibleName,
@@ -279,18 +296,20 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         pendingSummary,
         detalleIntegrantes,
         detallePorDia,
+        detalleGastosGenerales,
         penalizacionesYAjustes,
         notificationContact,
         isFallbackContact,
         selectedTotals,
         selectedMembers,
+        configurationSummary,
         dateRangeLabel,
         handlePrepareLiquidacion,
         handleConfirmLiquidacion,
     }
 }
 
-const filterClosuresByRange = (closures: ReturnType<typeof useClosuresDashboard>["pendingClosures"], range: DateRangeValue) => {
+const filterClosuresByRange = (closures: ClosureDocument[], range: DateRangeValue): ClosureDocument[] => {
     if (!closures.length) {
         return []
     }

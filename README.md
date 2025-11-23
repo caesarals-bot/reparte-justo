@@ -1,117 +1,131 @@
 # ReparteJusto Frontend
 
-Aplicación web orientada a restaurantes para gestionar la distribución transparente de propinas y cierres diarios. Construida sobre React, TypeScript y Vite, incorpora componentes de Shadcn/UI y estilos con Tailwind CSS para ofrecer una experiencia moderna, accesible y responsiva.
+Plataforma web para administrar cierres diarios, distribución de propinas y liquidaciones en restaurantes. El objetivo principal es garantizar trazabilidad completa (quién recibió cuánto, qué descuentos se aplicaron, cuál fue el gasto general) y ofrecer un flujo de liquidación confiable respaldado por Cloud Functions de Firebase.
 
-## Tabla de Contenidos
-1. [Características Principales](#características-principales)
-2. [Tecnologías](#tecnologías)
-3. [Estructura del Proyecto](#estructura-del-proyecto)
-4. [Primeros Pasos](#primeros-pasos)
-5. [Scripts Disponibles](#scripts-disponibles)
-6. [Guía de Desarrollo](#guía-de-desarrollo)
-7. [Próximos Pasos](#próximos-pasos)
+## Resumen Ejecutivo
 
-## Características Principales
-- **Landing responsiva** con navegación sticky, héroe informativo y secciones de valor del producto.
-- **Onboarding guiado ( `/setup` )** con persistencia en Firestore para nombre del restaurante, deducciones y staff (roles, emails, ponderaciones).
-- **Cierre Diario ( `/cierre` )** conectado a la configuración guardada, calcula propinas cocina/garzones aplicando descuentos y muestra montos asignados por persona.
-- **Dashboard administrativo (en progreso)** con páginas base para overview, restaurantes y usuarios.
-- **Liquidación guiada con PDF automático**: la vista `/dashboard/liquidacion` se apoya en `useLiquidacionWorkflow` para preparar rangos, bloquear días ya liquidados, generar un PDF detallado y descargarlo inmediatamente después de confirmar.
-- **Detalle de cierre modularizado**: `ClosureDetailPage` ahora delega cálculos/ajustes en `useClosureDetail`, mostrando un historial claro de miembros, penalizaciones y ajustes antes de liquidar.
-- **Accesibilidad cuidada**: etiquetas, `aria-*`, soporte para teclado en el menú móvil y inputs consistentes.
+- **Stack**: React 19 + TypeScript + Vite + Tailwind + Shadcn/UI en el frontend; Firebase (Auth, Firestore, Functions) como backend administrado.
+- **Estado actual** (noviembre 2025):
+  - Cierres diarios generan snapshots completos (asistencia, asignaciones, gastos generales detallados).
+  - Dashboard y modal de liquidación muestran los gastos generales con nombre/tipo y obtienen los porcentajes configurados de cocina/transbank.
+  - La función `liquidarPeriodo` ya registra errores detallados y respeta las reglas de transacciones de Firestore gracias al refactor en 3 fases (lecturas → cómputo → escrituras).
+  - El PDF de liquidación incorpora el desglose de gastos generales y el resumen por integrante.
 
-## Tecnologías
-- **React 19**, **TypeScript**, **Vite**
-- **Tailwind CSS** para estilos utilitarios
-- **Shadcn/UI** como librería de componentes (Card, Tabs, Calendar, etc.)
-- **Lucide Icons** para iconografía
-- **Firebase** (Auth + Firestore) como backend-as-a-service
+## Contenido
+1. [Arquitectura funcional](#arquitectura-funcional)
+2. [Tecnologías y dependencias](#tecnologías-y-dependencias)
+3. [Estructura de carpetas](#estructura-de-carpetas)
+4. [Configuración y variables de entorno](#configuración-y-variables-de-entorno)
+5. [Scripts y automatización](#scripts-y-automatización)
+6. [Buenas prácticas de desarrollo](#buenas-prácticas-de-desarrollo)
+7. [Estado de QA / Bitácora reciente](#estado-de-qa--bitácora-reciente)
+8. [Roadmap](#roadmap)
 
-## Estructura del Proyecto
+## Arquitectura funcional
+
+| Módulo | Descripción | Archivos clave |
+|--------|-------------|----------------|
+| **Landing / Marketing** | Presenta beneficios de ReparteJusto y dirige al onboarding. | `src/appPropinaSegura/component` |
+| **Setup inicial (`/setup`)** | Define modo de liquidación, porcentajes de cocina/transbank, staff de servicio/apoyo y permisos. | `InitialSetupPage.tsx`, hooks en `setup/` |
+| **Cierre diario (`/cierre`)** | Captura totales del día, asistencia, penalizaciones y gastos generales múltiples. Valida netos ≤ 0 y genera snapshot listo para el backend. | `CierreDiarioPage.tsx`, `useCierreDiario.ts` |
+| **Dashboard / Detalle de cierre** | Lista cierres pendientes/históricos, permite registrar ajustes y visualizar gastos generales por entrada. | `DashboardPage.tsx`, `ClosureDetailPage.tsx`, `useClosuresDashboard.ts` |
+| **Liquidación (`/dashboard/liquidacion`)** | Filtra cierres pendientes por rango, bloquea fechas liquidadas, arma payload para `liquidarPeriodo` y descarga un PDF con totales, integrantes y gastos generales. | `LiquidacionPage.tsx`, `useLiquidacionWorkflow.ts`, `generateLiquidacionPdf.ts` |
+| **Cloud Functions** | `guardarCierreDiario`, `eliminarCierreDiario`, `liquidarPeriodo` y logger normalizado. La transacción de liquidación se reescribió para respetar el orden lecturas→escrituras. | `functions/src/handlers/*.ts`, `functions/src/index.ts` |
+
+## Tecnologías y dependencias
+
+- **Frontend**: React 19, Vite 5, TypeScript, Tailwind CSS, Shadcn/UI, pdf-lib, Lucide Icons.
+- **Backend**: Firebase Functions (Node 20), Firestore, Firebase Auth.
+- **Herramientas de soporte**: ESLint, Prettier (via configuración propia del repositorio), npm scripts.
+
+## Estructura de carpetas
+
 ```
 src/
  ├─ appPropinaSegura/
- │   ├─ cierre/               # página de Cierre Diario
- │   ├─ component/navbar/     # NavBar y Footer
- │   ├─ dashboard/            # Liquidación y detalle de cierres
- │   └─ setup/                # Configuración inicial y staff
- ├─ auth/, components/, router/, context/ …
+ │   ├─ cierre/               # Cierre diario y hooks asociados
+ │   ├─ dashboard/            # Dashboard, liquidación, componentes de reportes
+ │   ├─ setup/                # Configuración inicial y staff
+ │   └─ component/            # Layout (NavBar, Footer, cards)
+ ├─ context/, auth/, router/  # Infraestructura transversal
  └─ main.tsx, index.css
 
 functions/
  ├─ src/
- │   ├─ index.ts              # Registro de Cloud Functions (https.onRequest)
- │   ├─ config/firebaseAdmin.ts # Inicialización compartida del Admin SDK
- │   └─ handlers/guardarCierreDiario.ts # Stub inicial del handler
- ├─ package.json, tsconfig.json
- └─ firebase.json (fuente = lib)
+ │   ├─ index.ts              # Registro global de Cloud Functions
+ │   ├─ handlers/             # guardarCierreDiario, liquidarPeriodo, eliminarCierreDiario
+ │   ├─ types/                # Schemas Zod (closures, liquidaciones)
+ │   └─ utils/                # pendingTotals, logging helpers
+ └─ lib/                      # Salida compilada (tsc)
 ```
 
-## Primeros Pasos
+## Configuración y variables de entorno
 
-```bash
-npm install
-npm run dev
-```
+1. Clonar el repositorio y ejecutar en la raíz:
+   ```bash
+   npm install
+   npm run dev
+   ```
+   La app corre en `http://localhost:5173`.
 
-La aplicación quedará disponible usualmente en `http://localhost:5173`.
+2. Crear `.env` o `.env.local` con las credenciales de Firebase (ver `src/firebase/config.ts`):
+   ```
+   VITE_FIREBASE_API_KEY=...
+   VITE_FIREBASE_AUTH_DOMAIN=...
+   VITE_FIREBASE_PROJECT_ID=...
+   VITE_FIREBASE_STORAGE_BUCKET=...
+   VITE_FIREBASE_MESSAGING_SENDER_ID=...
+   VITE_FIREBASE_APP_ID=...
+   ```
 
-### Variables de entorno (Firebase)
-Crear un archivo `.env` o `.env.local` con las claves de Firebase (ver `src/firebase/config.ts`):
+3. Para desplegar funciones:
+   ```bash
+   cd functions
+   npm install
+   npm run build
+   firebase deploy --only functions
+   ```
 
-```
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-```
+## Scripts y automatización
 
-> Consulta **AGENT.md** para lineamientos de contribución adicionales (naming, estilos, accesibilidad).
+| Script | Ubicación | Descripción |
+|--------|-----------|-------------|
+| `npm run dev` | raíz | Servidor de desarrollo Vite con HMR. |
+| `npm run build` | raíz | Compila frontend (Vite) y revisa tipos con `tsc`. |
+| `npm run preview` | raíz | Sirve la build estática. |
+| `npm run build` | `functions/` | Compila Cloud Functions a `lib/`. |
+| `npm run deploy` | `functions/` | Alias para `firebase deploy --only functions`. |
+| `npm run emulate` | `functions/` | Emula HTTP Functions en local. |
 
-## Scripts Disponibles
-- `npm run dev`: inicia el servidor de desarrollo con HMR.
-- `npm run build`: compila a producción usando `tsc` y `vite build`.
-- `npm run preview`: sirve la versión compilada.
-- **Backend (`functions/`):**
-  - `npm install` (una sola vez) dentro de `functions/`.
-  - `npm run build`: compila las funciones a `lib/`.
-  - `npm run emulate`: compila y levanta los emuladores de Firebase Functions.
-  - `npm run deploy`: compila y despliega solo las Cloud Functions (`firebase deploy --only functions`).
+## Buenas prácticas de desarrollo
 
-## Guía de Desarrollo
-- **Estilos**: usar clases de Tailwind. Evitar CSS plano salvo casos muy específicos.
-- **Componentes**: preferir los de Shadcn/UI y mantener consistencia en variantes.
-- **Accesibilidad**: cada input debe tener su `Label`; usar `aria-label` en enlaces o botones iconográficos.
-- **Estado**: actualmente se maneja con `useState`; la conexión a APIs se implementará en iteraciones posteriores.
+- **Estilos**: priorizar utilidades Tailwind y los componentes Shadcn/UI. Evitar CSS aislado salvo que sea estrictamente necesario.
+- **Accesibilidad**: cada input debe mantener relación `Label` ↔ control. Los botones iconográficos requieren `aria-label`.
+- **Logs y diagnósticos**: usar `safeLogError` en funciones para evitar crashes del logger y capturar stack trace completo.
+- **Snapshots**: cualquier cambio en la forma de `generalExpenses`, `assignments` o `configurationSnapshot` debe propagarse a `closureCalculations` y `useClosuresDashboard` para no romper compatibilidad con cierres históricos.
 
-## Flujo de liquidación (estado actual)
+## Estado de QA / Bitácora reciente
 
-1. `useClosuresDashboard` provee cierres pendientes + fechas liquidadas para que `LiquidacionPage` sólo se enfoque en UI.
-2. `useLiquidacionWorkflow` centraliza la lógica de filtrado, validación de rango, construcción del payload, generación del PDF (via `pdf-lib`) y bloqueo local de días liquidados.
-3. Al confirmar la liquidación, se descarga automáticamente el PDF generado (`generateLiquidacionPdf`) mientras dejamos documentado el envío de correos para activarlo más adelante.
-4. `ClosureDetailPage` utiliza `useClosureDetail` para cargar el snapshot de un cierre, listar ajustes y permitir registrar nuevos, manteniendo la trazabilidad antes de ejecutar la liquidación.
+- **22/11/2025**
+  - `liquidarPeriodo` dejó de fallar con 500 gracias a la reestructuración de la transacción y al logger robusto basado en `console.error`.
+  - El modal de liquidación y el PDF listan los gastos generales con nombre/tipo y traen el porcentaje de cocina desde el `configurationSnapshot` más reciente.
+  - Despliegue completo de funciones (`guardarCierreDiario`, `eliminarCierreDiario`, `liquidarPeriodo`) en `reparte-justo/us-central1`.
 
-## Estado Actual & Próximos Pasos
+Consulte `DOCUMENTACION.md` para la cronología y detalles técnicos adicionales de cada fix.
 
-### Hoy
-- Configuración inicial persiste en Firestore y se reutiliza en el cierre diario.
-- El cierre calcula propinas netas (cocina/garzones) aplicando descuentos y ponderaciones.
-- La pantalla de liquidación bloquea días asentados, genera y descarga automáticamente un PDF con el detalle del período y deja listo el hook para activar correos.
-- Se documentó el flujo completo (hooks, PDF y pasos futuros) y se actualizó `plan-manana.md` con la siguiente iteración.
+## Roadmap
 
-### Mañana / Iteración inmediata
-1. Conectar las Cloud Functions reales (`guardarCierreDiario`, `liquidarPeriodo`) y reemplazar los placeholders actuales.
-2. Extender el flujo de liquidación para enviar correos (cuando se habilite) reutilizando el payload documentado.
-3. Mostrar en el dashboard un indicador de "Total no liquidado" usando los datos retornados por la API.
-4. Agregar pruebas/regresión manual sobre días bloqueados y descarga automática de PDF.
-
-### Más adelante
-- Añadir notificaciones de éxito/error (Shadcn `sonner`).
-- Implementar pruebas unitarias para componentes críticos.
-- Incorporar protección de rutas y autorización por roles.
+1. **Notificaciones y flujos automáticos**
+   - Enviar correo al responsable configurado tras cada liquidación, adjuntando el PDF generado.
+2. **Permisos y auditoría avanzada**
+   - Definir roles (admin, supervisor, staff) y restringir acciones sensibles como eliminar o editar cierres.
+3. **Pruebas automatizadas**
+   - Unit tests para hooks críticos (`useCierreDiario`, `useLiquidacionWorkflow`) y pruebas end-to-end del flujo de liquidación.
+4. **Optimización de bundle**
+   - Implementar `manualChunks`/`dynamic imports` para mantener cada chunk < 500 kB y mejorar tiempos de carga móviles.
+5. **Panel de métricas**
+   - Exponer KPIs de periodos liquidados (propinas netas, gasto general acumulado, montos por cocina vs garzones) usando los mismos snapshots ya persistidos.
 
 ---
 
-Para detalles técnicos adicionales ver [DOCUMENTACION.md](./DOCUMENTACION.md).
+Para documentación completa del dominio revisa [DOCUMENTACION.md](./DOCUMENTACION.md).

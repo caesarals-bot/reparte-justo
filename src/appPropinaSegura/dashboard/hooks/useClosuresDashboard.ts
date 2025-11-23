@@ -18,6 +18,32 @@ export type ClosureAdjustment = {
     createdBy?: string
 }
 
+const mapConfigurationSnapshot = (value: unknown): ClosureConfigurationSnapshot | undefined => {
+    const record = extractRecord(value)
+    if (!record) {
+        return undefined
+    }
+
+    const rawSettlementMode = record.settlementMode
+    const settlementMode = rawSettlementMode === "pool" || rawSettlementMode === "directa" ? rawSettlementMode : null
+
+    const poolPercentagesRecord = extractRecord(record.poolPercentages)
+    const poolPercentages = poolPercentagesRecord
+        ? {
+              kitchen: typeof poolPercentagesRecord.kitchen !== "undefined" ? toNumber(poolPercentagesRecord.kitchen) : undefined,
+              transbank:
+                  typeof poolPercentagesRecord.transbank !== "undefined"
+                      ? toNumber(poolPercentagesRecord.transbank)
+                      : undefined,
+          }
+        : undefined
+
+    return {
+        settlementMode,
+        poolPercentages,
+    }
+}
+
 const mapRestaurantContact = (value: unknown): RestaurantContact | undefined => {
     const record = extractRecord(value)
 
@@ -69,6 +95,14 @@ export type StaffAssignments = {
     pocilloSecundario: StaffAssignment[]
 }
 
+export type ClosureConfigurationSnapshot = {
+    settlementMode?: "pool" | "directa" | null
+    poolPercentages?: {
+        kitchen?: number
+        transbank?: number
+    }
+}
+
 type RestaurantContact = {
     email?: string
     responsibleName?: string
@@ -103,6 +137,7 @@ export type ClosureDocument = {
     createdAt?: Timestamp | null
     updatedAt?: Timestamp | null
     restaurantContact?: RestaurantContact
+    configurationSnapshot?: ClosureConfigurationSnapshot | null
 }
 
 export type ClosuresSummary = {
@@ -150,6 +185,30 @@ const extractArray = (value: unknown): unknown[] => {
 
     return []
 }
+
+const extractGeneralExpensesSource = (value: unknown): unknown[] => {
+    if (Array.isArray(value)) {
+        return value
+    }
+
+    const record = extractRecord(value)
+    if (!record) {
+        return []
+    }
+
+    return Object.entries(record).map(([entryId, payload]) => {
+        if (typeof payload === "object" && payload !== null) {
+            return { entryId, ...(payload as Record<string, unknown>) }
+        }
+
+        return { entryId, nombre: payload }
+    })
+}
+
+const generateExpenseId = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
 const mapAssignment = (value: unknown): StaffAssignment => {
     const record = extractRecord(value)
@@ -214,16 +273,15 @@ const mapGeneralExpense = (value: unknown): GeneralExpenseEntry | null => {
         return null
     }
 
-    const entryId = typeof record.entryId === "string" ? record.entryId : undefined
     const nombre = typeof record.nombre === "string" ? record.nombre : undefined
     const monto = toNumber(record.monto)
 
-    if (!entryId || !nombre || monto < 0) {
+    if (!nombre || monto < 0) {
         return null
     }
 
     return {
-        entryId,
+        entryId: typeof record.entryId === "string" ? record.entryId : generateExpenseId(),
         nombre,
         tipo: typeof record.tipo === "string" ? record.tipo : undefined,
         monto,
@@ -391,12 +449,16 @@ export const mapSnapshotToClosure = (
         mapRestaurantContact(data["restaurantContact"]) ??
         mapRestaurantContact(snapshotRecord?.["restaurantContact"]) ??
         undefined
+    const configurationSnapshot =
+        mapConfigurationSnapshot(data["configurationSnapshot"]) ??
+        mapConfigurationSnapshot(snapshotRecord?.["configurationSnapshot"]) ??
+        null
 
     const buildAssignments = (key: keyof StaffAssignments): StaffAssignment[] =>
         extractArray(assignmentsRecord?.[key]).map((item) => mapAssignment(item))
 
-    const generalExpensesFromDoc = extractArray(data["generalExpenses"])
-    const generalExpensesFromSnapshot = extractArray(snapshotRecord?.["generalExpenses"])
+    const generalExpensesFromDoc = extractGeneralExpensesSource(data["generalExpenses"])
+    const generalExpensesFromSnapshot = extractGeneralExpensesSource(snapshotRecord?.["generalExpenses"])
     const mappedGeneralExpenses = generalExpensesFromDoc.length
         ? generalExpensesFromDoc.map(mapGeneralExpense).filter(Boolean)
         : generalExpensesFromSnapshot.map(mapGeneralExpense).filter(Boolean)
@@ -445,6 +507,7 @@ export const mapSnapshotToClosure = (
         createdAt: (data.createdAt as Timestamp | undefined) ?? null,
         updatedAt: (data.updatedAt as Timestamp | undefined) ?? null,
         restaurantContact,
+        configurationSnapshot,
     }
 }
 

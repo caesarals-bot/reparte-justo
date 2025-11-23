@@ -10,6 +10,7 @@ export const liquidacionTotalsSchema = z.object({
     propinas: z.number().finite(),
     transbank: z.number().finite(),
     deductions: z.number().finite(),
+    generalExpense: z.number().finite(),
 })
 
 export const liquidacionMemberSchema = z.object({

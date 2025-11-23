@@ -44,6 +44,27 @@ const handlePreflight = (req: functions.Request, res: functions.Response) => {
     return false
 }
 
+const safeLogError = (label: string, error: unknown) => {
+    // Usar console.error que es más robusto y Firebase también lo captura
+    console.error(`[${label}]`)
+    
+    if (error instanceof Error) {
+        console.error("Error name:", error.name)
+        console.error("Error message:", error.message)
+        if (error.stack) {
+            console.error("Stack trace:")
+            console.error(error.stack)
+        }
+        return
+    }
+
+    try {
+        console.error("Error data:", JSON.stringify(error, null, 2))
+    } catch (stringifyError) {
+        console.error("Error (string):", String(error))
+    }
+}
+
 export const guardarCierreDiario = functions
     .region("us-central1")
     .https.onRequest(async (req, res): Promise<void> => {
@@ -59,7 +80,7 @@ export const guardarCierreDiario = functions
             res.status(200).json(result)
         } catch (error) {
             const { status, body } = mapHandlerError(error)
-            functions.logger.error("guardarCierreDiario error", { error })
+            safeLogError("guardarCierreDiario error", error)
             res.status(status).json(body)
         }
     })
@@ -79,7 +100,7 @@ export const eliminarCierreDiario = functions
             res.status(200).json(result)
         } catch (error) {
             const { status, body } = mapHandlerError(error)
-            functions.logger.error("eliminarCierreDiario error", { error })
+            safeLogError("eliminarCierreDiario error", error)
             res.status(status).json(body)
         }
     })
@@ -99,7 +120,7 @@ export const liquidarPeriodo = functions
             res.status(200).json(result)
         } catch (error) {
             const { status, body } = mapHandlerError(error)
-            functions.logger.error("liquidarPeriodo error", { error })
+            safeLogError("liquidarPeriodo error", error)
             res.status(status).json(body)
         }
     })

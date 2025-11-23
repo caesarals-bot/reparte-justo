@@ -39,17 +39,28 @@ export const liquidarPeriodoHandler = async (payload: unknown): Promise<Liquidar
 
     const { processedCount, updatedClosureIds, settledReferenceDates } = await firestoreAdmin.runTransaction(
         async (transaction) => {
-            let processed = 0
-            const updatedIds: string[] = []
-            const settledDates: string[] = []
+            // Fase 1: TODAS las lecturas primero (requisito de Firestore)
+            const closureReads = await Promise.all(
+                input.closureIds.map(async (closureId) => {
+                    const docRef = closuresCollection.doc(closureId)
+                    const snapshot = await transaction.get(docRef)
+                    return { closureId, docRef, snapshot }
+                })
+            )
+
+            // Fase 2: Procesar datos de las lecturas
+            const closuresToUpdate: Array<{
+                closureId: string
+                docRef: FirebaseFirestore.DocumentReference
+                summary: { netAfterDeductions: number; deductionsAmount: number; transbankAmount: number }
+                referenceDate: string | null
+            }> = []
+
             let netDelta = 0
             let deductionsDelta = 0
             let transbankDelta = 0
 
-            for (const closureId of input.closureIds) {
-                const docRef = closuresCollection.doc(closureId)
-                const snapshot = await transaction.get(docRef)
-
+            for (const { closureId, docRef, snapshot } of closureReads) {
                 if (!snapshot.exists) {
                     continue
                 }
@@ -64,14 +75,18 @@ export const liquidarPeriodoHandler = async (payload: unknown): Promise<Liquidar
                 deductionsDelta += summary.deductionsAmount
                 transbankDelta += summary.transbankAmount
 
-                processed += 1
-                updatedIds.push(closureId)
-
                 const referenceDate = data.metadata?.referenceDate ?? null
-                if (typeof referenceDate === "string" && referenceDate.length) {
-                    settledDates.push(referenceDate)
-                }
 
+                closuresToUpdate.push({
+                    closureId,
+                    docRef,
+                    summary,
+                    referenceDate: typeof referenceDate === "string" && referenceDate.length ? referenceDate : null,
+                })
+            }
+
+            // Fase 3: TODAS las escrituras (después de todas las lecturas)
+            for (const { docRef, referenceDate } of closuresToUpdate) {
                 transaction.update(docRef, {
                     estado: "pagado",
                     liquidatedAt: now,
@@ -80,21 +95,27 @@ export const liquidarPeriodoHandler = async (payload: unknown): Promise<Liquidar
                 })
             }
 
-            if (processed > 0) {
+            if (closuresToUpdate.length > 0) {
                 transaction.set(
                     restaurantRef,
                     buildPendingTotalsUpdate({
                         netAfterDeductions: -netDelta,
                         deductionsAmount: -deductionsDelta,
                         transbankAmount: -transbankDelta,
-                        pendingCount: -processed,
-                        pendingDaysDelta: -processed,
+                        pendingCount: -closuresToUpdate.length,
+                        pendingDaysDelta: -closuresToUpdate.length,
                     }),
                     { merge: true },
                 )
             }
 
-            return { processedCount: processed, updatedClosureIds: updatedIds, settledReferenceDates: settledDates }
+            return {
+                processedCount: closuresToUpdate.length,
+                updatedClosureIds: closuresToUpdate.map((c) => c.closureId),
+                settledReferenceDates: closuresToUpdate
+                    .map((c) => c.referenceDate)
+                    .filter((date): date is string => date !== null),
+            }
         },
     )
 

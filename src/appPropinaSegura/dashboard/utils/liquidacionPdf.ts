@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 
-import type { LiquidacionMemberSummary } from "./closureCalculations"
+import type { LiquidacionGeneralExpenseSummary, LiquidacionMemberSummary } from "./closureCalculations"
 
 type LiquidacionTotalsSnapshot = {
     totalNetAfterDeductions: number
@@ -14,6 +14,7 @@ type GenerateLiquidacionPdfArgs = {
     rangeLabel: string
     totals: LiquidacionTotalsSnapshot
     members: LiquidacionMemberSummary[]
+    generalExpenses?: LiquidacionGeneralExpenseSummary[]
     closureCount: number
     contactEmail?: string
     responsibleName?: string
@@ -48,6 +49,7 @@ export const generateLiquidacionPdf = async ({
     rangeLabel,
     totals,
     members,
+    generalExpenses = [],
     closureCount,
     contactEmail,
     responsibleName,
@@ -121,6 +123,20 @@ export const generateLiquidacionPdf = async ({
     drawText(`Descuentos globales: ${formatCurrency(totals.totalDeductions)}`)
     drawText(`Gasto general: ${formatCurrency(totals.totalGeneralExpense)}`)
     drawText(`Transbank: ${formatCurrency(totals.totalTransbank)}`)
+
+    divider()
+
+    drawText("Gastos generales", { font: boldFont, size: 14 })
+
+    if (!generalExpenses.length) {
+        drawText("No se registraron gastos generales en el rango seleccionado.")
+    } else {
+        generalExpenses.forEach((expense, index) => {
+            drawText(`${index + 1}. ${expense.nombre}${expense.tipo ? ` • ${expense.tipo}` : ""}`, { font: boldFont })
+            drawText(`Monto: ${formatCurrency(expense.total)}`, { size: 10 })
+            cursorY -= lineSpacing
+        })
+    }
 
     divider()
 

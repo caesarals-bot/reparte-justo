@@ -20,12 +20,30 @@ export type SummaryItem = {
     value: string
 }
 
+const mapGeneralExpenseInput = (value: unknown): unknown[] => {
+    if (Array.isArray(value)) {
+        return value
+    }
+
+    if (value && typeof value === "object") {
+        return Object.entries(value as Record<string, unknown>).map(([entryId, payload]) =>
+            payload && typeof payload === "object"
+                ? { entryId, ...(payload as Record<string, unknown>) }
+                : { entryId, nombre: payload },
+        )
+    }
+
+    return []
+}
+
 const sanitizeGeneralExpenseEntries = (value: unknown): GeneralExpenseEntry[] => {
-    if (!Array.isArray(value)) {
+    const entries = mapGeneralExpenseInput(value)
+
+    if (!entries.length) {
         return []
     }
 
-    return value
+    return entries
         .map((item) => {
             if (!item || typeof item !== "object") {
                 return null

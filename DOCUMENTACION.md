@@ -336,3 +336,15 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - `npm run build` ejecutado a las 22:35 (UTC-03). Resultado exitoso con el warning habitual de chunks > 500 kB (pendiente de `manualChunks`).
   - Commit generado: `ef23e66` — _"chore: UI tweaks and staff flow adjustments"_.
   - Próximo paso: documentar capturas/QA del nuevo flujo y validar navegación desde el dashboard.
+
+## Bitácora · 22/11/2025
+
+- **Errores críticos detectados en `liquidarPeriodo`**
+  - El logger de Firebase fallaba con `entryFromArgs` al intentar serializar `Error` completos. Se reemplazó el helper por `safeLogError` basado en `console.error`, garantizando stacktraces limpios para futuros diagnósticos.
+  - Una vez expuestos los mensajes reales, Firestore devolvió `transactions require all reads to be executed before all writes`. Se reescribió la transacción en `functions/src/handlers/liquidarPeriodo.ts` en tres fases (lecturas → cómputo → escrituras) para cumplir la regla y evitar 500.
+- **Liquidación y PDF enriquecidos con gastos generales**
+  - `closureCalculations.ts` ahora agrega los `generalExpenses` por nombre/tipo, lo cual alimenta `useLiquidacionWorkflow`, el modal de confirmación y el PDF generado automáticamente. En la UI se lista explícitamente cada gasto (ej. "Sofía • anfitriona") para validar antes de pagar.
+  - Se añadieron también los porcentajes de configuración (`configurationSnapshot.poolPercentages`) a `useClosuresDashboard`/`useLiquidacionWorkflow`, permitiendo mostrar el porcentaje de cocina aun cuando no haya personal de cocina en el rango seleccionado.
+- **Despliegue**
+  - Se ejecutó `npm run build` en `functions/` y `firebase deploy --only functions` para publicar los fixes anteriores.
+  - Status de endpoints: `guardarCierreDiario`, `eliminarCierreDiario` y `liquidarPeriodo` operativos en `reparte-justo/us-central1`.

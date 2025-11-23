@@ -58,7 +58,6 @@ const setCorsHeaders = (req, res) => {
     res.set("Access-Control-Max-Age", "3600");
 };
 const handlePreflight = (req, res) => {
-    setCorsHeaders(req, res);
     if (req.method === "OPTIONS") {
         res.status(204).send("");
         return true;
@@ -72,10 +71,30 @@ const handlePreflight = (req, res) => {
     }
     return false;
 };
+const safeLogError = (label, error) => {
+    // Usar console.error que es más robusto y Firebase también lo captura
+    console.error(`[${label}]`);
+    if (error instanceof Error) {
+        console.error("Error name:", error.name);
+        console.error("Error message:", error.message);
+        if (error.stack) {
+            console.error("Stack trace:");
+            console.error(error.stack);
+        }
+        return;
+    }
+    try {
+        console.error("Error data:", JSON.stringify(error, null, 2));
+    }
+    catch (stringifyError) {
+        console.error("Error (string):", String(error));
+    }
+};
 exports.guardarCierreDiario = functions
     .region("us-central1")
     .https.onRequest(async (req, res) => {
     functions.logger.info("guardarCierreDiario request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
     if (handlePreflight(req, res)) {
         return;
     }
@@ -85,7 +104,7 @@ exports.guardarCierreDiario = functions
     }
     catch (error) {
         const { status, body } = mapHandlerError(error);
-        functions.logger.error("guardarCierreDiario error", { error });
+        safeLogError("guardarCierreDiario error", error);
         res.status(status).json(body);
     }
 });
@@ -93,6 +112,7 @@ exports.eliminarCierreDiario = functions
     .region("us-central1")
     .https.onRequest(async (req, res) => {
     functions.logger.info("eliminarCierreDiario request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
     if (handlePreflight(req, res)) {
         return;
     }
@@ -102,7 +122,7 @@ exports.eliminarCierreDiario = functions
     }
     catch (error) {
         const { status, body } = mapHandlerError(error);
-        functions.logger.error("eliminarCierreDiario error", { error });
+        safeLogError("eliminarCierreDiario error", error);
         res.status(status).json(body);
     }
 });
@@ -110,6 +130,7 @@ exports.liquidarPeriodo = functions
     .region("us-central1")
     .https.onRequest(async (req, res) => {
     functions.logger.info("liquidarPeriodo request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
     if (handlePreflight(req, res)) {
         return;
     }
@@ -119,7 +140,7 @@ exports.liquidarPeriodo = functions
     }
     catch (error) {
         const { status, body } = mapHandlerError(error);
-        functions.logger.error("liquidarPeriodo error", { error });
+        safeLogError("liquidarPeriodo error", error);
         res.status(status).json(body);
     }
 });

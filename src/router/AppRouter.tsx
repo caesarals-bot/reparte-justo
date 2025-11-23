@@ -8,6 +8,7 @@ import CierreDiarioPage from "@/appPropinaSegura/cierre/CierreDiarioPage"
 import DashboardPage from "@/appPropinaSegura/dashboard/DashboardPage"
 import ClosureDetailPage from "@/appPropinaSegura/dashboard/ClosureDetailPage"
 import LiquidacionPage from "@/appPropinaSegura/dashboard/LiquidacionPage"
+import PaidSettlementsPage from "@/appPropinaSegura/dashboard/PaidSettlementsPage"
 import StaffManagementPage from "@/appPropinaSegura/staff/StaffManagementPage"
 import AdminLayout from "@/appPropinaSegura/admin/components/AdminLayout"
 import AdminOverviewPage from "@/appPropinaSegura/admin/pages/AdminOverviewPage"
@@ -42,6 +43,10 @@ const AppRouter = createBrowserRouter([
             {
                 path: "dashboard/liquidacion",
                 element: <LiquidacionPage />,
+            },
+            {
+                path: "dashboard/liquidaciones-pagadas",
+                element: <PaidSettlementsPage />,
             },
             {
                 path: "dashboard/personal",

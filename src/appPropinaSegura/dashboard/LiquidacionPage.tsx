@@ -41,6 +41,7 @@ const LiquidacionPage = () => {
         pendingSummary,
         detalleIntegrantes,
         detallePorDia,
+        detalleGastosGenerales,
         penalizacionesYAjustes,
         notificationContact,
         isFallbackContact,
@@ -266,6 +267,32 @@ const LiquidacionPage = () => {
                                         ))}
                                         {selectedMembers.length > 6 ? (
                                             <li className="text-[11px] text-muted-foreground">+ {selectedMembers.length - 6} integrantes</li>
+                                        ) : null}
+                                    </ul>
+                                )}
+                            </div>
+
+                            <div className="rounded-md border bg-background/60 p-3">
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                                    Gastos generales incluidos en la liquidación
+                                </p>
+                                {detalleGastosGenerales.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">No hay gastos generales registrados.</p>
+                                ) : (
+                                    <ul className="space-y-1 text-sm text-foreground">
+                                        {detalleGastosGenerales.slice(0, 6).map((expense) => (
+                                            <li key={expense.id} className="flex justify-between text-xs">
+                                                <span className="font-medium">
+                                                    {expense.nombre}
+                                                    {expense.tipo ? ` • ${expense.tipo}` : ""}
+                                                </span>
+                                                <span>{formatCurrency(expense.total)}</span>
+                                            </li>
+                                        ))}
+                                        {detalleGastosGenerales.length > 6 ? (
+                                            <li className="text-[11px] text-muted-foreground">
+                                                + {detalleGastosGenerales.length - 6} gastos adicionales
+                                            </li>
                                         ) : null}
                                     </ul>
                                 )}

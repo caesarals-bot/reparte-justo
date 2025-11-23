@@ -1,8 +1,20 @@
 # Plan de trabajo
 
-> Actualizado: 20 de noviembre de 2025
+> Actualizado: 21 de noviembre de 2025
 
-## Mañana · 21/11/2025
+## Mañana · 22/11/2025
+
+1. **Propagar gastos generales al dashboard/detalle**
+   - Mostrar `generalExpenses` y su total en `ClosureDetailPage`, cards del dashboard y futuros PDFs.
+   - Validar que los snapshots históricos guardan el arreglo completo para mantención.
+2. **QA de edición con advertencias**
+   - Escenarios de creación/edición con múltiples gastos generales verificando el `AlertDialog` de neto ≤ 0.
+   - Documentar hallazgos en `DOCUMENTACION.md` con capturas o pasos.
+3. **Preparación para alertas por correo**
+   - Definir payload/resumen que se enviará cuando el neto sea ≤ 0 y dejarlo documentado.
+   - Identificar qué datos del responsable (nombre/email) faltan para enviar el aviso desde Cloud Functions.
+
+## Histórico · 21/11/2025
 
 1. **Correcciones sobre cierres guardados**
    - Diseñar endpoints y UI para eliminar un cierre diario (revirtiendo `pendingTotals`).

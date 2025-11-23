@@ -11,6 +11,7 @@ exports.liquidacionTotalsSchema = zod_1.z.object({
     propinas: zod_1.z.number().finite(),
     transbank: zod_1.z.number().finite(),
     deductions: zod_1.z.number().finite(),
+    generalExpense: zod_1.z.number().finite(),
 });
 exports.liquidacionMemberSchema = zod_1.z.object({
     id: zod_1.z.string(),

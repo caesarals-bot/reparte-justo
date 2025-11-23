@@ -52,6 +52,7 @@ const buildClosureSnapshot = (input) => {
         totals: input.totals,
         deductions: input.deductions,
         assignments: input.assignments,
+        generalExpenses: input.generalExpenses,
         penalties: input.penalties,
         adjustments: input.adjustments,
         staffSnapshot: input.staff,

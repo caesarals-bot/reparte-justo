@@ -317,7 +317,7 @@ const DashboardPage = () => {
         return nextGroups
     }, [pendingClosures])
 
-    const historicalData = useMemo<DashboardSettlement[]>(
+    const historicalSettlements = useMemo<DashboardSettlement[]>(
         () =>
             historicalClosures.map((closure) => ({
                 id: closure.id,
@@ -328,6 +328,11 @@ const DashboardPage = () => {
                 status: closure.estado,
             })),
         [historicalClosures],
+    )
+
+    const pendingHistoricalData = useMemo<DashboardSettlement[]>(
+        () => historicalSettlements.filter((settlement) => settlement.status !== "pagado"),
+        [historicalSettlements],
     )
 
     const isLoadingDashboard = isLoadingConfig || isLoading
@@ -366,7 +371,7 @@ const DashboardPage = () => {
             restaurantName={restaurantName}
             liquidacionMode={liquidacionMode}
             pendingData={pendingData}
-            historicalData={historicalData}
+            pendingHistoricalData={pendingHistoricalData}
         />
     )
 }

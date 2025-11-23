@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.guardarCierreDiarioSchema = exports.eliminarCierreDiarioSchema = exports.submittedBySchema = exports.configurationSnapshotSchema = exports.restaurantContactSchema = exports.metadataSchema = exports.totalsSchema = exports.adjustmentEntrySchema = exports.penaltyEntrySchema = exports.staffAssignmentsSchema = exports.staffAssignmentSnapshotSchema = void 0;
+exports.guardarCierreDiarioSchema = exports.eliminarCierreDiarioSchema = exports.submittedBySchema = exports.configurationSnapshotSchema = exports.restaurantContactSchema = exports.metadataSchema = exports.totalsSchema = exports.adjustmentEntrySchema = exports.penaltyEntrySchema = exports.generalExpenseEntrySchema = exports.staffAssignmentsSchema = exports.staffAssignmentSnapshotSchema = void 0;
 const zod_1 = require("zod");
 exports.staffAssignmentSnapshotSchema = zod_1.z.object({
     staffId: zod_1.z.string().min(1),
@@ -19,6 +19,12 @@ exports.staffAssignmentsSchema = zod_1.z.object({
     cocina: zod_1.z.array(exports.staffAssignmentSnapshotSchema),
     ventaDirecta: zod_1.z.array(exports.staffAssignmentSnapshotSchema),
     pocilloSecundario: zod_1.z.array(exports.staffAssignmentSnapshotSchema),
+});
+exports.generalExpenseEntrySchema = zod_1.z.object({
+    entryId: zod_1.z.string().min(1),
+    nombre: zod_1.z.string().min(1),
+    tipo: zod_1.z.enum(["part-time", "anfitriona"]),
+    monto: zod_1.z.number().finite(),
 });
 exports.penaltyEntrySchema = zod_1.z.object({
     staffId: zod_1.z.string().optional(),
@@ -119,6 +125,7 @@ exports.guardarCierreDiarioSchema = zod_1.z.object({
         pocilloSecundario: zod_1.z.array(zod_1.z.any()),
     }),
     assignments: exports.staffAssignmentsSchema,
+    generalExpenses: zod_1.z.array(exports.generalExpenseEntrySchema),
     metadata: exports.metadataSchema,
     penalties: zod_1.z.array(exports.penaltyEntrySchema),
     adjustments: zod_1.z.array(exports.adjustmentEntrySchema),

@@ -5,23 +5,21 @@ import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { FileTextIcon, CheckCircle2Icon, AlertCircleIcon, Users } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { FileTextIcon, CheckCircle2Icon, AlertCircleIcon, Users, EyeIcon } from "lucide-react"
 import { PaymentGroupCard } from "./payment-group-card"
 import { DateRangePicker } from "./date-range-picker"
 import { HistoricalSettlement } from "./historical-settlement"
-import type {
-  DashboardPaymentGroup,
-  DashboardSettlement,
-} from "@/data/dashboard"
+import type { DashboardPaymentGroup, DashboardSettlement } from "@/data/dashboard"
 
 type DashboardProps = {
   restaurantName: string
   liquidacionMode: "pool" | "directa"
   pendingData: DashboardPaymentGroup[]
-  historicalData: DashboardSettlement[]
+  pendingHistoricalData: DashboardSettlement[]
 }
 
-export function Dashboard({ restaurantName, liquidacionMode, pendingData, historicalData }: DashboardProps) {
+export function Dashboard({ restaurantName, liquidacionMode, pendingData, pendingHistoricalData }: DashboardProps) {
   const navigate = useNavigate()
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -143,18 +141,44 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, histor
           <section>
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold tracking-tight">Liquidaciones Pasadas</h2>
-                <p className="mt-1 text-sm text-white/70">Historial de pagos realizados</p>
+                <h2 className="text-xl font-semibold tracking-tight">Cierres pendientes de liquidar</h2>
+                <p className="mt-1 text-sm text-white/70">Solo mostramos cierres cuyo estado aún no es "pagado".</p>
               </div>
               <DateRangePicker dateRange={dateRange} setDateRange={setDateRange} />
             </div>
 
-            {/* Historical Settlements */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {historicalData.map((settlement) => (
-                <HistoricalSettlement key={settlement.id} settlement={settlement} />
-              ))}
-            </div>
+            {pendingHistoricalData.length ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {pendingHistoricalData.map((settlement) => (
+                  <HistoricalSettlement key={settlement.id} settlement={settlement} />
+                ))}
+              </div>
+            ) : (
+              <Card className="border border-white/10 bg-white/5 text-white">
+                <CardContent className="py-10 text-center text-sm text-white/70">
+                  No hay cierres pendientes adicionales. Todo lo que aparece aquí ya está incluido en los montos de la sección "Pendiente de Pago".
+                </CardContent>
+              </Card>
+            )}
+          </section>
+
+          <section>
+            <Card className="border border-white/10 bg-white/5 text-white">
+              <CardContent className="flex flex-col gap-4 py-6 text-center text-sm text-white/80 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-white">¿Necesitas revisar liquidaciones pagadas?</h3>
+                  <p className="text-sm text-white/70">Abre la vista histórica completa solo cuando la requieras para no cargar datos innecesarios.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="mx-auto gap-2 rounded-full border-white/30 bg-white/5 text-white transition hover:bg-white/10 sm:mx-0"
+                  onClick={() => navigate("/dashboard/liquidaciones-pagadas")}
+                >
+                  <EyeIcon className="h-4 w-4" />
+                  Ver liquidaciones pagadas
+                </Button>
+              </CardContent>
+            </Card>
           </section>
         </div>
       </main>

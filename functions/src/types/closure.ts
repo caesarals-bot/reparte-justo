@@ -20,6 +20,13 @@ export const staffAssignmentsSchema = z.object({
     pocilloSecundario: z.array(staffAssignmentSnapshotSchema),
 })
 
+export const generalExpenseEntrySchema = z.object({
+    entryId: z.string().min(1),
+    nombre: z.string().min(1),
+    tipo: z.enum(["part-time", "anfitriona"]),
+    monto: z.number().finite(),
+})
+
 export const penaltyEntrySchema = z.object({
     staffId: z.string().optional(),
     nombre: z.string().min(1),
@@ -131,6 +138,7 @@ export const guardarCierreDiarioSchema = z.object({
         pocilloSecundario: z.array(z.any()),
     }),
     assignments: staffAssignmentsSchema,
+    generalExpenses: z.array(generalExpenseEntrySchema),
     metadata: metadataSchema,
     penalties: z.array(penaltyEntrySchema),
     adjustments: z.array(adjustmentEntrySchema),

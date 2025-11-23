@@ -20,6 +20,43 @@ export type LiquidacionMemberSummary = {
     totalAjustes: number
 }
 
+export type LiquidacionGeneralExpenseSummary = {
+    id: string
+    nombre: string
+    tipo?: string
+    total: number
+}
+
+export const aggregateGeneralExpensesFromClosures = (
+    closures: ClosureDocument[],
+): LiquidacionGeneralExpenseSummary[] => {
+    if (!closures.length) {
+        return []
+    }
+
+    const map = new Map<string, LiquidacionGeneralExpenseSummary>()
+
+    closures.forEach((closure) => {
+        closure.generalExpenses.forEach((expense) => {
+            const key = `${expense.nombre}|${expense.tipo ?? "general"}`
+            const existing = map.get(key)
+
+            if (existing) {
+                existing.total += expense.monto
+            } else {
+                map.set(key, {
+                    id: key,
+                    nombre: expense.nombre,
+                    tipo: expense.tipo,
+                    total: expense.monto,
+                })
+            }
+        })
+    })
+
+    return Array.from(map.values()).sort((a, b) => b.total - a.total)
+}
+
 export const buildPenaltyAndAdjustmentEntries = (
     closures: ClosureDocument[],
 ): PenaltyAdjustmentEntry[] => {
