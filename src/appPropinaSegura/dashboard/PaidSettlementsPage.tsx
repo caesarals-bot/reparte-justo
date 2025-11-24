@@ -107,55 +107,66 @@ const PaidSettlementsPage = () => {
                 ) : null}
 
                 {!isLoading && !error && paidSettlementGroups.length ? (
-                    <section className="space-y-4">
-                        {paidSettlementGroups.map((settlement) => (
-                            <Card key={settlement.id} className="border border-white/10 bg-[rgba(21,24,40,0.9)]">
-                                <CardHeader className="flex flex-col gap-1 border-b border-white/10">
-                                    <CardTitle className="text-lg font-semibold">
-                                        {settlement.label}
-                                    </CardTitle>
-                                    <p className="text-sm text-white/70">{settlement.rangeLabel}</p>
-                                </CardHeader>
-                                <CardContent className="flex flex-col gap-4 py-6">
-                                    <div className="grid gap-4 sm:grid-cols-3">
-                                        <div>
-                                            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Total repartido</p>
-                                            <p className="font-mono text-2xl text-white">
+                    <Card className="border border-white/10 bg-[rgba(21,24,40,0.9)]">
+                        <CardHeader className="border-b border-white/10">
+                            <CardTitle className="text-lg font-semibold">Historial por liquidación</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table className="text-sm text-white">
+                                <TableHeader>
+                                    <TableRow className="border-white/10 text-white/60">
+                                        <TableHead className="text-white/70">Ciclo liquidado</TableHead>
+                                        <TableHead className="text-center text-white/70">Cierres</TableHead>
+                                        <TableHead className="text-right text-white/70">Propinas (bruto)</TableHead>
+                                        <TableHead className="text-right text-white/70">Total repartido</TableHead>
+                                        <TableHead className="text-right text-white/70">Descuentos</TableHead>
+                                        <TableHead className="text-right text-white/70">Gasto general</TableHead>
+                                        <TableHead className="text-right text-white/70">Acciones</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {paidSettlementGroups.map((settlement) => (
+                                        <TableRow key={settlement.id} className="border-white/5">
+                                            <TableCell>
+                                                <div className="font-medium text-white">{settlement.rangeLabel}</div>
+                                                <p className="text-xs text-white/60">{settlement.label}</p>
+                                            </TableCell>
+                                            <TableCell className="text-center font-mono text-base">
+                                                {settlement.closures.length}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-base">
+                                                ${settlement.totals.propinas.toLocaleString("es-CL")}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-base">
                                                 ${settlement.totals.netAfterDeductions.toLocaleString("es-CL")}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Descuentos</p>
-                                            <p className="font-mono text-2xl text-white">
-                                                ${settlement.totals.deductionsAmount.toLocaleString("es-CL")}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase tracking-[0.3em] text-white/60">Gasto general</p>
-                                            <p className="font-mono text-2xl text-white">
-                                                ${settlement.totals.generalExpense.toLocaleString("es-CL")}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap items-center justify-between gap-4">
-                                        <p className="text-sm text-white/70">
-                                            Incluye {settlement.closures.length} cierre(s) con un total de $
-                                            {settlement.totals.propinas.toLocaleString("es-CL")} en propinas brutas.
-                                        </p>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="gap-2 rounded-full border border-white/10 px-4 text-white transition hover:bg-white/10"
-                                            onClick={() => setSelectedSettlementId(settlement.id)}
-                                        >
-                                            <EyeIcon className="h-4 w-4" />
-                                            Ver detalles
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </section>
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-sm text-white/80">
+                                                {settlement.totals.deductionsAmount > 0
+                                                    ? `$${settlement.totals.deductionsAmount.toLocaleString("es-CL")}`
+                                                    : "—"}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-sm text-white/80">
+                                                {settlement.totals.generalExpense > 0
+                                                    ? `$${settlement.totals.generalExpense.toLocaleString("es-CL")}`
+                                                    : "—"}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="gap-2 rounded-full border border-white/10 px-3 text-white transition hover:bg-white/10"
+                                                    onClick={() => setSelectedSettlementId(settlement.id)}
+                                                >
+                                                    <EyeIcon className="h-4 w-4" />
+                                                    Ver detalles
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
                 ) : null}
             </div>
 

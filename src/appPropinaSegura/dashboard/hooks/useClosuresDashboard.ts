@@ -312,8 +312,8 @@ const mapGeneralExpense = (value: unknown): GeneralExpenseEntry | null => {
     }
 }
 
-const buildMemberIdentifier = (staffId?: string, nombre?: string, role?: string | null) =>
-    staffId ?? `${nombre ?? ""}|${role ?? ""}`
+const buildMemberIdentifier = (staffId?: string, name?: string, role?: string | null) =>
+    staffId ?? `${name ?? ""}|${role ?? ""}`
 
 const applyPercentageAdjustmentsToClosure = (closure: ClosureDocument): ClosureDocument => {
     if (!closure.adjustments.length) {
@@ -726,6 +726,10 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
                 return `${closure.liquidacionRange.from ?? ""}|${closure.liquidacionRange.to ?? ""}`
             }
 
+            if (closure.liquidatedAt) {
+                return `timestamp|${closure.liquidatedAt.toMillis()}`
+            }
+
             return `closure|${closure.id}`
         }
 
@@ -791,6 +795,22 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
             return fallback ?? "Sin rango registrado"
         }
 
+        const computeRangeFromClosures = (closuresInGroup: ClosureDocument[]) => {
+            const sortedIsoDates = closuresInGroup
+                .map((closure) => closure.metadata.referenceDate)
+                .filter((value): value is string => Boolean(value))
+                .sort()
+
+            if (!sortedIsoDates.length) {
+                return { from: null, to: null }
+            }
+
+            return {
+                from: sortedIsoDates[0] ?? null,
+                to: sortedIsoDates[sortedIsoDates.length - 1] ?? sortedIsoDates[0] ?? null,
+            }
+        }
+
         const resolveSortDate = (value?: string | null, closuresInGroup: ClosureDocument[] = []) => {
             const parsed = parseDate(value)
             if (parsed) {
@@ -812,8 +832,11 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
             .map((group) => {
                 const totalSnapshot = summarizeClosures(group.closures)
                 const dailySummaries = buildDailyClosureSummaries(group.closures)
+                const computedRange = computeRangeFromClosures(group.closures)
+                const displayFrom = group.from ?? computedRange.from
+                const displayTo = group.to ?? computedRange.to ?? computedRange.from
 
-                const primaryLabel = formatRangeLabel(group.from, group.to, group.closures[0]?.metadata.referenceDate)
+                const primaryLabel = formatRangeLabel(displayFrom, displayTo, group.closures[0]?.metadata.referenceDate)
 
                 return {
                     id: group.id,

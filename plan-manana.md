@@ -1,8 +1,31 @@
 # Plan de trabajo
 
-> Actualizado: 21 de noviembre de 2025
+> Actualizado: 24 de noviembre de 2025
 
-## Mañana · 22/11/2025
+## Mañana · 24/11/2025
+
+1. **Liquidación por venta directa — definición funcional**
+   - Documentar reglas: un cierre es exclusivo de un modo (`pool` o `directa`), cada garzón cobra sólo lo que vendió y se le aplican descuentos configurables (porcentaje + valor fijo tipo anfitriona).
+   - Identificar en `configurationSnapshot` qué campos podemos reutilizar (cards actuales de gastos, ajustes) y qué nuevos necesitamos (`directSales.percentageFee`, `directSales.fixedFee`, descripciones).
+   - Asegurar que las cards/resúmenes existentes puedan mostrar el modo seleccionado sin duplicar componentes (reutilizar cards del dashboard y modal de liquidación con toggle de modo).
+
+2. **Backend: extensión de `liquidarPeriodo` para venta directa**
+   - Validar que el payload incluya `mode: "directa"`, totales y descuentos aplicables; rechazar mezclas de modos.
+   - Reutilizar la lógica de snapshots actual para marcar cierres pagados, agregando `directSalesAdjustments` y registrando cuánto se descontó a cada garzón.
+   - Generar un `liquidacionId` por modo/ciclo para que el historial de liquidaciones (cards/tablas ya existentes) muestre los ciclos directos sin nuevas vistas.
+
+3. **Hooks y UI**
+   - `useClosuresDashboard` / `useLiquidacionWorkflow`: agregar selector de modo (pool vs. venta directa) reutilizando el mismo calendario y cards, filtrando cierres según `mode`.
+   - `PaidSettlementsPage` / cards del dashboard: mostrar badge de modo y permitir filtrar (reutilizar tabla actual cambiando sólo labels).
+   - Modal de detalle: aprovechar el componente existente para listar días y añadir filas de descuentos específicos (porcentaje/fijo) sólo cuando el modo sea "directa".
+
+4. **Documentación y QA**
+   - Incluir en `DOCUMENTACION.md` el flujo de venta directa, ejemplos de descuentos y capturas reutilizando las mismas cards.
+   - Preparar casos de prueba: liquidación diaria directa, liquidación por ciclo y verificación de descuentos aplicados en el modal y PDF.
+
+---
+
+## Histórico · 22/11/2025
 
 1. **Propagar gastos generales al dashboard/detalle**
    - Mostrar `generalExpenses` y su total en `ClosureDetailPage`, cards del dashboard y futuros PDFs.
