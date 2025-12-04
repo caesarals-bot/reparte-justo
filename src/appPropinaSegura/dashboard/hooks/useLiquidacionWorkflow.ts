@@ -380,12 +380,19 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         try {
             setIsSubmittingLiquidacion(true)
             setLiquidacionFeedback(null)
+            
+            // Extraer directSalesAdjustments del primer cierre si es modo directa
+            const directSalesAdjustments = isDirectSalesMode 
+                ? normalizedClosures[0]?.directSalesAdjustmentsSnapshot ?? undefined
+                : undefined
+            
             const payload = buildLiquidacionPayload({
                 restaurantId: uid,
                 closures: normalizedClosures,
                 dateRange,
                 contact: notificationContact,
                 modeOverride: modeInfo.mode,
+                directSalesAdjustments,
             })
             const result: LiquidarPeriodoResponse = await liquidarPeriodo(payload)
             await refresh()
@@ -455,6 +462,9 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         selectedMembers,
         refresh,
         modeInfo.isMixed,
+        modeInfo.mode,
+        isDirectSalesMode,
+        detalleGastosGenerales,
     ])
 
     return {
