@@ -1,6 +1,30 @@
 # Plan de trabajo
 
-> Actualizado: 24 de noviembre de 2025
+> Actualizado: 28 de noviembre de 2025
+
+## Mañana · 29/11/2025
+
+1. **Deducción grupal – UI y estado**
+   - Agregar botón "Deducción grupal" en el bloque de venta directa y construir el `Dialog` con nombre opcional, tipo (monto/%), valor y selección de destinatarios.
+   - Persistir las deducciones en `useCierreDiario` mediante un nuevo arreglo `groupDeductions` con helpers para crear/editar/eliminar.
+2. **Cálculos y snapshot**
+   - Ajustar los montos asignados (`directAssignedAmounts`) restando las deducciones según su tipo antes de generar el snapshot.
+   - Registrar el detalle en `assignmentsSnapshot` para que la deducción aparezca en dashboards, PDF y futuras liquidaciones.
+3. **QA y documentación**
+   - Casos manuales: crear deducción de monto fijo aplicada a todos, otra porcentual solo para un garzón y validar que los netos nunca queden negativos.
+   - Actualizar `DOCUMENTACION.md` con el flujo completo (capturas del modal, chips/resumen) y anotar pasos de prueba.
+
+## Mañana · 27/11/2025
+
+1. **Venta directa — cierre diario y snapshots**
+   - Propagar `deduccion_nombre` y `deduccion_descripcion` hacia `useCierreDiario`, snapshot y payload de `guardarCierreDiario` para que queden registrados en Firestore.
+   - Actualizar `closureCalculations` / `ClosureDetailPage` para mostrar el nombre y la descripción en las tablas e históricos.
+2. **Documentación + UI**
+   - Capturar pantallas del nuevo registro de venta directa (card alineada + modal con nombre/nota) y añadirlas a `DOCUMENTACION.md`.
+   - Escribir pasos de QA: registrar venta directa con deducción nombrada, editar cierre y verificar persistencia.
+3. **QA técnico**
+   - Correr `npm run lint && npm run build` para asegurar que las importaciones nuevas no rompen el pipeline.
+   - Revisar regresiones visuales en modo oscuro (contenedores y badges de ponderación).
 
 ## Mañana · 24/11/2025
 

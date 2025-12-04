@@ -1,33 +1,12 @@
 import { Button } from "@/components/ui/button"
-import { adminEvents, adminMetrics, adminRestaurants } from "@/data/admin"
 import AdminOverview from "../components/AdminOverview"
+import { useAdminOverview } from "../hooks/useAdminOverview"
 
 const AdminOverviewPage = () => {
-    const totalRestaurants = adminRestaurants.length
-    const restaurantsMetric = adminMetrics.find((metric) => metric.id === "restaurants")
-    const staffMetric = adminMetrics.find((metric) => metric.id === "staff")
-    const settlementsMetric = adminMetrics.find((metric) => metric.id === "settlements")
+    const { heroStats, metrics, events, restaurants, isLoading, error, refresh } = useAdminOverview()
 
-    const heroStats = [
-        {
-            id: "restaurants",
-            label: restaurantsMetric?.label ?? "Restaurantes activos",
-            value: restaurantsMetric?.value ?? totalRestaurants.toString(),
-            helper: restaurantsMetric?.deltaLabel ?? "Sin variación registrada",
-        },
-        {
-            id: "staff",
-            label: staffMetric?.label ?? "Colaboradores registrados",
-            value: staffMetric?.value ?? "0",
-            helper: staffMetric?.deltaLabel ?? "Sin variación registrada",
-        },
-        {
-            id: "settlements",
-            label: settlementsMetric?.label ?? "Cierres procesados",
-            value: settlementsMetric?.value ?? "0",
-            helper: settlementsMetric?.deltaLabel ?? "Sin pendientes",
-        },
-    ]
+    const totalRestaurants = restaurants.length
+    const staffMetric = metrics.find((metric) => metric.id === "staff")
 
     return (
         <section className="space-y-8">
@@ -40,8 +19,14 @@ const AdminOverviewPage = () => {
                             Revisa métricas globales, gestiona {totalRestaurants} restaurantes y coordina {staffMetric?.value ?? "0"} colaboradores registrados.
                         </p>
                     </div>
-                    <Button className="gap-2" size="sm" aria-label="Generar reporte general">
-                        Generar reporte
+                    <Button
+                        className="gap-2"
+                        size="sm"
+                        aria-label="Actualizar datos administrativos"
+                        onClick={() => refresh()}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? "Actualizando..." : "Actualizar datos"}
                     </Button>
                 </div>
 
@@ -57,9 +42,15 @@ const AdminOverviewPage = () => {
                         </div>
                     ))}
                 </dl>
+
+                {error ? (
+                    <p className="mt-4 text-sm text-red-200" role="alert">
+                        {error}
+                    </p>
+                ) : null}
             </header>
 
-            <AdminOverview sectionId="overview" metrics={adminMetrics} events={adminEvents} />
+            <AdminOverview sectionId="overview" metrics={metrics} events={events} />
         </section>
     )
 }

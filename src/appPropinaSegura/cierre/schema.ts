@@ -7,6 +7,8 @@ export const staffEntrySchema = z.object({
     presente: z.boolean(),
     penalizacion_pct: z.number().nonnegative(),
     deduccion_valor: z.number().nonnegative(),
+    deduccion_nombre: z.string().max(80).optional(),
+    deduccion_descripcion: z.string().max(200).optional(),
     montoIndividual: z.number().nonnegative().optional(),
     porcentajeVenta: z.number().nonnegative().max(100).optional(),
     totalVenta: z.number().nonnegative().optional(),
@@ -39,20 +41,6 @@ export const cierreSchema = z
                     code: z.ZodIssueCode.custom,
                     message: "El monto de venta individual es requerido",
                     path: ["ventaDirecta", index, "montoIndividual"],
-                })
-            }
-            if (item.porcentajeVenta === undefined) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    message: "El porcentaje de venta es requerido",
-                    path: ["ventaDirecta", index, "porcentajeVenta"],
-                })
-            }
-            if (item.totalVenta === undefined) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    message: "El total de venta es requerido",
-                    path: ["ventaDirecta", index, "totalVenta"],
                 })
             }
         })

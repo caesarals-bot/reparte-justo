@@ -1,7 +1,7 @@
 import { useCallback } from "react"
 
 import { aggregateMembersFromClosures, summarizeClosures } from "../utils/closureCalculations"
-import type { ClosureDocument } from "./useClosuresDashboard"
+import type { ClosureDocument, SettlementMode } from "./useClosuresDashboard"
 import { getApiBaseUrl } from "@/appPropinaSegura/cierre/services/closuresApi"
 
 export type LiquidacionRange = {
@@ -28,6 +28,13 @@ export type LiquidacionPayload = {
         email?: string
         responsibleName?: string
     }
+    mode: "pool" | "directa"
+    settlementFrequency: "daily" | "cycle"
+    directSalesAdjustments?: {
+        percentageFee?: number
+        fixedFee?: number
+        notes?: string
+    }
 }
 
 type BuildLiquidacionPayloadArgs = {
@@ -35,6 +42,8 @@ type BuildLiquidacionPayloadArgs = {
     closures: ClosureDocument[]
     dateRange: LiquidacionRange
     contact?: LiquidacionPayload["contact"]
+    directSalesAdjustments?: LiquidacionPayload["directSalesAdjustments"]
+    modeOverride?: SettlementMode | null
 }
 
 const toIsoString = (value?: Date) => value?.toISOString() ?? null
@@ -67,9 +76,19 @@ const isLiquidarPeriodoResponse = (value: unknown): value is LiquidarPeriodoResp
 
 export const useLiquidacionActions = () => {
     const buildLiquidacionPayload = useCallback(
-        ({ restaurantId, closures, dateRange, contact }: BuildLiquidacionPayloadArgs): LiquidacionPayload => {
+        ({
+            restaurantId,
+            closures,
+            dateRange,
+            contact,
+            directSalesAdjustments,
+            modeOverride,
+        }: BuildLiquidacionPayloadArgs): LiquidacionPayload => {
             const totals = summarizeClosures(closures)
             const members = aggregateMembersFromClosures(closures)
+            const inferredMode = closures[0]?.mode === "directa" ? "directa" : "pool"
+            const mode = modeOverride ?? inferredMode
+            const isSingleDay = Boolean(dateRange.from && dateRange.to && dateRange.from.getTime() === dateRange.to.getTime())
 
             return {
                 restaurantId,
@@ -87,6 +106,9 @@ export const useLiquidacionActions = () => {
                 },
                 members,
                 contact,
+                mode,
+                settlementFrequency: isSingleDay ? "daily" : "cycle",
+                directSalesAdjustments,
             }
         },
         [],

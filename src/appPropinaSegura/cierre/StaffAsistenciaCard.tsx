@@ -1,4 +1,4 @@
-import { Scissors } from "lucide-react"
+import { Info, Scissors } from "lucide-react"
 import { useController, useFormContext, useWatch, type FieldArrayWithId } from "react-hook-form"
 
 import { Button } from "@/components/ui/button"
@@ -67,24 +67,24 @@ const StaffAsistenciaCard = ({
         name: `${baseName}.deduccion_valor`,
     })
 
+    const {
+        field: deduccionNombreField,
+    } = useController({
+        control,
+        name: `${baseName}.deduccion_nombre`,
+    })
+
+    const {
+        field: deduccionDescripcionField,
+    } = useController({
+        control,
+        name: `${baseName}.deduccion_descripcion`,
+    })
+
     const montoController = showMontoIndividual
         ? useController({
               control,
               name: `${baseName}.montoIndividual`,
-          })
-        : null
-
-    const porcentajeController = showMontoIndividual
-        ? useController({
-              control,
-              name: `${baseName}.porcentajeVenta`,
-          })
-        : null
-
-    const totalController = showMontoIndividual
-        ? useController({
-              control,
-              name: `${baseName}.totalVenta`,
           })
         : null
 
@@ -95,34 +95,34 @@ const StaffAsistenciaCard = ({
 
     return (
         <Sheet>
-            <div className="flex items-start gap-4 rounded-xl border p-4 shadow-sm">
+            <div className="flex flex-col gap-4 rounded-xl border p-4 shadow-sm sm:flex-row sm:items-start">
                 <Checkbox
                     checked={Boolean(presenteField.value)}
                     onCheckedChange={(checked) => presenteField.onChange(checked === true)}
                     aria-label={`Presente ${field.nombre}`}
+                    className="mt-1"
                 />
 
-                <div className="flex-1 space-y-3">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-1">
-                            <p className="text-base font-semibold leading-tight">{field.nombre}</p>
-                            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex-1 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                            <p className="text-base font-semibold leading-tight text-foreground">{field.nombre}</p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                 {showPonderacion && field.ponderacion ? (
-                                    <span className="rounded-md bg-muted/60 px-2 py-0.5 font-medium">
-                                        {field.ponderacion}
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-0.5 font-medium">
+                                        <Info className="h-3 w-3" /> Ponderación {field.ponderacion}
                                     </span>
                                 ) : null}
                                 {assignedAmount ? (
-                                    <span className="rounded-md bg-primary/10 px-2 py-0.5 font-medium text-primary">
-                                        {assignedAmount}
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                                        Asignado {assignedAmount}
                                     </span>
                                 ) : null}
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            {hasAdjustments ? <Badge variant="destructive">Ajuste</Badge> : null}
-
+                        <div className="flex items-center gap-2">
+                            {hasAdjustments ? <Badge variant="destructive">Con ajustes</Badge> : null}
                             <SheetTrigger asChild>
                                 <Button
                                     variant="outline"
@@ -138,10 +138,10 @@ const StaffAsistenciaCard = ({
                         </div>
                     </div>
 
-                    {showMontoIndividual && montoController && porcentajeController && totalController ? (
-                        <div className="grid gap-3 sm:grid-cols-3">
+                    {showMontoIndividual && montoController ? (
+                        <div className="grid gap-3 sm:grid-cols-2">
                             <div className="space-y-1">
-                                <Label htmlFor={`${baseName}-monto`}>Monto Venta ($)</Label>
+                                <Label htmlFor={`${baseName}-monto`}>Monto venta ($)</Label>
                                 <input
                                     id={`${baseName}-monto`}
                                     type="number"
@@ -156,33 +156,10 @@ const StaffAsistenciaCard = ({
                             </div>
 
                             <div className="space-y-1">
-                                <Label htmlFor={`${baseName}-porcentaje`}>Porcentaje (%)</Label>
-                                <input
-                                    id={`${baseName}-porcentaje`}
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    className={percentageInputClassName}
-                                    value={porcentajeController.field.value ?? 0}
-                                    onChange={(event) =>
-                                        porcentajeController.field.onChange(Number(event.target.value) || 0)
-                                    }
-                                />
-                            </div>
-
-                            <div className="space-y-1">
-                                <Label htmlFor={`${baseName}-total`}>Total Día ($)</Label>
-                                <input
-                                    id={`${baseName}-total`}
-                                    type="number"
-                                    min={0}
-                                    max={999999}
-                                    className={amountInputClassName}
-                                    value={totalController.field.value ?? 0}
-                                    onChange={(event) =>
-                                        totalController.field.onChange(Number(event.target.value) || 0)
-                                    }
-                                />
+                                <Label className="text-muted-foreground">Ponderación</Label>
+                                <div className="flex h-10 items-center rounded-md border border-dashed border-muted-foreground/50 bg-background/40 px-3 text-sm text-muted-foreground">
+                                    {field.ponderacion ?? "Sin definir"}
+                                </div>
                             </div>
                         </div>
                     ) : null}
@@ -196,28 +173,57 @@ const StaffAsistenciaCard = ({
                 </SheetHeader>
 
                 <div className="space-y-5">
-                    <div className={sheetFieldWrapper}>
-                        <Label htmlFor={`${baseName}-penalizacion`}>Penalización (%)</Label>
-                        <input
-                            id={`${baseName}-penalizacion`}
-                            type="number"
-                            min={0}
-                            className={percentageInputClassName}
-                            value={penalizacionField.value ?? 0}
-                            onChange={(event) => penalizacionField.onChange(Number(event.target.value) || 0)}
-                        />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className={sheetFieldWrapper}>
+                            <Label htmlFor={`${baseName}-penalizacion`}>Penalización (%)</Label>
+                            <input
+                                id={`${baseName}-penalizacion`}
+                                type="number"
+                                min={0}
+                                className={percentageInputClassName}
+                                value={penalizacionField.value ?? 0}
+                                onChange={(event) => penalizacionField.onChange(Number(event.target.value) || 0)}
+                            />
+                        </div>
+
+                        <div className={sheetFieldWrapper}>
+                            <Label htmlFor={`${baseName}-deduccion`}>Monto deducción ($)</Label>
+                            <input
+                                id={`${baseName}-deduccion`}
+                                type="number"
+                                min={0}
+                                className={amountInputClassName}
+                                value={deduccionField.value ?? 0}
+                                onChange={(event) => deduccionField.onChange(Number(event.target.value) || 0)}
+                            />
+                        </div>
                     </div>
 
-                    <div className={sheetFieldWrapper}>
-                        <Label htmlFor={`${baseName}-deduccion`}>Deducción ($) (Adelantos)</Label>
-                        <input
-                            id={`${baseName}-deduccion`}
-                            type="number"
-                            min={0}
-                            className={amountInputClassName}
-                            value={deduccionField.value ?? 0}
-                            onChange={(event) => deduccionField.onChange(Number(event.target.value) || 0)}
-                        />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className={sheetFieldWrapper}>
+                            <Label htmlFor={`${baseName}-deduccion-nombre`}>Nombre del descuento</Label>
+                            <input
+                                id={`${baseName}-deduccion-nombre`}
+                                type="text"
+                                maxLength={80}
+                                placeholder="Ej. Pocillo"
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                value={deduccionNombreField.value ?? ""}
+                                onChange={(event) => deduccionNombreField.onChange(event.target.value)}
+                            />
+                        </div>
+                        <div className={sheetFieldWrapper}>
+                            <Label htmlFor={`${baseName}-deduccion-descripcion`}>Descripción corta</Label>
+                            <textarea
+                                id={`${baseName}-deduccion-descripcion`}
+                                rows={2}
+                                maxLength={200}
+                                placeholder="Motivo o referencia"
+                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={deduccionDescripcionField.value ?? ""}
+                                onChange={(event) => deduccionDescripcionField.onChange(event.target.value)}
+                            />
+                        </div>
                     </div>
                 </div>
 

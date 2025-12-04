@@ -62,6 +62,15 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Calendar, monto bruto del día y tablas de asistencia con columnas para penalización (%) y deducción ($) por colaborador tanto en servicio como cocina.
 - **Modo Venta Directa**
   - Calendar, registro de montos individuales por garzón con penalización y deducción; asistencia del staff secundario con ponderaciones y descuentos monetarios.
+  - Cada tarjeta de garzón muestra únicamente dos campos: `Monto venta ($)` y un recordatorio pasivo de la **ponderación** configurada. El chip/badge de ponderación se alinea con los botones principales para evitar saltos visuales.
+  - El modal "Deducciones" incluye ahora nombre y descripción opcionales para cada descuento aplicado; se persisten junto al monto dentro de `staffEntry` (`deduccion_nombre`, `deduccion_descripcion`).
+  - Estos textos sirven como bitácora ligera para distinguir entre pocillo, adelantos u otros motivos sin abusar de los porcentajes.
+
+#### QA manual recomendado (venta directa)
+1. Registrar un cierre directo ingresando montos individuales para al menos dos garzones.
+2. Abrir el modal de deducciones para un garzón, capturar `Penalización (%)`, `Monto deducción ($)`, `Nombre` (ej. *Pocillo*), y una descripción corta; guardar y confirmar que la tarjeta muestra el badge "Con ajustes".
+3. Guardar el cierre y volver a abrirlo en modo edición para validar que nombre/descripcion persisten.
+4. Repetir el flujo sin ingresar deducción para validar que la UI mantiene alineación y no muestra campos vacíos.
 - **Botón global** para guardar (pendiente de link a API real).
 
 ### Hook `useCierreDiario`
@@ -78,6 +87,7 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 - `generalExpenseEntries` y `generalExpenseTotal` se calculan con `useWatch` + `useMemo` y se restan del reparto a garzones/kitchen antes de construir el snapshot.
 - Cuando se edita un cierre antiguo que solo tenía `gastoGeneral` numérico, el hook genera un fallback con una entrada única para mantener compatibilidad.
 - Cada snapshot guardado expone tanto el total (`totals.generalExpense`) como el arreglo completo `generalExpenses`, lo que habilita mostrar el desglose en dashboard, detalle y futuros reportes.
+- **Visibilidad en ambos modos (Nov 2025)**: el formulario de gastos generales se renderiza con el mismo helper tanto en el bloque de registro de Pocillo como en el de Venta Directa. El subtítulo cambia automáticamente para indicar si el descuento aplica "antes de repartir el pocillo" o "antes de repartir la venta directa", pero los campos son idénticos y se descuentan del neto del grupo activo sin duplicar lógica.
 
 ### Visualización de gastos generales en dashboard y detalle
 - `ClosureDetailPage` muestra ahora una tarjeta dedicada con el total de gasto general y el listado de cada partida (nombre, tipo, monto), manteniendo trazabilidad aunque el cierre se haya creado antes de la nueva UI.
@@ -93,6 +103,10 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 - **Archivo principal**: `src/appPropinaSegura/cierre/CierreDiarioPage.tsx` con lógica central en `useCierreDiario`.
 - Los totales y snapshots se generan a través de `buildClosureSnapshotPayload`. El payload incluye: configuraciones vigentes, snapshot de staff, asignaciones y metadatos (`referenceDateKey`, `daysWithoutSettlement`).
 - La función `guardarCierreDiario` (cliente en `src/appPropinaSegura/cierre/services/closuresApi.ts`) llama al Cloud Function homónimo para persistir el cierre y recalcular los totales pendientes del restaurante.
+
+#### Notas añadidas (noviembre 2025)
+- `useCierreDiario` y `schema.ts` exponen columnas nuevas para deducciones nombradas (`deduccion_nombre`, `deduccion_descripcion`) manteniendo compatibilidad con cierres anteriores.
+- Los valores se muestran en la UI y quedarán listos para propagarse a PDFs/historial en la siguiente iteración.
 
 ### Eliminar un cierre
 - **Backend**: Cloud Function `eliminarCierreDiario` (`functions/src/handlers/eliminarCierreDiario.ts`) valida que el cierre esté pendiente, revierte los pendientes diarios y escribe un registro de auditoría.
@@ -266,6 +280,67 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 - El calendario de selección de rango destaca, con un color diferente, los días que tienen cierres pendientes (a partir de `referenceDate`), para facilitar elegir períodos con movimiento.
 - El botón de **Confirmar liquidación** está deshabilitado por ahora; no se marcan cierres como liquidados ni se generan reportes automáticos todavía.
 
+### Modo "Venta Directa" — reglas funcionales
+
+- Un restaurante opera exclusivamente en un modo por ciclo: `pool` o `directa`. No se permiten cierres mixtos dentro de la misma liquidación.
+- Cada garzón cobra solo lo que vendió en su día. Antes de marcar el cierre como pagado pueden aplicarse descuentos configurables:
+  - **Porcentaje** (ej. 10 % anfitriona).
+  - **Valor fijo** (ej. $2.000 caja).
+  - Combinar ambos en cascada (primero porcentaje, luego valor fijo).
+- La frecuencia de liquidación puede ser diaria o por ciclo (varios días agrupados por `liquidacionRange`).
+- Las mismas cards/tablas del dashboard se reutilizan; únicamente se agrega un badge para indicar el modo y se muestran filas extra con los descuentos cuando el grupo es `directa`.
+
+#### Payload extendido para `liquidarPeriodo`
+
+- Campos adicionales requeridos cuando el modo es `directa`:
+  - `mode: "directa"`.
+  - `directSalesAdjustments`: `{ percentageFee?: number; fixedFee?: number; notes?: string }`.
+  - `settlementFrequency`: `"daily" | "cycle"` (derivado del rango seleccionado).
+- El backend valida que todos los `closureIds` pertenezcan al mismo modo y rechaza combinaciones.
+- Se recalcula el neto diario aplicando primero el `percentageFee` y luego el `fixedFee`, registrando en cada documento cuánto se descontó (`directSalesAppliedAdjustments`).
+- Los campos `liquidacionMode` y `directSalesAdjustmentsSnapshot` se escriben junto con `liquidacionRange`/`liquidacionId` para que el frontend pueda mostrar badges y desglose histórico.
+
+#### Estado de implementación · 25/11/2025 (corte nocturno)
+
+- ✅ **Tipos y contratos**: `LiquidacionPayload`, `liquidarPeriodoSchema` y los builders del frontend incluyen `mode`, `settlementFrequency` y `directSalesAdjustments`.
+- ✅ **Backend `liquidarPeriodo`**: valida modos homogéneos, aplica descuentos en cascada, actualiza `pendingTotals` con los montos netos descontados y persiste `liquidacionMode`, `directSalesAdjustmentsSnapshot` y `directSalesAdjustmentApplied` en cada cierre pagado.
+- ✅ **Hooks actualizados**:
+  1. `useClosuresDashboard` agrupa pendientes por modo, expone `directSalesAdjustmentsSnapshot/applied` y arma `paidSettlementGroups` con esa metadata.
+- ✅ **UI actualizada**:
+  1. `LiquidacionPage` muestra badges de modo tanto en la tarjeta principal como en el modal, bloquea mezclas y, si es `directa`, rinde inputs de porcentaje/monto/notas con vista previa del descuento aplicado.
+  2. `PaidSettlementsPage` agrega la columna "Modo" y un renglón "Venta directa" en la tabla y en el modal histórico, reutilizando `directSalesAdjustmentApplied` para cada día/grupo.
+
+
+## Administración general (Nov 2025)
+
+- Se habilitó la ruta `/admin/overview` como panel exclusivo para el administrador general (rol interno).
+- El hook `useAdminOverview` ahora consulta directamente Firestore:
+  - `restaurants`: obtiene todos los registros, contabiliza staff, modo, responsable y contacto.
+  - `collectionGroup("registros_diarios")`: toma una muestra de cierres para calcular métricas globales, pendientes y eventos recientes.
+- Las tarjetas "Visión general" usan estas métricas en vivo (restaurantes activos, colaboradores registrados, cierres procesados / pendientes) y muestran botón de refresco manual.
+- El feed de actividad reciente se arma con los últimos cierres detectados, etiquetando el estado (`pendiente`, `en_progreso`, `completado`).
+- Cada restaurante queda enriquecido con:
+  - Fecha del último cierre (`lastSettlementDate`) y su versión formateada.
+  - Días transcurridos sin liquidar (`daysWithoutSettlement`).
+  - Conteo de cierres pendientes (`pendingClosures`).
+  - Nombre/correo de contacto si existe en la configuración inicial.
+- Próximo paso (pendiente): reutilizar esta misma data para las secciones "Restaurantes" y "Usuarios"; hoy siguen mostrando contenido mock.
+
+> Próximo turno: capturar evidencias visuales y QA final antes de despliegue.
+
+#### Reutilización de hooks/UI
+
+- `useClosuresDashboard`: filtra y agrupa cierres por `mode`, expone badges y `paidSettlementGroups` con descuentos diarios para venta directa.
+- `useLiquidacionWorkflow`: impide seleccionar cierres de modos distintos, muestra la configuración directa desde `configurationSnapshot` y adjunta los nuevos campos al payload.
+- `PaidSettlementsPage` y el modal de detalle reutilizan la tabla actual, agregando filas específicas con los descuentos cuando el grupo pertenece al modo `directa`.
+
+#### QA sugerido
+
+1. Liquidación diaria con modo `directa`: ingresar porcentaje y monto fijo, confirmar que se rellenan en el modal, se envían en el payload y el PDF refleja los descuentos.
+2. Liquidación de ciclo (≥2 días) con modo `directa`: los badges del dashboard y el modal deben indicar "Venta directa" y la suma de `directSalesAdjustmentApplied` debe coincidir con la previsualización.
+3. Intento de liquidar cierres mezclados (`pool` + `directa`): el botón "Preparar liquidación" debe bloquearse y mostrar el mensaje de error.
+4. Revisión del historial (`PaidSettlementsPage`): cada grupo debe mostrar el badge de modo y la columna "Venta directa" con el total aplicado por ciclo y por día antes de descargar el PDF.
+
 ### Metadatos persistidos por liquidación (Nov 2025)
 
 - Cada vez que `liquidarPeriodo` marca cierres como pagados, la función escribe dos campos adicionales en cada documento de `registros_diarios`:
@@ -275,12 +350,12 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 
 ### Histórico de liquidaciones pagadas (PaidSettlementsPage)
 
-- La vista `/dashboard/liquidaciones-pagadas` ahora consume los metadatos anteriores desde `useClosuresDashboard`.
-- El hook expone `paidSettlementGroups`, agrupando cierres `estado = "pagado"` por `liquidacionId`/rango y consolidando totales (`netAfterDeductions`, `deductionsAmount`, `generalExpense`, `propinas`).
+- La vista `/dashboard/liquidaciones-pagadas` consume los metadatos anteriores desde `useClosuresDashboard` y ahora calcula además el modo del grupo (`pool`, `directa` o mixto) y el total de `directSalesAdjustmentApplied`.
+- `paidSettlementGroups` agrupa cierres `estado = "pagado"` por `liquidacionId`/rango, consolidando totales (`netAfterDeductions`, `deductionsAmount`, `generalExpense`, `propinas`) y construyendo `dailySummaries` con el ajuste directo por día.
 - La UI muestra:
-  - Tarjetas por rango (`Liquidación de N días`) con monto repartido, descuentos y gasto general.
-  - Botón "Ver detalles" que abre un `Dialog` reutilizando `buildDailyClosureSummaries` para listar cada día liquidadito con sus montos netos, descuentos y gasto general, emulando el PDF.
-- Esta pantalla no se carga en el dashboard principal para mantenerlo liviano; solo se consulta bajo demanda.
+  - Tabla con columnas "Modo" y "Venta directa" para identificar rápidamente el tipo de liquidación y los descuentos aplicados.
+  - Botón "Ver detalles" que abre un `Dialog` con badge del modo, resumen financiero actualizado y la nueva columna "Venta directa" dentro de "Días incluidos".
+- Esta pantalla sigue siendo on-demand para no recargar el dashboard principal.
 
 ## Tema "Dark Serenity" — avances UI (Nov 2025)
 

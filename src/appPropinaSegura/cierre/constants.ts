@@ -23,8 +23,6 @@ export const createDefaultCierreValues = (): CierreFormValues => ({
     ventaDirecta: serviceStaffData.map((member) => ({
         ...mapToStaffEntry(member),
         montoIndividual: 0,
-        porcentajeVenta: 0,
-        totalVenta: 0,
     })),
     pocilloSecundario: kitchenStaffData.map(mapToStaffEntry),
 })

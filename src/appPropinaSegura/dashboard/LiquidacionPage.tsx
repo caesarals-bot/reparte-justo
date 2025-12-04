@@ -15,6 +15,7 @@ import {
 import { AlertCircle, CalendarRange, Loader2, PiggyBank } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { useLiquidacionWorkflow } from "./hooks/useLiquidacionWorkflow"
+import { Badge } from "@/components/ui/badge"
 
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", minimumFractionDigits: 0 }).format(
@@ -47,13 +48,97 @@ const LiquidacionPage = () => {
         isFallbackContact,
         selectedTotals,
         selectedMembers,
+        selectedMode,
+        isDirectSalesMode,
+        modeMismatchError,
+        configurationSummary,
         dateRangeLabel,
+        hasUnnamedDeductions,
+        unnamedDeductionCount,
+        unnamedDeductionSample,
         handlePrepareLiquidacion,
         handleConfirmLiquidacion,
     } = useLiquidacionWorkflow({ uid, ownerEmail, ownerName })
 
+    const modeLabel = selectedMode === "directa" ? "Venta directa" : selectedMode === "pool" ? "Pool" : "Sin modo"
+    const prepareDisabled =
+        !availablePendingClosures.length || !dateRange.from || filteredClosures.length === 0 || Boolean(modeMismatchError)
+    const directWaiterPercentage = configurationSummary?.directWaiterPercentage ?? null
+    const remainderPercentage = directWaiterPercentage !== null ? Math.max(0, 100 - directWaiterPercentage) : null
+
     const handleBack = () => {
         navigate("/dashboard")
+    }
+
+    const renderDirectModeHint = (variant: "card" | "modal") => {
+        if (!isDirectSalesMode) {
+            return null
+        }
+
+        const wrapperClassName =
+            variant === "card"
+                ? "rounded-md border border-primary/25 bg-primary/5 px-4 py-3"
+                : "rounded-md border border-primary/25 bg-background/60 px-3 py-2"
+
+        return (
+            <div className={wrapperClassName}>
+                <p className="text-xs uppercase tracking-wide text-primary">Ponderación de venta directa</p>
+                <div className="mt-2 grid gap-3 text-sm text-primary sm:grid-cols-2">
+                    <div>
+                        <p className="text-[11px] uppercase tracking-wide text-primary/70">Garzón directo</p>
+                        <p className="text-base font-semibold">
+                            {directWaiterPercentage !== null ? `${directWaiterPercentage}%` : "Sin definir"}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-[11px] uppercase tracking-wide text-primary/70">Disponible para cocina/bar</p>
+                        <p className="text-base font-semibold">
+                            {remainderPercentage !== null ? `${remainderPercentage}%` : "Depende de la configuración"}
+                        </p>
+                    </div>
+                </div>
+                <p className="mt-2 text-[11px] text-primary/80">
+                    Los descuentos con nombre (pocillo, caja, anfitriona, etc.) se registran desde el botón "Agregar deducción" de cada cierre.
+                </p>
+                {directWaiterPercentage === null ? (
+                    <p className="mt-1 text-[11px] text-destructive">
+                        Define esta ponderación en Configuración inicial → Personal para evitar inconsistencias.
+                    </p>
+                ) : null}
+            </div>
+        )
+    }
+
+    const renderUnnamedDeductionAlert = (variant: "card" | "modal") => {
+        if (!hasUnnamedDeductions) {
+            return null
+        }
+
+        const sampleLabel = unnamedDeductionSample
+            .map((entry) => entry.staffName)
+            .filter(Boolean)
+            .join(", ")
+        const sampleSuffix = unnamedDeductionCount > unnamedDeductionSample.length ? "…" : ""
+
+        const baseClassName =
+            variant === "card"
+                ? "rounded-md border border-amber-300/60 bg-amber-100/80 px-3 py-2 text-amber-900"
+                : "rounded-md border border-amber-300/60 bg-amber-100/70 px-3 py-2 text-amber-900"
+
+        return (
+            <div className={`${baseClassName} text-xs leading-relaxed`}>
+                <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5" />
+                    <div>
+                        <p className="font-medium">{unnamedDeductionCount} deducción(es) sin nombre</p>
+                        <p>
+                            Las liquidaremos como <span className="font-semibold">“Otros”</span> para no bloquear el pago.
+                            {sampleLabel ? ` Ej: ${sampleLabel}${sampleSuffix}` : ""}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )
     }
 
     if (isLoading) {
@@ -120,6 +205,18 @@ const LiquidacionPage = () => {
                             <p className="text-xs text-muted-foreground">
                                 Gasto general acumulado: {formatCurrency(pendingSummary.totalGeneralExpense)}
                             </p>
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span>Modo detectado:</span>
+                                <Badge
+                                    variant={selectedMode === "directa" ? "default" : "outline"}
+                                    className={selectedMode === "directa" ? "bg-primary/90" : "text-foreground"}
+                                >
+                                    {modeLabel}
+                                </Badge>
+                                {modeMismatchError ? (
+                                    <span className="text-destructive">({modeMismatchError})</span>
+                                ) : null}
+                            </div>
                             {notificationContact?.email ? (
                                 <p className="mt-2 text-xs text-muted-foreground">
                                     {isFallbackContact
@@ -135,18 +232,16 @@ const LiquidacionPage = () => {
                                 </p>
                             )}
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-col gap-3">
                             <Button
                                 type="button"
                                 onClick={handlePrepareLiquidacion}
-                                disabled={
-                                    !availablePendingClosures.length ||
-                                    !dateRange.from ||
-                                    filteredClosures.length === 0
-                                }
+                                disabled={prepareDisabled}
                             >
                                 Preparar liquidación
                             </Button>
+                            {renderUnnamedDeductionAlert("card")}
+                            {renderDirectModeHint("card")}
                         </div>
                     </CardContent>
                 </Card>
@@ -173,14 +268,14 @@ const LiquidacionPage = () => {
                     </CardContent>
                 </Card>
 
-                {prepareError ? (
+                {prepareError || modeMismatchError ? (
                     <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                        {prepareError}
+                        {prepareError ?? modeMismatchError}
                     </div>
                 ) : null}
 
                 <Dialog open={isModalOpen} onOpenChange={handleModalOpenChange}>
-                    <DialogContent className="max-w-3xl">
+                    <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Preparar liquidación</DialogTitle>
                             <DialogDescription>
@@ -298,6 +393,24 @@ const LiquidacionPage = () => {
                                 )}
                             </div>
 
+                            <div className="rounded-md border bg-background/60 p-3 space-y-3">
+                                <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
+                                    <span>Modo de liquidación</span>
+                                    <Badge
+                                        variant={selectedMode === "directa" ? "default" : "outline"}
+                                        className={selectedMode === "directa" ? "bg-primary/90" : "text-foreground"}
+                                    >
+                                        {modeLabel}
+                                    </Badge>
+                                </div>
+
+                                {modeMismatchError ? (
+                                    <p className="text-xs text-destructive">{modeMismatchError}</p>
+                                ) : null}
+
+                                {renderDirectModeHint("modal")}
+                            </div>
+
                             {liquidacionFeedback ? (
                                 <p
                                     className={`rounded-md border px-3 py-2 text-xs ${
@@ -309,6 +422,7 @@ const LiquidacionPage = () => {
                                     {liquidacionFeedback.message}
                                 </p>
                             ) : null}
+                            {renderUnnamedDeductionAlert("modal")}
                         </div>
 
                         <DialogFooter className="gap-2">

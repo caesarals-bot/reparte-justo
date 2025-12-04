@@ -20,6 +20,30 @@ export type ClosureAdjustment = {
     createdBy?: string
 }
 
+const mapDirectSalesAdjustmentsSnapshot = (value: unknown): DirectSalesAdjustmentsSnapshot | null => {
+    const record = extractRecord(value)
+
+    if (!record) {
+        return null
+    }
+
+    const percentageFee = typeof record.percentageFee === "number" && Number.isFinite(record.percentageFee)
+        ? record.percentageFee
+        : undefined
+    const fixedFee = typeof record.fixedFee === "number" && Number.isFinite(record.fixedFee) ? record.fixedFee : undefined
+    const notes = typeof record.notes === "string" && record.notes.trim().length ? record.notes.trim() : undefined
+
+    if (typeof percentageFee === "undefined" && typeof fixedFee === "undefined" && typeof notes === "undefined") {
+        return null
+    }
+
+    return {
+        percentageFee,
+        fixedFee,
+        notes,
+    }
+}
+
 const mapConfigurationSnapshot = (value: unknown): ClosureConfigurationSnapshot | undefined => {
     const record = extractRecord(value)
     if (!record) {
@@ -40,9 +64,20 @@ const mapConfigurationSnapshot = (value: unknown): ClosureConfigurationSnapshot 
         }
         : undefined
 
+    const directConfigRecord = extractRecord(record.directConfig)
+    const directConfig = directConfigRecord
+        ? {
+            directWaiterPercentage:
+                typeof directConfigRecord.directWaiterPercentage !== "undefined"
+                    ? toNumber(directConfigRecord.directWaiterPercentage)
+                    : undefined,
+        }
+        : undefined
+
     return {
         settlementMode,
         poolPercentages,
+        directConfig,
     }
 }
 
@@ -71,6 +106,15 @@ const toNumber = (value: unknown): number => {
     return 0
 }
 
+const sanitizeAssignmentText = (value: unknown): string | undefined => {
+    if (typeof value !== "string") {
+        return undefined
+    }
+
+    const trimmed = value.trim()
+    return trimmed.length ? trimmed : undefined
+}
+
 export type StaffAssignment = {
     staffId?: string
     nombre: string
@@ -81,6 +125,8 @@ export type StaffAssignment = {
     penaltyPercentage: number
     penaltyAmount: number
     deductionAmount: number
+    deductionName?: string
+    deductionDescription?: string
     netAmount: number
     netAmountAdjusted?: number
     adjustmentSummary?: {
@@ -103,6 +149,15 @@ export type ClosureConfigurationSnapshot = {
         kitchen?: number
         transbank?: number
     }
+    directConfig?: {
+        directWaiterPercentage?: number
+    }
+}
+
+export type DirectSalesAdjustmentsSnapshot = {
+    percentageFee?: number
+    fixedFee?: number
+    notes?: string
 }
 
 type RestaurantContact = {
@@ -117,10 +172,12 @@ export type GeneralExpenseEntry = {
     monto: number
 }
 
+export type SettlementMode = "pool" | "directa"
+
 export type ClosureDocument = {
     id: string
     estado: string
-    mode: "pool" | "directa" | null
+    mode: SettlementMode | null
     totals: {
         propinas: number
         netAfterDeductions: number
@@ -138,14 +195,26 @@ export type ClosureDocument = {
         to?: string | null
     } | null
     liquidacionId?: string | null
+    liquidacionMode?: SettlementMode | null
     assignments: StaffAssignments
     generalExpenses: GeneralExpenseEntry[]
     adjustments: ClosureAdjustment[]
+    directSalesAdjustmentsSnapshot?: DirectSalesAdjustmentsSnapshot | null
+    directSalesAdjustmentApplied?: number
     createdAt?: Timestamp | null
     updatedAt?: Timestamp | null
     liquidatedAt?: Timestamp | null
     restaurantContact?: RestaurantContact
     configurationSnapshot?: ClosureConfigurationSnapshot | null
+}
+
+export const resolveClosureMode = (closure: ClosureDocument): SettlementMode | null =>
+    closure.mode ?? closure.configurationSnapshot?.settlementMode ?? null
+
+export type PendingClosuresByMode = {
+    pool: ClosureDocument[]
+    directa: ClosureDocument[]
+    unknown: ClosureDocument[]
 }
 
 export type PaidSettlementPeriod = {
@@ -256,6 +325,8 @@ const mapAssignment = (value: unknown): StaffAssignment => {
     const penaltyAmount = toNumber(record.penaltyAmount)
     const deductionAmount = toNumber(record.deductionAmount)
     const netAmount = toNumber(record.netAmount)
+    const deductionName = sanitizeAssignmentText(record.deductionName)
+    const deductionDescription = sanitizeAssignmentText(record.deductionDescription)
 
     return {
         staffId: typeof record.staffId === "string" ? record.staffId : undefined,
@@ -267,6 +338,8 @@ const mapAssignment = (value: unknown): StaffAssignment => {
         penaltyPercentage,
         penaltyAmount,
         deductionAmount,
+        deductionName,
+        deductionDescription,
         netAmount,
     }
 }
@@ -477,6 +550,16 @@ export const mapSnapshotToClosure = (
         mapConfigurationSnapshot(data["configurationSnapshot"]) ??
         mapConfigurationSnapshot(snapshotRecord?.["configurationSnapshot"]) ??
         null
+    const directSalesAdjustmentsSnapshot =
+        mapDirectSalesAdjustmentsSnapshot(data["directSalesAdjustmentsSnapshot"]) ??
+        mapDirectSalesAdjustmentsSnapshot(snapshotRecord?.["directSalesAdjustmentsSnapshot"]) ??
+        null
+
+    const rawDirectSalesAdjustmentApplied = data["directSalesAdjustmentApplied"]
+    const directSalesAdjustmentApplied =
+        typeof rawDirectSalesAdjustmentApplied === "number" && Number.isFinite(rawDirectSalesAdjustmentApplied)
+            ? rawDirectSalesAdjustmentApplied
+            : undefined
 
     const buildAssignments = (key: keyof StaffAssignments): StaffAssignment[] =>
         extractArray(assignmentsRecord?.[key]).map((item) => mapAssignment(item))
@@ -528,6 +611,8 @@ export const mapSnapshotToClosure = (
             pocilloSecundario: buildAssignments("pocilloSecundario"),
         },
         adjustments,
+        directSalesAdjustmentsSnapshot,
+        directSalesAdjustmentApplied,
         createdAt: (data.createdAt as Timestamp | undefined) ?? null,
         updatedAt: (data.updatedAt as Timestamp | undefined) ?? null,
         liquidatedAt: (data.liquidatedAt as Timestamp | undefined) ?? null,
@@ -689,6 +774,27 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
         () => closures.filter((closure) => closure.estado === "pendiente"),
         [closures],
     )
+
+    const pendingClosuresByMode = useMemo<PendingClosuresByMode>(() => {
+        const groups: PendingClosuresByMode = {
+            pool: [],
+            directa: [],
+            unknown: [],
+        }
+
+        pendingClosures.forEach((closure) => {
+            const mode = resolveClosureMode(closure)
+            if (mode === "pool") {
+                groups.pool.push(closure)
+            } else if (mode === "directa") {
+                groups.directa.push(closure)
+            } else {
+                groups.unknown.push(closure)
+            }
+        })
+
+        return groups
+    }, [pendingClosures])
 
     const historicalClosures = useMemo(() => closures, [closures])
 
@@ -863,6 +969,7 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
     return {
         closures,
         pendingClosures,
+        pendingClosuresByMode,
         historicalClosures,
         summary,
         paidSettlementGroups,

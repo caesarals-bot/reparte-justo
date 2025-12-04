@@ -10,12 +10,95 @@ import {
     summarizeClosures,
 } from "../utils/closureCalculations"
 import { buildLiquidacionPdfFileName, generateLiquidacionPdf } from "../utils/liquidacionPdf"
-import { useClosuresDashboard, type ClosureDocument } from "./useClosuresDashboard"
+import {
+    useClosuresDashboard,
+    resolveClosureMode,
+    type ClosureDocument,
+    type SettlementMode,
+    type StaffAssignment,
+} from "./useClosuresDashboard"
 import { useLiquidacionActions, type LiquidarPeriodoResponse } from "./useLiquidacionActions"
 
 export type DateRangeValue = { from: Date | undefined; to: Date | undefined }
 
 const emptyRange: DateRangeValue = { from: undefined, to: undefined }
+
+const FALLBACK_DEDUCTION_NAME = "Otros"
+const FALLBACK_DEDUCTION_DESCRIPTION = "Asignado automáticamente por falta de nombre"
+
+type UnnamedDeductionEntry = {
+    staffName: string
+    closureId: string
+    referenceDate?: string | null
+}
+
+const collectAssignmentsFromClosure = (closure: ClosureDocument): StaffAssignment[] => [
+    ...closure.assignments.servicio,
+    ...closure.assignments.cocina,
+    ...closure.assignments.ventaDirecta,
+    ...closure.assignments.pocilloSecundario,
+]
+
+const hasUnnamedDeduction = (assignment: StaffAssignment) =>
+    assignment.deductionAmount > 0 && !(assignment.deductionName && assignment.deductionName.trim().length > 0)
+
+const trimOrUndefined = (value?: string | null) => {
+    if (typeof value !== "string") {
+        return undefined
+    }
+
+    const trimmed = value.trim()
+    return trimmed.length ? trimmed : undefined
+}
+
+const normalizeAssignmentDeduction = (assignment: StaffAssignment): StaffAssignment => {
+    const trimmedName = trimOrUndefined(assignment.deductionName)
+    const trimmedDescription = trimOrUndefined(assignment.deductionDescription)
+
+    if (assignment.deductionAmount <= 0) {
+        if (trimmedName === assignment.deductionName && trimmedDescription === assignment.deductionDescription) {
+            return assignment
+        }
+
+        return {
+            ...assignment,
+            deductionName: trimmedName,
+            deductionDescription: trimmedDescription,
+        }
+    }
+
+    if (trimmedName) {
+        if (trimmedName === assignment.deductionName && trimmedDescription === assignment.deductionDescription) {
+            return assignment
+        }
+
+        return {
+            ...assignment,
+            deductionName: trimmedName,
+            deductionDescription: trimmedDescription,
+        }
+    }
+
+    return {
+        ...assignment,
+        deductionName: FALLBACK_DEDUCTION_NAME,
+        deductionDescription: trimmedDescription ?? FALLBACK_DEDUCTION_DESCRIPTION,
+    }
+}
+
+const applyDeductionFallbackToClosure = (closure: ClosureDocument): ClosureDocument => {
+    const mapGroup = (assignments: StaffAssignment[]) => assignments.map(normalizeAssignmentDeduction)
+
+    return {
+        ...closure,
+        assignments: {
+            servicio: mapGroup(closure.assignments.servicio),
+            cocina: mapGroup(closure.assignments.cocina),
+            ventaDirecta: mapGroup(closure.assignments.ventaDirecta),
+            pocilloSecundario: mapGroup(closure.assignments.pocilloSecundario),
+        },
+    }
+}
 
 export type UseLiquidacionWorkflowArgs = {
     uid?: string | null
@@ -37,7 +120,6 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
     >(null)
     const [prepareError, setPrepareError] = useState<string | null>(null)
     const [locallySettledDates, setLocallySettledDates] = useState<Date[]>([])
-
     const { closures, pendingClosures, isLoading, refresh } = useClosuresDashboard({ uid })
     const { buildLiquidacionPayload, liquidarPeriodo } = useLiquidacionActions()
 
@@ -62,6 +144,68 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         [availablePendingClosures, dateRange],
     )
 
+    const normalizedClosures = useMemo(
+        () => filteredClosures.map((closure) => applyDeductionFallbackToClosure(closure)),
+        [filteredClosures],
+    )
+
+    const unnamedDeductionEntries = useMemo<UnnamedDeductionEntry[]>(() => {
+        if (!filteredClosures.length) {
+            return []
+        }
+
+        const entries: UnnamedDeductionEntry[] = []
+
+        filteredClosures.forEach((closure) => {
+            const referenceDate = closure.metadata.referenceDate
+            collectAssignmentsFromClosure(closure).forEach((assignment) => {
+                if (hasUnnamedDeduction(assignment)) {
+                    entries.push({
+                        staffName: assignment.nombre,
+                        closureId: closure.id,
+                        referenceDate,
+                    })
+                }
+            })
+        })
+
+        return entries
+    }, [filteredClosures])
+
+    const modeInfo = useMemo(() => {
+        if (!filteredClosures.length) {
+            return { mode: null as SettlementMode | null, isMixed: false }
+        }
+
+        let detectedMode: SettlementMode | null = null
+        let mixed = false
+
+        for (const closure of filteredClosures) {
+            const closureMode = resolveClosureMode(closure)
+            if (!closureMode) {
+                mixed = true
+                break
+            }
+
+            if (!detectedMode) {
+                detectedMode = closureMode
+                continue
+            }
+
+            if (detectedMode !== closureMode) {
+                mixed = true
+                break
+            }
+        }
+
+        return {
+            mode: mixed ? null : detectedMode,
+            isMixed: mixed,
+        }
+    }, [filteredClosures])
+
+    const isDirectSalesMode = modeInfo.mode === "directa"
+
     const { pendingDates: pendingHighlightDates, settledDates: settledHighlightDates } = useMemo(() => {
         return buildClosureHighlights(closures)
     }, [closures])
@@ -80,18 +224,24 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         return pendingHighlightDates.filter((date) => !settledSet.has(date.getTime()))
     }, [pendingHighlightDates, settledDates])
 
-    const resumen = useMemo(() => summarizeClosures(filteredClosures), [filteredClosures])
+    const resumen = useMemo(() => summarizeClosures(normalizedClosures), [normalizedClosures])
 
     const pendingSummary = useMemo(() => summarizeClosures(availablePendingClosures), [availablePendingClosures])
 
-    const detalleIntegrantes = useMemo(() => aggregateMembersFromClosures(filteredClosures), [filteredClosures])
-    const detalleGastosGenerales = useMemo(() => aggregateGeneralExpensesFromClosures(filteredClosures), [filteredClosures])
+    const detalleIntegrantes = useMemo(
+        () => aggregateMembersFromClosures(normalizedClosures),
+        [normalizedClosures],
+    )
+    const detalleGastosGenerales = useMemo(
+        () => aggregateGeneralExpensesFromClosures(normalizedClosures),
+        [normalizedClosures],
+    )
 
-    const detallePorDia = useMemo(() => buildDailyClosureSummaries(filteredClosures), [filteredClosures])
+    const detallePorDia = useMemo(() => buildDailyClosureSummaries(normalizedClosures), [normalizedClosures])
 
     const penalizacionesYAjustes = useMemo(
-        () => buildPenaltyAndAdjustmentEntries(filteredClosures),
-        [filteredClosures],
+        () => buildPenaltyAndAdjustmentEntries(normalizedClosures),
+        [normalizedClosures],
     )
 
     const restaurantContact = useMemo(() => {
@@ -100,9 +250,10 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
     }, [pendingClosures])
 
     const configurationSummary = useMemo(() => {
-        const closureWithConfig = pendingClosures.find((closure) => closure.configurationSnapshot?.poolPercentages)
+        const closureWithConfig = pendingClosures.find((closure) => closure.configurationSnapshot)
         const settlementMode = closureWithConfig?.configurationSnapshot?.settlementMode ?? null
         const poolPercentages = closureWithConfig?.configurationSnapshot?.poolPercentages
+        const directWaiterPercentage = closureWithConfig?.configurationSnapshot?.directConfig?.directWaiterPercentage
 
         return {
             settlementMode,
@@ -110,6 +261,10 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
                 settlementMode === "pool" ? poolPercentages?.kitchen ?? null : null,
             transbankPercentage:
                 settlementMode === "pool" ? poolPercentages?.transbank ?? null : null,
+            directWaiterPercentage:
+                settlementMode === "directa" && typeof directWaiterPercentage === "number"
+                    ? directWaiterPercentage
+                    : null,
         }
     }, [pendingClosures])
 
@@ -130,8 +285,11 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
 
     const isFallbackContact = Boolean(notificationContact?.email && !restaurantContact?.email)
 
-    const selectedTotals = useMemo(() => summarizeClosures(filteredClosures), [filteredClosures])
-    const selectedMembers = useMemo(() => aggregateMembersFromClosures(filteredClosures), [filteredClosures])
+    const selectedTotals = useMemo(() => summarizeClosures(normalizedClosures), [normalizedClosures])
+    const selectedMembers = useMemo(
+        () => aggregateMembersFromClosures(normalizedClosures),
+        [normalizedClosures],
+    )
 
     const dateRangeLabel = useMemo(() => {
         if (!dateRange.from) {
@@ -175,10 +333,19 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
             return
         }
 
+        if (modeInfo.isMixed) {
+            setPrepareError("No puedes mezclar cierres de Pool y Venta directa en la misma liquidación.")
+            return
+        }
+
         setPrepareError(null)
         setLiquidacionFeedback(null)
         setIsModalOpen(true)
-    }, [availablePendingClosures.length, dateRange.from, filteredClosures.length])
+    }, [availablePendingClosures.length, dateRange.from, filteredClosures.length, modeInfo.isMixed])
+
+    const modeMismatchError = modeInfo.isMixed
+        ? "No puedes mezclar cierres de Pool y Venta directa en la misma liquidación."
+        : null
 
     const handleConfirmLiquidacion = useCallback(async () => {
         if (!uid) {
@@ -202,14 +369,23 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
             return
         }
 
+        if (modeInfo.isMixed) {
+            setLiquidacionFeedback({
+                type: "error",
+                message: "No puedes liquidar cierres de modos distintos en la misma solicitud.",
+            })
+            return
+        }
+
         try {
             setIsSubmittingLiquidacion(true)
             setLiquidacionFeedback(null)
             const payload = buildLiquidacionPayload({
                 restaurantId: uid,
-                closures: filteredClosures,
+                closures: normalizedClosures,
                 dateRange,
                 contact: notificationContact,
+                modeOverride: modeInfo.mode,
             })
             const result: LiquidarPeriodoResponse = await liquidarPeriodo(payload)
             await refresh()
@@ -270,6 +446,7 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         uid,
         dateRange,
         filteredClosures,
+        normalizedClosures,
         buildLiquidacionPayload,
         notificationContact,
         liquidarPeriodo,
@@ -277,6 +454,7 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         selectedTotals,
         selectedMembers,
         refresh,
+        modeInfo.isMixed,
     ])
 
     return {
@@ -306,6 +484,12 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         dateRangeLabel,
         handlePrepareLiquidacion,
         handleConfirmLiquidacion,
+        selectedMode: modeInfo.mode,
+        isDirectSalesMode,
+        modeMismatchError,
+        hasUnnamedDeductions: unnamedDeductionEntries.length > 0,
+        unnamedDeductionCount: unnamedDeductionEntries.length,
+        unnamedDeductionSample: unnamedDeductionEntries.slice(0, 3),
     }
 }
 

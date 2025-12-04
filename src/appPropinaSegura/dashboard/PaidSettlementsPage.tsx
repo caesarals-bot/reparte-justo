@@ -19,8 +19,14 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { useAuth } from "@/context/AuthContext"
-import { useClosuresDashboard } from "./hooks/useClosuresDashboard"
+import {
+    useClosuresDashboard,
+    resolveClosureMode,
+    type SettlementMode,
+    type PaidSettlementPeriod,
+} from "./hooks/useClosuresDashboard"
 import { Loader2, ArrowLeft, EyeIcon } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
 const formatDateLabel = (value?: Date | null) => {
     if (!value) {
@@ -34,6 +40,88 @@ const formatDateLabel = (value?: Date | null) => {
     }).format(value)
 }
 
+const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", minimumFractionDigits: 0 }).format(
+        Math.round(value),
+    )
+
+type GroupModeInfo = {
+    mode: SettlementMode | null
+    isMixed: boolean
+}
+
+type ModeBadgeProps = {
+    label: string
+    variant: "default" | "secondary" | "destructive" | "outline"
+    className?: string
+}
+
+const resolveGroupModeInfo = (closures: PaidSettlementPeriod["closures"]): GroupModeInfo => {
+    if (!closures.length) {
+        return { mode: null, isMixed: false }
+    }
+
+    let detectedMode: SettlementMode | null = null
+    let mixed = false
+
+    closures.forEach((closure) => {
+        const closureMode = resolveClosureMode(closure)
+        if (!closureMode) {
+            mixed = true
+            return
+        }
+
+        if (!detectedMode) {
+            detectedMode = closureMode
+            return
+        }
+
+        if (detectedMode !== closureMode) {
+            mixed = true
+        }
+    })
+
+    return {
+        mode: mixed ? null : detectedMode,
+        isMixed: mixed,
+    }
+}
+
+const sumDirectSalesAdjustments = (closures: PaidSettlementPeriod["closures"]): number =>
+    closures.reduce((total, closure) => total + (closure.directSalesAdjustmentApplied ?? 0), 0)
+
+const getModeBadgeProps = (info: GroupModeInfo): ModeBadgeProps => {
+    if (info.isMixed) {
+        return {
+            label: "Mixto",
+            variant: "outline",
+            className: "border-destructive/50 text-destructive",
+        }
+    }
+
+    if (info.mode === "directa") {
+        return {
+            label: "Venta directa",
+            variant: "outline",
+            className: "border-emerald-400/50 text-emerald-200",
+        }
+    }
+
+    if (info.mode === "pool") {
+        return {
+            label: "Pool",
+            variant: "outline",
+            className: "border-white/25 text-white/80",
+        }
+    }
+
+    return {
+        label: "Sin modo",
+        variant: "outline",
+        className: "border-white/15 text-white/60",
+    }
+}
+
 const PaidSettlementsPage = () => {
     const { uid } = useAuth()
     const navigate = useNavigate()
@@ -43,6 +131,19 @@ const PaidSettlementsPage = () => {
     const selectedSettlement = useMemo(
         () => paidSettlementGroups.find((group) => group.id === selectedSettlementId) ?? null,
         [paidSettlementGroups, selectedSettlementId],
+    )
+
+    const selectedModeInfo = useMemo(
+        () => (selectedSettlement ? resolveGroupModeInfo(selectedSettlement.closures) : null),
+        [selectedSettlement],
+    )
+    const selectedModeBadge = useMemo(
+        () => (selectedModeInfo ? getModeBadgeProps(selectedModeInfo) : null),
+        [selectedModeInfo],
+    )
+    const selectedDirectSalesAdjustments = useMemo(
+        () => (selectedSettlement ? sumDirectSalesAdjustments(selectedSettlement.closures) : 0),
+        [selectedSettlement],
     )
 
     const isEmpty = !paidSettlementGroups.length && !isLoading && !error
@@ -116,53 +217,71 @@ const PaidSettlementsPage = () => {
                                 <TableHeader>
                                     <TableRow className="border-white/10 text-white/60">
                                         <TableHead className="text-white/70">Ciclo liquidado</TableHead>
+                                        <TableHead className="text-center text-white/70">Modo</TableHead>
                                         <TableHead className="text-center text-white/70">Cierres</TableHead>
                                         <TableHead className="text-right text-white/70">Propinas (bruto)</TableHead>
                                         <TableHead className="text-right text-white/70">Total repartido</TableHead>
                                         <TableHead className="text-right text-white/70">Descuentos</TableHead>
                                         <TableHead className="text-right text-white/70">Gasto general</TableHead>
+                                        <TableHead className="text-right text-white/70">Venta directa</TableHead>
                                         <TableHead className="text-right text-white/70">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {paidSettlementGroups.map((settlement) => (
-                                        <TableRow key={settlement.id} className="border-white/5">
-                                            <TableCell>
-                                                <div className="font-medium text-white">{settlement.rangeLabel}</div>
-                                                <p className="text-xs text-white/60">{settlement.label}</p>
-                                            </TableCell>
-                                            <TableCell className="text-center font-mono text-base">
-                                                {settlement.closures.length}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-base">
-                                                ${settlement.totals.propinas.toLocaleString("es-CL")}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-base">
-                                                ${settlement.totals.netAfterDeductions.toLocaleString("es-CL")}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-sm text-white/80">
-                                                {settlement.totals.deductionsAmount > 0
-                                                    ? `$${settlement.totals.deductionsAmount.toLocaleString("es-CL")}`
-                                                    : "—"}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-sm text-white/80">
-                                                {settlement.totals.generalExpense > 0
-                                                    ? `$${settlement.totals.generalExpense.toLocaleString("es-CL")}`
-                                                    : "—"}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="gap-2 rounded-full border border-white/10 px-3 text-white transition hover:bg-white/10"
-                                                    onClick={() => setSelectedSettlementId(settlement.id)}
-                                                >
-                                                    <EyeIcon className="h-4 w-4" />
-                                                    Ver detalles
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
+                                    {paidSettlementGroups.map((settlement) => {
+                                        const modeInfo = resolveGroupModeInfo(settlement.closures)
+                                        const badgeProps = getModeBadgeProps(modeInfo)
+                                        const directSalesAdjustmentsTotal = sumDirectSalesAdjustments(settlement.closures)
+
+                                        return (
+                                            <TableRow key={settlement.id} className="border-white/5">
+                                                <TableCell>
+                                                    <div className="font-medium text-white">{settlement.rangeLabel}</div>
+                                                    <p className="text-xs text-white/60">{settlement.label}</p>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant={badgeProps.variant} className={badgeProps.className}>
+                                                        {badgeProps.label}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono text-base">
+                                                    {settlement.closures.length}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-base">
+                                                    {formatCurrency(settlement.totals.propinas)}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-base">
+                                                    {formatCurrency(settlement.totals.netAfterDeductions)}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-sm text-white/80">
+                                                    {settlement.totals.deductionsAmount > 0
+                                                        ? formatCurrency(settlement.totals.deductionsAmount)
+                                                        : "—"}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-sm text-white/80">
+                                                    {settlement.totals.generalExpense > 0
+                                                        ? formatCurrency(settlement.totals.generalExpense)
+                                                        : "—"}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-sm text-emerald-200">
+                                                    {directSalesAdjustmentsTotal > 0
+                                                        ? `-${formatCurrency(directSalesAdjustmentsTotal)}`
+                                                        : "—"}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="gap-2 rounded-full border border-white/10 px-3 text-white transition hover:bg-white/10"
+                                                        onClick={() => setSelectedSettlementId(settlement.id)}
+                                                    >
+                                                        <EyeIcon className="h-4 w-4" />
+                                                        Ver detalles
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })}
                                 </TableBody>
                             </Table>
                         </CardContent>
@@ -182,23 +301,41 @@ const PaidSettlementsPage = () => {
                         <div className="space-y-6">
                             <div className="grid gap-4 rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white">
                                 <div className="flex items-center justify-between">
+                                    <span className="text-white/70">Modo</span>
+                                    {selectedModeBadge ? (
+                                        <Badge variant={selectedModeBadge.variant} className={selectedModeBadge.className}>
+                                            {selectedModeBadge.label}
+                                        </Badge>
+                                    ) : (
+                                        <span className="text-white/50">—</span>
+                                    )}
+                                </div>
+                                <div className="flex items-center justify-between">
                                     <span className="text-white/70">Total repartido</span>
                                     <strong className="font-mono text-base">
-                                        ${selectedSettlement.totals.netAfterDeductions.toLocaleString("es-CL")}
+                                        {formatCurrency(selectedSettlement.totals.netAfterDeductions)}
                                     </strong>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-white/70">Descuentos</span>
                                     <strong className="font-mono text-base">
-                                        ${selectedSettlement.totals.deductionsAmount.toLocaleString("es-CL")}
+                                        {formatCurrency(selectedSettlement.totals.deductionsAmount)}
                                     </strong>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-white/70">Gasto general</span>
                                     <strong className="font-mono text-base">
-                                        ${selectedSettlement.totals.generalExpense.toLocaleString("es-CL")}
+                                        {formatCurrency(selectedSettlement.totals.generalExpense)}
                                     </strong>
                                 </div>
+                                {selectedDirectSalesAdjustments > 0 ? (
+                                    <div className="flex items-center justify-between text-emerald-200">
+                                        <span className="text-white/70">Venta directa aplicada</span>
+                                        <strong className="font-mono text-base">
+                                            -{formatCurrency(selectedDirectSalesAdjustments)}
+                                        </strong>
+                                    </div>
+                                ) : null}
                             </div>
 
                             <div>
@@ -210,6 +347,7 @@ const PaidSettlementsPage = () => {
                                             <TableHead className="text-right">Total neto</TableHead>
                                             <TableHead className="text-right">Descuentos</TableHead>
                                             <TableHead className="text-right">Gasto general</TableHead>
+                                            <TableHead className="text-right">Venta directa</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -217,16 +355,22 @@ const PaidSettlementsPage = () => {
                                             <TableRow key={summary.id} className="border-white/5">
                                                 <TableCell>{formatDateLabel(summary.referenceDate)}</TableCell>
                                                 <TableCell className="text-right font-mono">
-                                                    ${summary.netAfterDeductions.toLocaleString("es-CL")}
+                                                    {formatCurrency(summary.netAfterDeductions)}
                                                 </TableCell>
                                                 <TableCell className="text-right font-mono text-white/80">
                                                     {summary.deductionsAmount > 0
-                                                        ? `$${summary.deductionsAmount.toLocaleString("es-CL")}`
+                                                        ? formatCurrency(summary.deductionsAmount)
                                                         : "—"}
                                                 </TableCell>
                                                 <TableCell className="text-right font-mono text-white/80">
                                                     {summary.generalExpense > 0
-                                                        ? `$${summary.generalExpense.toLocaleString("es-CL")}`
+                                                        ? formatCurrency(summary.generalExpense)
+                                                        : "—"}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-emerald-200">
+                                                    {summary.directSalesAdjustmentApplied &&
+                                                    summary.directSalesAdjustmentApplied > 0
+                                                        ? `-${formatCurrency(summary.directSalesAdjustmentApplied)}`
                                                         : "—"}
                                                 </TableCell>
                                             </TableRow>

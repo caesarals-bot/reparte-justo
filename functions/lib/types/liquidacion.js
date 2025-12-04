@@ -36,4 +36,13 @@ exports.liquidarPeriodoSchema = zod_1.z.object({
     totals: exports.liquidacionTotalsSchema,
     members: zod_1.z.array(exports.liquidacionMemberSchema),
     contact: exports.liquidacionContactSchema,
+    mode: zod_1.z.enum(["pool", "directa"]),
+    settlementFrequency: zod_1.z.enum(["daily", "cycle"]),
+    directSalesAdjustments: zod_1.z
+        .object({
+        percentageFee: zod_1.z.number().finite().optional(),
+        fixedFee: zod_1.z.number().finite().optional(),
+        notes: zod_1.z.string().max(200).optional(),
+    })
+        .optional(),
 });

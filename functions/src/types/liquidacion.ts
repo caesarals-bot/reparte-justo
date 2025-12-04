@@ -38,6 +38,15 @@ export const liquidarPeriodoSchema = z.object({
     totals: liquidacionTotalsSchema,
     members: z.array(liquidacionMemberSchema),
     contact: liquidacionContactSchema,
+    mode: z.enum(["pool", "directa"]),
+    settlementFrequency: z.enum(["daily", "cycle"]),
+    directSalesAdjustments: z
+        .object({
+            percentageFee: z.number().finite().optional(),
+            fixedFee: z.number().finite().optional(),
+            notes: z.string().max(200).optional(),
+        })
+        .optional(),
 })
 
 export type LiquidarPeriodoInput = z.infer<typeof liquidarPeriodoSchema>

@@ -132,6 +132,7 @@ export type DailyClosureSummary = {
     propinas: number
     transbankAmount: number
     generalExpense: number
+    directSalesAdjustmentApplied?: number
 }
 
 export type PenaltyAdjustmentEntry = {
@@ -268,6 +269,7 @@ export const buildDailyClosureSummaries = (closures: ClosureDocument[]): DailyCl
         propinas: closure.totals.propinas,
         transbankAmount: closure.totals.transbankAmount,
         generalExpense: closure.totals.generalExpense,
+        directSalesAdjustmentApplied: closure.directSalesAdjustmentApplied,
     }))
 
     return summary.sort((a, b) => {

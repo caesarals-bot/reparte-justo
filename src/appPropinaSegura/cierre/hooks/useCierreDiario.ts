@@ -78,6 +78,8 @@ export type StaffAssignmentSnapshot = {
     penaltyPercentage: number
     penaltyAmount: number
     deductionAmount: number
+    deductionName?: string
+    deductionDescription?: string
     netAmount: number
 }
 
@@ -179,6 +181,9 @@ type RestaurantConfigurationSnapshot = {
         kitchenPercentage?: number
         transbankPercentage?: number
     }
+    directConfig?: {
+        directWaiterPercentage?: number
+    }
     additionalDeductions?: { percentage?: number }[]
     responsibleName?: string
     contactEmail?: string
@@ -206,6 +211,9 @@ type ConfigurationVersionSnapshot = {
     poolPercentages: {
         kitchen: number
         transbank: number
+    }
+    directConfig?: {
+        directWaiterPercentage?: number
     }
     additionalDeductions: number[]
     serviceStaff: VersionedStaffMemberSnapshot[]
@@ -264,6 +272,7 @@ type UseCierreDiarioResult = {
     totalKitchenShare: number
     totalGarzonShare: number
     settlementModeConfig: "pool" | "directa" | null
+    directWaiterPercentage: number | null
     isSavingClosure: boolean
     setIsSavingClosure: (value: boolean) => void
     saveError: string | null
@@ -316,6 +325,19 @@ const toSafeNumber = (value: unknown, fallback = 0): number => {
     return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const sanitizeDeductionText = (value: unknown, maxLength: number): string | undefined => {
+    if (typeof value !== "string") {
+        return undefined
+    }
+
+    const trimmed = value.trim()
+    if (!trimmed) {
+        return undefined
+    }
+
+    return trimmed.slice(0, maxLength)
+}
+
 const sanitizeStaffEntries = (value: unknown): StaffEntry[] => {
     if (!Array.isArray(value)) {
         return []
@@ -333,6 +355,9 @@ const sanitizeStaffEntries = (value: unknown): StaffEntry[] => {
                 return null
             }
 
+            const deductionName = sanitizeDeductionText(entry.deduccion_nombre, 80)
+            const deductionDescription = sanitizeDeductionText(entry.deduccion_descripcion, 200)
+
             return {
                 ...entry,
                 id: String(entry.id),
@@ -340,11 +365,10 @@ const sanitizeStaffEntries = (value: unknown): StaffEntry[] => {
                 presente: entry.presente !== false,
                 penalizacion_pct: toSafeNumber(entry.penalizacion_pct),
                 deduccion_valor: toSafeNumber(entry.deduccion_valor),
+                deduccion_nombre: deductionName,
+                deduccion_descripcion: deductionDescription,
                 montoIndividual:
                     entry.montoIndividual !== undefined ? toSafeNumber(entry.montoIndividual) : entry.montoIndividual,
-                porcentajeVenta:
-                    entry.porcentajeVenta !== undefined ? toSafeNumber(entry.porcentajeVenta) : entry.porcentajeVenta,
-                totalVenta: entry.totalVenta !== undefined ? toSafeNumber(entry.totalVenta) : entry.totalVenta,
             } as StaffEntry
         })
         .filter((entry): entry is StaffEntry => Boolean(entry))
@@ -420,8 +444,6 @@ const mapStaffMemberToEntry = (member: StoredStaffMember): StaffEntry => {
 const mapStaffMemberToDirectEntry = (member: StoredStaffMember): StaffEntry => ({
     ...mapStaffMemberToEntry(member),
     montoIndividual: 0,
-    porcentajeVenta: 0,
-    totalVenta: 0,
 })
 
 const mapStaffMemberForConfigurationSnapshot = (
@@ -484,6 +506,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     const [poolTotalInput, setPoolTotalInput] = useState("")
     const [settlementModeConfig, setSettlementModeConfig] = useState<"pool" | "directa" | null>(null)
     const [poolPercentages, setPoolPercentages] = useState({ kitchen: 0, transbank: 0 })
+    const [directWaiterPercentage, setDirectWaiterPercentage] = useState<number | null>(null)
     const [additionalDeductionPercents, setAdditionalDeductionPercents] = useState<number[]>([])
     const [isSavingClosure, setIsSavingClosure] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
@@ -525,6 +548,18 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         }, 0)
     }, [generalExpenseEntries])
 
+    const presentDirectWaiterCount = useMemo(() => {
+        return ventaDirectaValues.reduce((count, entry) => (entry?.presente === false ? count : count + 1), 0)
+    }, [ventaDirectaValues])
+
+    const generalExpenseSharePerDirectWaiter = useMemo(() => {
+        if (settlementModeConfig !== "directa" || generalExpenseTotal <= 0 || presentDirectWaiterCount <= 0) {
+            return 0
+        }
+
+        return generalExpenseTotal / presentDirectWaiterCount
+    }, [settlementModeConfig, generalExpenseTotal, presentDirectWaiterCount])
+
     const buildInitialFormValues = useCallback(
         (serviceStaff: StoredStaffMember[], supportStaff: StoredStaffMember[], mode: "pool" | "directa") => ({
             asistenciaServicio: serviceStaff.map(mapStaffMemberToEntry),
@@ -545,7 +580,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     const totalDirectSales = useMemo(
         () =>
             ventaDirectaValues.reduce<number>((sum, entry) => {
-                const current = Number(entry?.totalVenta ?? 0)
+                const current = Number(entry?.montoIndividual ?? 0)
                 return sum + (Number.isFinite(current) ? current : 0)
             }, 0),
         [ventaDirectaValues],
@@ -671,14 +706,21 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         })
     }, [asistenciaCocinaValues, settlementModeConfig, totalGarzonShare, totalKitchenShare])
 
-    const directAssignedAmounts = useMemo(
-        () =>
-            ventaDirectaValues.map((entry) => {
-                const baseAmount = Number(entry?.totalVenta ?? entry?.montoIndividual ?? 0)
-                return Number.isFinite(baseAmount) ? baseAmount : 0
-            }),
-        [ventaDirectaValues],
-    )
+    const directAssignedAmounts = useMemo(() => {
+        return ventaDirectaValues.map((entry) => {
+            const baseAmount = Number(entry?.montoIndividual ?? 0)
+            if (!Number.isFinite(baseAmount) || entry?.presente === false) {
+                return 0
+            }
+
+            if (settlementModeConfig !== "directa" || generalExpenseSharePerDirectWaiter <= 0) {
+                return baseAmount
+            }
+
+            const adjustedAmount = baseAmount - generalExpenseSharePerDirectWaiter
+            return adjustedAmount > 0 ? adjustedAmount : 0
+        })
+    }, [ventaDirectaValues, settlementModeConfig, generalExpenseSharePerDirectWaiter])
 
     const handlePoolTotalChange = (event: ChangeEvent<HTMLInputElement>) => {
         setPoolTotalInput(event.target.value)
@@ -712,6 +754,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 const mode = data.settlementMode ?? "pool"
                 const kitchenPercentage = sanitizePercentageValue(data.poolConfig?.kitchenPercentage)
                 const transbankPercentage = sanitizePercentageValue(data.poolConfig?.transbankPercentage)
+                const waiterPercentage = sanitizePercentageValue(data.directConfig?.directWaiterPercentage)
                 const deductions = (data.additionalDeductions ?? []).map((item) => sanitizePercentageValue(item?.percentage))
 
                 const initialValues = buildInitialFormValues(serviceStaff, supportStaff, mode)
@@ -720,6 +763,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 reset(initialValues)
 
                 setPoolPercentages({ kitchen: kitchenPercentage, transbank: transbankPercentage })
+                setDirectWaiterPercentage(Number.isFinite(waiterPercentage) && waiterPercentage > 0 ? waiterPercentage : null)
                 setAdditionalDeductionPercents(deductions)
                 setSettlementModeConfig(mode)
                 setRestaurantContact({
@@ -777,6 +821,8 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 const penaltyAmount = assignedAmount * (penaltyPercentage / 100)
                 const deductionAmount = Number(entry?.deduccion_valor ?? 0)
                 const netAmount = Math.max(assignedAmount - penaltyAmount - deductionAmount, 0)
+                const deductionName = sanitizeDeductionText(entry?.deduccion_nombre, 80)
+                const deductionDescription = sanitizeDeductionText(entry?.deduccion_descripcion, 200)
 
                 return {
                     staffId: entry.id,
@@ -788,6 +834,8 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                     penaltyPercentage,
                     penaltyAmount,
                     deductionAmount,
+                    deductionName,
+                    deductionDescription,
                     netAmount,
                 }
             })
@@ -829,6 +877,10 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                 kitchen: poolPercentages.kitchen,
                 transbank: poolPercentages.transbank,
             },
+            directConfig:
+                settlementModeConfig === "directa" && Number.isFinite(directWaiterPercentage ?? NaN)
+                    ? { directWaiterPercentage: directWaiterPercentage ?? 0 }
+                    : undefined,
             additionalDeductions: additionalDeductionPercents,
             serviceStaff: (initialStaffConfig?.serviceStaff ?? []).map(mapStaffMemberForConfigurationSnapshot),
             supportStaff: (initialStaffConfig?.supportStaff ?? []).map(mapStaffMemberForConfigurationSnapshot),
@@ -1011,6 +1063,23 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                     })
                 }
 
+                if (configurationSnapshot?.directConfig) {
+                    const waiterPercentage = toSafeNumber(configurationSnapshot.directConfig.directWaiterPercentage)
+                    setDirectWaiterPercentage(Number.isFinite(waiterPercentage) && waiterPercentage > 0 ? waiterPercentage : null)
+                }
+
+                if (!configurationSnapshot?.directConfig && data["configurationSnapshot"]) {
+                    // Intenta extraer del snapshot anidado si existe
+                    const nestedDirectPercentage = toSafeNumber(
+                        (configurationSnapshot as ConfigurationVersionSnapshot | undefined)?.directConfig?.directWaiterPercentage,
+                    )
+                    setDirectWaiterPercentage(
+                        Number.isFinite(nestedDirectPercentage) && nestedDirectPercentage > 0
+                            ? nestedDirectPercentage
+                            : directWaiterPercentage,
+                    )
+                }
+
                 if (Array.isArray(configurationSnapshot?.additionalDeductions)) {
                     setAdditionalDeductionPercents(
                         configurationSnapshot.additionalDeductions.map((value) => toSafeNumber(value)),
@@ -1024,10 +1093,14 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
                     )
                 }
 
-                const editingMode = (data["mode"] as "pool" | "directa" | null | undefined) ??
-                    configurationSnapshot?.settlementMode ??
-                    null
+                const editingMode =
+                    (data["mode"] as "pool" | "directa" | null | undefined) ?? configurationSnapshot?.settlementMode ?? null
                 setSettlementModeConfig(editingMode)
+
+                if (editingMode === "directa" && configurationSnapshot?.directConfig) {
+                    const waiterPercentage = toSafeNumber(configurationSnapshot.directConfig.directWaiterPercentage)
+                    setDirectWaiterPercentage(Number.isFinite(waiterPercentage) && waiterPercentage > 0 ? waiterPercentage : null)
+                }
 
                 setIneligibleStaffNames([])
                 setLoadError(null)
@@ -1142,6 +1215,9 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         generalExpenseTotal,
         isLoadingConfig,
         loadError,
+        settlementModeConfig,
+        directWaiterPercentage,
+        isSavingClosure,
         setLoadError,
         buildClosureSnapshotPayload,
         effectiveTransbankPercentage,
@@ -1150,8 +1226,6 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         netAfterDeductions,
         totalKitchenShare,
         totalGarzonShare,
-        settlementModeConfig,
-        isSavingClosure,
         setIsSavingClosure,
         saveError,
         setSaveError,
