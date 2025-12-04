@@ -1,6 +1,108 @@
 # Plan de trabajo
 
-> Actualizado: 28 de noviembre de 2025
+> Actualizado: 3 de diciembre de 2025
+
+---
+
+## 🔥 PRIORIDAD ALTA: Sistema de Autenticación y Roles
+
+**Contexto**: Se documentó completamente el sistema de auth en `PLAN-AUTH-ROLES.md` (1,477 líneas). Los componentes base están implementados pero requieren refactorización para cumplir con la Ley 20.549 chilena sobre propinas.
+
+### Fase 1: Refactorización de componentes existentes (Semana 1)
+
+1. **AuthContext - Consultar roles desde Firestore**
+   - Actualizar `AuthContext.tsx` para consultar `/users/{uid}` después del login
+   - Exponer `userRoles: { siteRoles: [], restaurantRoles: {} }` en el contexto
+   - Registrar `lastLogin` timestamp en Firestore al autenticar
+   - **Archivos**: `src/context/AuthContext.tsx`
+
+2. **RegisterPage - Cambiar estructura de datos**
+   - Cambiar collection de `adminUsers` → `users`
+   - Eliminar rol hardcodeado `"operador"`
+   - Agregar selector de tipo de cuenta: "Propietario" vs "Trabajador"
+   - Implementar `sendEmailVerification()` después del registro
+   - Validación de password fuerte: ≥8 chars, 1 mayúscula, 1 número
+   - Redirección condicional: propietarios → `/setup`, trabajadores → `/pending`
+   - **Archivos**: `src/auth/RegisterPage.tsx`
+
+3. **LoginPage - Redirección inteligente y verificación**
+   - Consultar roles después del login exitoso
+   - Redirección según roles:
+     - Si tiene `siteRoles` → `/admin`
+     - Si tiene `restaurantRoles` → `/dashboard`
+     - Si no tiene roles → `/setup`
+   - Verificar `emailVerified` y mostrar banner si no está verificado
+   - **Archivos**: `src/auth/LoginPage.tsx`
+
+4. **Cloud Function `onUserCreate`**
+   - Crear trigger que se ejecute al registrar nuevo usuario
+   - Inicializar documento en `/users/{uid}` con estructura base
+   - Estructura: `{ uid, email, displayName, siteRoles: [], restaurantRoles: {}, createdAt, isActive: true }`
+   - **Archivos**: `functions/src/triggers/onUserCreate.ts` (nuevo)
+
+### Fase 2: Protección de rutas y permisos (Semana 2)
+
+5. **Hook `usePermissions`**
+   - Implementar hook para validar permisos granulares
+   - Exponer `hasPermission(permission)` y `hasSiteRole(role)`
+   - Mapear roles → permisos según `PLAN-AUTH-ROLES.md`
+   - **Archivos**: `src/hooks/usePermissions.ts` (nuevo)
+
+6. **Componente `ProtectedRoute`**
+   - Guard de autenticación y roles
+   - Props: `requireSiteRole`, `requireRestaurantRole`, `restaurantId`
+   - Redireccionar a `/auth/login` si no autenticado
+   - Redireccionar a `/unauthorized` si no tiene permisos
+   - **Archivos**: `src/router/ProtectedRoute.tsx` (nuevo)
+
+7. **Actualizar rutas en `AppRouter.tsx`**
+   - Proteger `/cierre` → solo `closure_editor`
+   - Proteger `/dashboard/liquidacion` → `closure_editor` o `liquidator`
+   - Proteger `/admin/*` → `super_admin` o `admin`
+   - **Archivos**: `src/router/AppRouter.tsx`
+
+### Fase 3: Firestore Security Rules (Semana 3)
+
+8. **Implementar Security Rules completas**
+   - Reglas para `/users/{uid}` (solo el usuario puede leer su propia data)
+   - Reglas para `/restaurants/{restaurantId}` (owner puede leer, closure_editor puede escribir)
+   - Reglas para `/registros_diarios/{closureId}` (bloquear escritura a owner)
+   - Reglas para `/liquidaciones/{liquidacionId}` (closure_editor y liquidator pueden crear)
+   - **Archivos**: `firestore.rules`
+
+### Fase 4: Testing (Semana 4)
+
+9. **Tests unitarios**
+   - `LoginPage.test.tsx` - validaciones, errores de Firebase
+   - `RegisterPage.test.tsx` - validaciones, passwords coinciden
+   - `usePermissions.test.tsx` - permisos por rol
+   - Target: 80% coverage
+   - **Herramientas**: Vitest + React Testing Library
+
+10. **Tests E2E**
+    - Flujo completo: registro → verificación → login → dashboard
+    - Intentos de acceso sin permisos
+    - **Herramientas**: Playwright
+
+### Tareas opcionales (prioridad baja)
+
+11. **Recovery/Reset Password page**
+    - Formulario de recuperación con `sendPasswordResetEmail`
+    - Página de confirmación con link temporal
+
+12. **Email Verification page**
+    - Banner recordatorio para verificar email
+    - Botón para reenviar verificación
+
+13. **Setup/Onboarding pages**
+    - `/setup` para propietarios (crear restaurante, invitar staff)
+    - `/pending` para trabajadores (esperar invitación)
+
+---
+
+## 📋 TAREAS PENDIENTES (menor prioridad)
+
+### Deducción grupal (pospuesta)
 
 ## Mañana · 29/11/2025
 
@@ -73,6 +175,40 @@
 3. **Documentación y QA**
    - Registrar en `DOCUMENTACION.md` la gestión de cierres (guardar, editar, eliminar) y el nuevo flujo del gasto general.
    - Preparar casos de prueba manuales para borrar/editar cierres y verificar el impacto en dashboard/liquidación.
+
+---
+
+## ✅ COMPLETADO RECIENTEMENTE
+
+### 3 de diciembre de 2025
+
+**Fix: Liquidación en modo venta directa** ✅
+- **Problema**: Error 400 INVALID_PAYLOAD al liquidar cierres en modo "directa"
+- **Causa**: No se enviaba `directSalesAdjustments` en el payload
+- **Solución**: Extraer `directSalesAdjustmentsSnapshot` del primer cierre y pasarlo al payload
+- **Archivos**: `src/appPropinaSegura/dashboard/hooks/useLiquidacionWorkflow.ts`
+- **Commit**: `bbe6168` - "fix: incluir directSalesAdjustments en payload de liquidación modo directa"
+
+**Documentación: Sistema de Autenticación y Roles** ✅
+- Creado `PLAN-AUTH-ROLES.md` (1,477 líneas)
+- Análisis completo de componentes existentes (LoginPage, RegisterPage, AuthContext)
+- Diseño de sistema de roles conforme a Ley 20.549 chilena
+- Definición de Site Roles (admin del sitio) y Restaurant Roles (operativos)
+- Ejemplos de código, tests, Firestore Rules, rate limiting
+- **Commit**: `bbe6168` - incluido en el mismo commit
+
+### 28 de noviembre de 2025
+
+**Venta directa en liquidaciones + Admin overview + Deducciones nombradas** ✅
+- Backend: soporte completo para liquidar en modo 'directa' con descuentos configurables
+- Frontend: filtros por modo, badges y previsualización de ajustes en liquidación
+- Admin: hook `useAdminOverview` con métricas en vivo desde Firestore
+- Cierre diario: campos para nombre y descripción de deducciones individuales
+- Dashboard: columna 'Modo' y 'Venta directa' en liquidaciones pagadas
+- Docs: actualización de `plan-manana.md` y `DOCUMENTACION.md` con estado actual
+- **Commit**: `1a0d533`
+
+---
 
 ## Enfoque de hoy · 19/11/2025
 
