@@ -43,13 +43,16 @@ const RegisterPage = () => {
 
     useEffect(() => {
         if (!isLoading && isAuthenticated && userRoles) {
-            // Solo redirigir si el usuario YA tiene roles asignados
-            const hasRoles = userRoles.siteRoles.length > 0 || 
-                           Object.keys(userRoles.restaurantRoles).length > 0
+            // Verificar si el usuario tiene roles de sitio (admin)
+            const hasSiteRoles = userRoles.siteRoles.length > 0
+            const hasRestaurantRoles = Object.keys(userRoles.restaurantRoles).length > 0
             
-            if (hasRoles) {
-                // Usuario con roles → redirigir al dashboard
+            if (hasSiteRoles) {
+                // Usuario administrador → panel admin
                 navigate("/admin/overview", { replace: true })
+            } else if (hasRestaurantRoles) {
+                // Usuario normal con roles de restaurante → dashboard
+                navigate("/dashboard", { replace: true })
             }
             // Si no tiene roles, se quedará en RegisterPage o irá a /pending después del registro
         }

@@ -31,15 +31,18 @@ const LoginPage = () => {
 
     useEffect(() => {
         if (!isLoading && isAuthenticated && userRoles) {
-            // Verificar si el usuario tiene roles asignados
-            const hasRoles = userRoles.siteRoles.length > 0 || 
-                           Object.keys(userRoles.restaurantRoles).length > 0
+            // Verificar si el usuario tiene roles de sitio (admin)
+            const hasSiteRoles = userRoles.siteRoles.length > 0
+            const hasRestaurantRoles = Object.keys(userRoles.restaurantRoles).length > 0
             
-            if (hasRoles) {
-                // Usuario con roles → redirigir al dashboard
+            if (hasSiteRoles) {
+                // Usuario administrador → panel admin
                 navigate("/admin/overview", { replace: true })
+            } else if (hasRestaurantRoles) {
+                // Usuario normal con roles de restaurante → dashboard
+                navigate("/dashboard", { replace: true })
             } else {
-                // Usuario sin roles → redirigir a página de pendiente
+                // Usuario sin roles → página de pendiente
                 navigate("/pending", { replace: true })
             }
         }
@@ -95,7 +98,8 @@ const LoginPage = () => {
 
         try {
             await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword)
-            navigate("/admin/overview", { replace: true })
+            // La redirección se maneja automáticamente en el useEffect
+            // según los roles del usuario (dashboard o pending)
         } catch (error) {
             const firebaseError = error as { code?: string }
 
