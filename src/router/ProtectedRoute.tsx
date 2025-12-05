@@ -81,7 +81,7 @@ export const ProtectedRoute = ({
 
     if (!hasRequiredSiteRole) {
       if (showUnauthorizedUI) {
-        return <UnauthorizedUI requiredRoles={requireSiteRole} type="site" />
+        return <UnauthorizedUI requiredRoles={requireSiteRole} />
       }
       return <Navigate to="/unauthorized" replace />
     }
@@ -105,7 +105,6 @@ export const ProtectedRoute = ({
         return (
           <UnauthorizedUI
             requiredRoles={requireRestaurantRole}
-            type="restaurant"
           />
         )
       }
@@ -122,10 +121,8 @@ export const ProtectedRoute = ({
  */
 const UnauthorizedUI = ({
   requiredRoles,
-  type,
 }: {
   requiredRoles: string[]
-  type: "site" | "restaurant"
 }) => {
   const { user, signOutUser } = useAuth()
 
@@ -161,7 +158,7 @@ const UnauthorizedUI = ({
                 <p className="font-medium">Roles requeridos:</p>
                 <ul className="list-disc list-inside text-muted-foreground space-y-1">
                   {requiredRoles.map((role) => (
-                    <li key={role}>{getRoleDisplayName(role, type)}</li>
+                    <li key={role}>{getRoleDisplayName(role)}</li>
                   ))}
                 </ul>
               </div>
@@ -197,7 +194,7 @@ const UnauthorizedUI = ({
 /**
  * Helper para mostrar nombres legibles de roles
  */
-const getRoleDisplayName = (role: string, type: "site" | "restaurant"): string => {
+const getRoleDisplayName = (role: string): string => {
   const displayNames: Record<string, string> = {
     // Site roles
     super_admin: "Super Administrador",
