@@ -292,7 +292,7 @@ const PaidSettlementsPage = () => {
             </div>
 
             <Dialog open={Boolean(selectedSettlement)} onOpenChange={(open) => !open && setSelectedSettlementId(null)}>
-                <DialogContent className="max-w-3xl">
+                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{selectedSettlement?.label ?? "Liquidación"}</DialogTitle>
                         <DialogDescription>
@@ -300,12 +300,12 @@ const PaidSettlementsPage = () => {
                         </DialogDescription>
                     </DialogHeader>
                     {selectedSettlement ? (
-                        <div className="space-y-6">
-                            <div className="grid gap-4 rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white">
+                        <div className="space-y-4">
+                            <div className="grid gap-3 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-white/70">Modo</span>
+                                    <span className="text-white/70 text-xs">Modo</span>
                                     {selectedModeBadge ? (
-                                        <Badge variant={selectedModeBadge.variant} className={selectedModeBadge.className}>
+                                        <Badge variant={selectedModeBadge.variant} className={`${selectedModeBadge.className} text-xs px-2 py-0.5`}>
                                             {selectedModeBadge.label}
                                         </Badge>
                                     ) : (
@@ -313,27 +313,27 @@ const PaidSettlementsPage = () => {
                                     )}
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-white/70">Total repartido</span>
-                                    <strong className="font-mono text-base">
+                                    <span className="text-white/70 text-xs">Total repartido</span>
+                                    <strong className="font-mono text-sm">
                                         {formatCurrency(selectedSettlement.totals.netAfterDeductions)}
                                     </strong>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-white/70">Descuentos</span>
-                                    <strong className="font-mono text-base">
+                                    <span className="text-white/70 text-xs">Descuentos</span>
+                                    <strong className="font-mono text-sm">
                                         {formatCurrency(selectedSettlement.totals.deductionsAmount)}
                                     </strong>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-white/70">Gasto general</span>
-                                    <strong className="font-mono text-base">
+                                    <span className="text-white/70 text-xs">Gasto general</span>
+                                    <strong className="font-mono text-sm">
                                         {formatCurrency(selectedSettlement.totals.generalExpense)}
                                     </strong>
                                 </div>
                                 {selectedDirectSalesAdjustments > 0 ? (
                                     <div className="flex items-center justify-between text-emerald-200">
-                                        <span className="text-white/70">Venta directa aplicada</span>
-                                        <strong className="font-mono text-base">
+                                        <span className="text-white/70 text-xs">Venta directa aplicada</span>
+                                        <strong className="font-mono text-sm">
                                             -{formatCurrency(selectedDirectSalesAdjustments)}
                                         </strong>
                                     </div>
@@ -341,36 +341,36 @@ const PaidSettlementsPage = () => {
                             </div>
 
                             <div>
-                                <p className="mb-3 text-sm uppercase tracking-[0.3em] text-white/60">Días incluidos</p>
-                                <div className="max-h-[400px] overflow-y-auto rounded-lg border border-white/10">
-                                    <Table className="text-sm text-white">
+                                <p className="mb-2 text-xs uppercase tracking-[0.3em] text-white/60">Días incluidos</p>
+                                <div className="max-h-[300px] overflow-y-auto rounded-lg border border-white/10">
+                                    <Table className="text-xs text-white">
                                     <TableHeader>
                                         <TableRow className="border-white/10 text-white/70">
-                                            <TableHead>Fecha</TableHead>
-                                            <TableHead className="text-right">Total neto</TableHead>
-                                            <TableHead className="text-right">Descuentos</TableHead>
-                                            <TableHead className="text-right">Gasto general</TableHead>
-                                            <TableHead className="text-right">Venta directa</TableHead>
+                                            <TableHead className="text-xs">Fecha</TableHead>
+                                            <TableHead className="text-right text-xs">Total neto</TableHead>
+                                            <TableHead className="text-right text-xs">Descuentos</TableHead>
+                                            <TableHead className="text-right text-xs">Gasto general</TableHead>
+                                            <TableHead className="text-right text-xs">Venta directa</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {selectedSettlement.dailySummaries.map((summary) => (
                                             <TableRow key={summary.id} className="border-white/5">
-                                                <TableCell>{formatDateLabel(summary.referenceDate)}</TableCell>
-                                                <TableCell className="text-right font-mono">
+                                                <TableCell className="text-xs py-2">{formatDateLabel(summary.referenceDate)}</TableCell>
+                                                <TableCell className="text-right font-mono text-xs py-2">
                                                     {formatCurrency(summary.netAfterDeductions)}
                                                 </TableCell>
-                                                <TableCell className="text-right font-mono text-white/80">
+                                                <TableCell className="text-right font-mono text-white/80 text-xs py-2">
                                                     {summary.deductionsAmount > 0
                                                         ? formatCurrency(summary.deductionsAmount)
                                                         : "—"}
                                                 </TableCell>
-                                                <TableCell className="text-right font-mono text-white/80">
+                                                <TableCell className="text-right font-mono text-white/80 text-xs py-2">
                                                     {summary.generalExpense > 0
                                                         ? formatCurrency(summary.generalExpense)
                                                         : "—"}
                                                 </TableCell>
-                                                <TableCell className="text-right font-mono text-emerald-200">
+                                                <TableCell className="text-right font-mono text-emerald-200 text-xs py-2">
                                                     {summary.directSalesAdjustmentApplied &&
                                                     summary.directSalesAdjustmentApplied > 0
                                                         ? `-${formatCurrency(summary.directSalesAdjustmentApplied)}`
