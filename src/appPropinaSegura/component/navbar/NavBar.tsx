@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router"
 import { Menu, X } from "lucide-react"
+import { doc, getDoc } from "firebase/firestore"
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth } from "@/context/AuthContext"
 import { usePermissions } from "@/hooks/usePermissions"
+import { db } from "@/firebase/config"
 
 const NAV_LINKS = [
     { label: "Inicio", path: "/" },
@@ -17,13 +19,45 @@ const NAV_LINKS = [
 
 const NavBar = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
-    const { isAuthenticated, isLoading, displayName, email, signOutUser } = useAuth()
+    const [setupCompleted, setSetupCompleted] = useState(false)
+    const { isAuthenticated, isLoading, displayName, email, signOutUser, user } = useAuth()
     const { hasSiteRole } = usePermissions()
     const navigate = useNavigate()
     const location = useLocation()
 
     // Verificar si el usuario tiene roles administrativos
     const isAdmin = hasSiteRole("super_admin") || hasSiteRole("admin") || hasSiteRole("support") || hasSiteRole("viewer")
+
+    // Consultar si el setup está completado
+    useEffect(() => {
+        const checkSetupStatus = async () => {
+            if (!user?.uid) return
+            
+            try {
+                // Consultar el documento del usuario para obtener primaryRestaurant
+                const userDocRef = doc(db, "users", user.uid)
+                const userSnapshot = await getDoc(userDocRef)
+                
+                if (userSnapshot.exists()) {
+                    const userData = userSnapshot.data()
+                    const restaurantId = userData.primaryRestaurant || user.uid
+                    
+                    // Consultar el restaurante para ver si setupCompleted es true
+                    const restaurantDocRef = doc(db, "restaurants", restaurantId)
+                    const restaurantSnapshot = await getDoc(restaurantDocRef)
+                    
+                    if (restaurantSnapshot.exists()) {
+                        const restaurantData = restaurantSnapshot.data()
+                        setSetupCompleted(restaurantData.setupCompleted === true)
+                    }
+                }
+            } catch (error) {
+                console.error("Error checking setup status:", error)
+            }
+        }
+        
+        checkSetupStatus()
+    }, [user])
 
     // Filtrar links según permisos
     const visibleNavLinks = useMemo(() => {
@@ -32,9 +66,13 @@ const NavBar = () => {
             if (link.path === "/admin") {
                 return isAdmin
             }
+            // Ocultar link "Ajustes" si el setup ya está completado
+            if (link.path === "/setup") {
+                return !setupCompleted
+            }
             return true
         })
-    }, [isAdmin])
+    }, [isAdmin, setupCompleted])
 
     const userInitials = useMemo(() => {
         const source = displayName || email || ""

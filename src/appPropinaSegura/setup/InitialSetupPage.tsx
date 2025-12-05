@@ -355,6 +355,7 @@ const InitialSetupPage = () => {
                 supportStaff: supportStaff.map(mapStaffMemberForStorage),
                 updatedAt: timestamp,
                 staffEditors,
+                setupCompleted: true, // Marcar setup como completado
             }
             
             // Solo actualizar restaurantName si no existe previamente (no se registró en el signup)
