@@ -64,6 +64,7 @@ const InitialSetupPage = () => {
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
     const [hasExistingConfig, setHasExistingConfig] = useState(false)
+    const [restaurantNameExists, setRestaurantNameExists] = useState(false)
     const [activeTab, setActiveTab] = useState<"restaurante" | "personal">("restaurante")
     const {
         staffForm,
@@ -98,7 +99,7 @@ const InitialSetupPage = () => {
     )
 
     const hasServiceStaff = serviceStaff.length > 0
-    const canContinueToStaff = Boolean(restaurantForm.restaurantName.trim())
+    const canContinueToStaff = restaurantNameExists || Boolean(restaurantForm.restaurantName.trim())
 
     useEffect(() => {
         const authName = displayName ?? email ?? ""
@@ -229,11 +230,42 @@ const InitialSetupPage = () => {
 
         const handleFetchConfiguration = async () => {
             try {
-                const restaurantReference = doc(db, "restaurants", uid)
+                // Primero consultar el documento del usuario para obtener primaryRestaurant
+                const userDocRef = doc(db, "users", uid)
+                const userSnapshot = await getDoc(userDocRef)
+                
+                let restaurantId = uid // Fallback: usar uid como antes
+                let restaurantNameFromRegistration = ""
+                
+                if (userSnapshot.exists()) {
+                    const userData = userSnapshot.data()
+                    if (userData.primaryRestaurant) {
+                        restaurantId = userData.primaryRestaurant
+                        
+                        // Consultar el restaurante para obtener el nombre
+                        const restaurantDocRef = doc(db, "restaurants", restaurantId)
+                        const restaurantSnapshot = await getDoc(restaurantDocRef)
+                        
+                        if (restaurantSnapshot.exists()) {
+                            const restaurantData = restaurantSnapshot.data()
+                            if (restaurantData.name) {
+                                restaurantNameFromRegistration = restaurantData.name
+                                setRestaurantNameExists(true)
+                            }
+                        }
+                    }
+                }
+                
+                // Ahora consultar la configuración en /restaurants/{restaurantId}
+                const restaurantReference = doc(db, "restaurants", restaurantId)
                 const snapshot = await getDoc(restaurantReference)
 
                 if (!snapshot.exists()) {
                     setHasExistingConfig(false)
+                    // Si tenemos nombre del registro, usarlo
+                    if (restaurantNameFromRegistration) {
+                        setRestaurantForm({ restaurantName: restaurantNameFromRegistration })
+                    }
                     return
                 }
 
@@ -241,7 +273,7 @@ const InitialSetupPage = () => {
 
                 setHasExistingConfig(true)
                 setRestaurantForm({
-                    restaurantName: data.restaurantName ?? "",
+                    restaurantName: restaurantNameFromRegistration || data.restaurantName || "",
                 })
 
                 if (data.responsibleName) {
@@ -297,7 +329,8 @@ const InitialSetupPage = () => {
 
         const trimmedRestaurantName = restaurantForm.restaurantName.trim()
 
-        if (!trimmedRestaurantName) {
+        // Solo validar nombre si no existe previamente
+        if (!restaurantNameExists && !trimmedRestaurantName) {
             setSaveError("Ingresa el nombre del restaurante para continuar.")
             return
         }
@@ -315,7 +348,6 @@ const InitialSetupPage = () => {
             const restaurantReference = doc(db, "restaurants", uid)
             const timestamp = serverTimestamp()
             const payload: Record<string, unknown> = {
-                restaurantName: trimmedRestaurantName,
                 responsibleName: responsibleName.trim() || null,
                 settlementMode,
                 additionalDeductions: additionalDeductions.map(mapAdditionalDeductionForStorage),
@@ -323,6 +355,11 @@ const InitialSetupPage = () => {
                 supportStaff: supportStaff.map(mapStaffMemberForStorage),
                 updatedAt: timestamp,
                 staffEditors,
+            }
+            
+            // Solo actualizar restaurantName si no existe previamente (no se registró en el signup)
+            if (!restaurantNameExists && trimmedRestaurantName) {
+                payload.restaurantName = trimmedRestaurantName
             }
 
             if (!hasExistingConfig) {
@@ -403,7 +440,13 @@ const InitialSetupPage = () => {
                                             onChange={handleRestaurantNameChange}
                                             className={baseInputClass}
                                             tabIndex={0}
+                                            disabled={restaurantNameExists}
                                         />
+                                        {restaurantNameExists && (
+                                            <p className="text-xs text-green-400/80">
+                                                ✓ Nombre ya registrado durante la creación de tu cuenta
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">
