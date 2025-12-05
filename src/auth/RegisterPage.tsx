@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Link, useNavigate } from "react-router"
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth"
 import { doc, serverTimestamp, setDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase/config"
 import { useAuth } from "@/context/AuthContext"
@@ -113,18 +113,42 @@ const RegisterPage = () => {
                 await updateProfile(credentials.user, { displayName: trimmedName })
             }
 
-            const userDocument = doc(db, "adminUsers", credentials.user.uid)
+            // Crear documento en colección 'users' con estructura correcta de roles
+            const userDocument = doc(db, "users", credentials.user.uid)
             await setDoc(userDocument, {
                 uid: credentials.user.uid,
-                name: trimmedName || null,
                 email: trimmedEmail,
-                status: "activo",
-                role: "operador",
+                displayName: trimmedName || null,
+                
+                // Roles vacíos por defecto (se asignarán después)
+                siteRoles: [],
+                restaurantRoles: {},
+                
+                // Timestamps
                 createdAt: serverTimestamp(),
+                lastLogin: null,
+                lastActivity: null,
+                
+                // Estado de seguridad
+                emailVerified: false,
+                isActive: true,
+                loginAttempts: 0,
+                lockedUntil: null,
             })
 
-            setFormMessage("Registro exitoso. Redirigiendo al panel…")
-            navigate("/admin/overview", { replace: true })
+            // Enviar email de verificación
+            try {
+                await sendEmailVerification(credentials.user)
+                setFormMessage("Cuenta creada. Revisa tu correo para verificar tu email.")
+            } catch (emailError) {
+                console.error("Error al enviar email de verificación:", emailError)
+                setFormMessage("Cuenta creada, pero no se pudo enviar el email de verificación.")
+            }
+
+            // Redirigir a página de pendiente (esperar asignación de roles)
+            setTimeout(() => {
+                navigate("/pending", { replace: true })
+            }, 2000)
         } catch (error) {
             const firebaseError = error as { code?: string }
 
