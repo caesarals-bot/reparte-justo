@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth } from "@/context/AuthContext"
+import { usePermissions } from "@/hooks/usePermissions"
 
 const NAV_LINKS = [
     { label: "Inicio", path: "/" },
@@ -17,8 +18,23 @@ const NAV_LINKS = [
 const NavBar = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const { isAuthenticated, isLoading, displayName, email, signOutUser } = useAuth()
+    const { hasSiteRole } = usePermissions()
     const navigate = useNavigate()
     const location = useLocation()
+
+    // Verificar si el usuario tiene roles administrativos
+    const isAdmin = hasSiteRole("super_admin") || hasSiteRole("admin") || hasSiteRole("support") || hasSiteRole("viewer")
+
+    // Filtrar links según permisos
+    const visibleNavLinks = useMemo(() => {
+        return NAV_LINKS.filter(link => {
+            // Mostrar link "Admin" solo si tiene roles administrativos
+            if (link.path === "/admin") {
+                return isAdmin
+            }
+            return true
+        })
+    }, [isAdmin])
 
     const userInitials = useMemo(() => {
         const source = displayName || email || ""
@@ -139,7 +155,7 @@ const NavBar = () => {
                     </span>
                 </Link>
                 <nav className="hidden items-center gap-6 md:flex">
-                    {NAV_LINKS.map((link) => (
+                    {visibleNavLinks.map((link) => (
                         <Link key={link.path} to={link.path} className={desktopLinkClassName(link.path)} tabIndex={0}>
                             {link.label}
                         </Link>
@@ -147,13 +163,15 @@ const NavBar = () => {
                     <div className="flex items-center gap-3">
                         {isAuthenticated ? (
                             <>
-                                <Link
-                                    to="/admin/overview"
-                                    className="hidden text-sm font-medium text-white/70 transition hover:text-white lg:inline"
-                                    aria-label="Ir al panel administrativo"
-                                >
-                                    Panel
-                                </Link>
+                                {isAdmin && (
+                                    <Link
+                                        to="/admin/overview"
+                                        className="hidden text-sm font-medium text-white/70 transition hover:text-white lg:inline"
+                                        aria-label="Ir al panel administrativo"
+                                    >
+                                        Panel
+                                    </Link>
+                                )}
                                 <div className="group relative flex items-center">
                                     <div className="flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-1">
                                         <Avatar className="h-8 w-8">
@@ -216,7 +234,7 @@ const NavBar = () => {
                     />
                     <nav className="fixed inset-x-0 top-16 z-50 border-b border-t border-white/10 bg-slate-950/95 pb-6 pt-4 shadow-2xl md:hidden">
                         <div className="container mx-auto flex flex-col gap-2 px-4">
-                            {NAV_LINKS.map((link) => (
+                            {visibleNavLinks.map((link) => (
                                 <Button
                                     key={link.path}
                                     variant="ghost"
