@@ -213,7 +213,8 @@ const PaidSettlementsPage = () => {
                             <CardTitle className="text-lg font-semibold">Historial por liquidación</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <Table className="text-sm text-white">
+                            <div className="max-h-[600px] overflow-y-auto">
+                                <Table className="text-sm text-white">
                                 <TableHeader>
                                     <TableRow className="border-white/10 text-white/60">
                                         <TableHead className="text-white/70">Ciclo liquidado</TableHead>
@@ -284,6 +285,7 @@ const PaidSettlementsPage = () => {
                                     })}
                                 </TableBody>
                             </Table>
+                            </div>
                         </CardContent>
                     </Card>
                 ) : null}
@@ -340,7 +342,8 @@ const PaidSettlementsPage = () => {
 
                             <div>
                                 <p className="mb-3 text-sm uppercase tracking-[0.3em] text-white/60">Días incluidos</p>
-                                <Table className="text-sm text-white">
+                                <div className="max-h-[400px] overflow-y-auto rounded-lg border border-white/10">
+                                    <Table className="text-sm text-white">
                                     <TableHeader>
                                         <TableRow className="border-white/10 text-white/70">
                                             <TableHead>Fecha</TableHead>
@@ -377,6 +380,7 @@ const PaidSettlementsPage = () => {
                                         ))}
                                     </TableBody>
                                 </Table>
+                                </div>
                             </div>
                         </div>
                     ) : null}
