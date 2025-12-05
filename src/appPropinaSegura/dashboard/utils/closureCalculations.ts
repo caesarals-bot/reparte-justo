@@ -6,6 +6,7 @@ export type ClosuresTotalsSnapshot = {
     totalPropinas: number
     totalTransbank: number
     totalGeneralExpense: number
+    totalKitchen: number
     memberCount: number
 }
 
@@ -215,6 +216,7 @@ export const summarizeClosures = (closures: ClosureDocument[]): ClosuresTotalsSn
             totalPropinas: 0,
             totalTransbank: 0,
             totalGeneralExpense: 0,
+            totalKitchen: 0,
             memberCount: 0,
         }
     }
@@ -224,6 +226,7 @@ export const summarizeClosures = (closures: ClosureDocument[]): ClosuresTotalsSn
     let totalPropinas = 0
     let totalTransbank = 0
     let totalGeneralExpense = 0
+    let totalKitchen = 0
     const memberIds = new Set<string>()
 
     closures.forEach((closure) => {
@@ -232,6 +235,13 @@ export const summarizeClosures = (closures: ClosureDocument[]): ClosuresTotalsSn
         totalPropinas += closure.totals.propinas
         totalTransbank += closure.totals.transbankAmount
         totalGeneralExpense += closure.totals.generalExpense
+
+        // Sumar total de assignments de cocina
+        closure.assignments.cocina.forEach((assignment) => {
+            if (assignment.present) {
+                totalKitchen += assignment.netAmount ?? 0
+            }
+        })
 
         collectAssignments(closure).forEach((assignment) => {
             if (!assignment.present) {
@@ -251,8 +261,9 @@ export const summarizeClosures = (closures: ClosureDocument[]): ClosuresTotalsSn
         totalPropinas,
         totalTransbank,
         totalGeneralExpense,
+        totalKitchen,
         memberCount: memberIds.size,
-    }
+}
 }
 
 export const buildDailyClosureSummaries = (closures: ClosureDocument[]): DailyClosureSummary[] => {

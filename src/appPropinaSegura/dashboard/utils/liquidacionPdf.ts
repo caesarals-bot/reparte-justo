@@ -8,6 +8,7 @@ type LiquidacionTotalsSnapshot = {
     totalPropinas: number
     totalTransbank: number
     totalGeneralExpense: number
+    totalKitchen: number
 }
 
 type GenerateLiquidacionPdfArgs = {
@@ -123,6 +124,7 @@ export const generateLiquidacionPdf = async ({
     drawText(`Descuentos globales: ${formatCurrency(totals.totalDeductions)}`)
     drawText(`Gasto general: ${formatCurrency(totals.totalGeneralExpense)}`)
     drawText(`Transbank: ${formatCurrency(totals.totalTransbank)}`)
+    drawText(`Total cocina: ${formatCurrency(totals.totalKitchen)}`)
 
     divider()
 
