@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { onAuthStateChanged, signOut, type User } from "firebase/auth"
-import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase/config"
 import type { UserRoles } from "@/types/user"
 
@@ -49,8 +49,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           lastActivity: serverTimestamp(),
         })
       } else {
-        console.warn(`No existe documento para usuario ${uid}`)
-        setUserRoles(null)
+        // Usuario sin documento en Firestore - crear uno automáticamente
+        console.warn(`No existe documento para usuario ${uid} - creando documento automáticamente`)
+        
+        const newUserDoc = {
+          uid,
+          email: auth.currentUser?.email || null,
+          displayName: auth.currentUser?.displayName || null,
+          siteRoles: [],
+          restaurantRoles: {},
+          createdAt: serverTimestamp(),
+          lastLogin: serverTimestamp(),
+          lastActivity: serverTimestamp(),
+          emailVerified: auth.currentUser?.emailVerified || false,
+          isActive: true,
+          loginAttempts: 0,
+          lockedUntil: null,
+        }
+        
+        await setDoc(userDocRef, newUserDoc)
+        
+        setUserRoles({
+          siteRoles: [],
+          restaurantRoles: {},
+        })
+        
+        console.log(`Documento creado para usuario ${uid}`)
       }
     } catch (error) {
       console.error("Error al obtener roles del usuario:", error)

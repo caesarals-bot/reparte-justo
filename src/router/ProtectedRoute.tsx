@@ -42,7 +42,6 @@ type ProtectedRouteProps = {
   requireRestaurantRole?: RestaurantRole[]
   restaurantId?: string
   redirectTo?: string
-  showUnauthorizedUI?: boolean
 }
 
 export const ProtectedRoute = ({
@@ -51,7 +50,6 @@ export const ProtectedRoute = ({
   requireRestaurantRole,
   restaurantId,
   redirectTo = "/auth/login",
-  showUnauthorizedUI = false,
 }: ProtectedRouteProps) => {
   const { user, userRoles, isLoading } = useAuth()
   const location = useLocation()
@@ -80,10 +78,7 @@ export const ProtectedRoute = ({
     )
 
     if (!hasRequiredSiteRole) {
-      if (showUnauthorizedUI) {
-        return <UnauthorizedUI requiredRoles={requireSiteRole} />
-      }
-      return <Navigate to="/unauthorized" replace />
+      return <UnauthorizedUI requiredRoles={requireSiteRole} />
     }
   }
 
@@ -93,7 +88,7 @@ export const ProtectedRoute = ({
       console.error(
         "ProtectedRoute: requireRestaurantRole requiere un restaurantId"
       )
-      return <Navigate to="/unauthorized" replace />
+      return <UnauthorizedUI requiredRoles={requireRestaurantRole} />
     }
 
     const hasRequiredRestaurantRole = requireRestaurantRole.some((role) =>
@@ -101,14 +96,7 @@ export const ProtectedRoute = ({
     )
 
     if (!hasRequiredRestaurantRole) {
-      if (showUnauthorizedUI) {
-        return (
-          <UnauthorizedUI
-            requiredRoles={requireRestaurantRole}
-          />
-        )
-      }
-      return <Navigate to="/unauthorized" replace />
+      return <UnauthorizedUI requiredRoles={requireRestaurantRole} />
     }
   }
 
