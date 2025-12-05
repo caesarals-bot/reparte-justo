@@ -84,15 +84,20 @@ export const ProtectedRoute = ({
 
   // Si requiere rol de restaurante
   if (requireRestaurantRole && requireRestaurantRole.length > 0) {
-    if (!restaurantId) {
-      console.error(
-        "ProtectedRoute: requireRestaurantRole requiere un restaurantId"
-      )
-      return <UnauthorizedUI requiredRoles={requireRestaurantRole} />
-    }
+    const restaurantRolesMap = userRoles?.restaurantRoles || {}
 
-    const hasRequiredRestaurantRole = requireRestaurantRole.some((role) =>
-      userRoles?.restaurantRoles?.[restaurantId]?.includes(role)
+    // Si NO se pasa restaurantId, se considera que cualquier restaurante
+    // donde el usuario tenga alguno de los roles requeridos es válido.
+    // Esto cubre el caso del creador de la cuenta (closure_editor) sin
+    // necesidad de pasar explícitamente el id del restaurante.
+    const restaurantIdsToCheck = restaurantId
+      ? [restaurantId]
+      : Object.keys(restaurantRolesMap)
+
+    const hasRequiredRestaurantRole = restaurantIdsToCheck.some((restId) =>
+      requireRestaurantRole.some((role) =>
+        restaurantRolesMap[restId]?.includes(role)
+      )
     )
 
     if (!hasRequiredRestaurantRole) {
