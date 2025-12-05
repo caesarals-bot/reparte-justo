@@ -20,6 +20,8 @@ type RegisterFormValues = {
     email: string
     password: string
     confirmPassword: string
+    restaurantName: string
+    accountType: "closure_editor" | "liquidator" | ""
 }
 
 type RegisterFieldErrors = Partial<Record<keyof RegisterFormValues, string>>
@@ -30,18 +32,28 @@ const RegisterPage = () => {
         email: "",
         password: "",
         confirmPassword: "",
+        restaurantName: "",
+        accountType: "",
     })
     const [fieldErrors, setFieldErrors] = useState<RegisterFieldErrors>({})
     const [formMessage, setFormMessage] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const navigate = useNavigate()
-    const { isAuthenticated, isLoading } = useAuth()
+    const { isAuthenticated, isLoading, userRoles } = useAuth()
 
     useEffect(() => {
-        if (!isLoading && isAuthenticated) {
-            navigate("/admin/overview", { replace: true })
+        if (!isLoading && isAuthenticated && userRoles) {
+            // Solo redirigir si el usuario YA tiene roles asignados
+            const hasRoles = userRoles.siteRoles.length > 0 || 
+                           Object.keys(userRoles.restaurantRoles).length > 0
+            
+            if (hasRoles) {
+                // Usuario con roles → redirigir al dashboard
+                navigate("/admin/overview", { replace: true })
+            }
+            // Si no tiene roles, se quedará en RegisterPage o irá a /pending después del registro
         }
-    }, [isAuthenticated, isLoading, navigate])
+    }, [isAuthenticated, isLoading, userRoles, navigate])
 
     const handleInputChange = (field: keyof RegisterFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
         const { value } = event.target
@@ -71,11 +83,13 @@ const RegisterPage = () => {
         const trimmedEmail = formValues.email.trim()
         const trimmedPassword = formValues.password.trim()
         const trimmedConfirmPassword = formValues.confirmPassword.trim()
+        const trimmedRestaurantName = formValues.restaurantName.trim()
+        const accountType = formValues.accountType
 
         const nextErrors: RegisterFieldErrors = {}
 
         if (!trimmedName) {
-            nextErrors.name = "Ingresa el nombre del contacto."
+            nextErrors.name = "Ingresa tu nombre completo."
         }
 
         if (!trimmedEmail) {
@@ -86,14 +100,26 @@ const RegisterPage = () => {
 
         if (!trimmedPassword) {
             nextErrors.password = "Crea una contraseña."
-        } else if (trimmedPassword.length < 6) {
-            nextErrors.password = "La contraseña debe tener al menos 6 caracteres."
+        } else if (trimmedPassword.length < 8) {
+            nextErrors.password = "La contraseña debe tener al menos 8 caracteres."
+        } else if (!/[A-Z]/.test(trimmedPassword)) {
+            nextErrors.password = "La contraseña debe contener al menos una mayúscula."
+        } else if (!/[0-9]/.test(trimmedPassword)) {
+            nextErrors.password = "La contraseña debe contener al menos un número."
         }
 
         if (!trimmedConfirmPassword) {
             nextErrors.confirmPassword = "Repite la contraseña."
         } else if (trimmedConfirmPassword !== trimmedPassword) {
             nextErrors.confirmPassword = "Las contraseñas deben coincidir."
+        }
+
+        if (!trimmedRestaurantName) {
+            nextErrors.restaurantName = "Ingresa el nombre de tu restaurante."
+        }
+
+        if (!accountType) {
+            nextErrors.accountType = "Selecciona el tipo de cuenta."
         }
 
         if (Object.keys(nextErrors).length > 0) {
@@ -113,16 +139,37 @@ const RegisterPage = () => {
                 await updateProfile(credentials.user, { displayName: trimmedName })
             }
 
-            // Crear documento en colección 'users' con estructura correcta de roles
+            // Crear restaurante automáticamente
+            const restaurantId = `rest_${credentials.user.uid}_${Date.now()}`
+            const restaurantDoc = doc(db, "restaurants", restaurantId)
+            await setDoc(restaurantDoc, {
+                id: restaurantId,
+                name: trimmedRestaurantName,
+                ownerId: credentials.user.uid,
+                ownerEmail: trimmedEmail,
+                ownerName: trimmedName,
+                createdAt: serverTimestamp(),
+                isActive: true,
+                settings: {
+                    timezone: "America/Santiago",
+                    currency: "CLP",
+                },
+            })
+
+            // Crear documento de usuario con rol asignado en el restaurante
             const userDocument = doc(db, "users", credentials.user.uid)
             await setDoc(userDocument, {
                 uid: credentials.user.uid,
                 email: trimmedEmail,
                 displayName: trimmedName || null,
                 
-                // Roles vacíos por defecto (se asignarán después)
+                // Sin roles de sitio (no es admin)
                 siteRoles: [],
-                restaurantRoles: {},
+                
+                // Rol asignado en el restaurante que acaba de crear
+                restaurantRoles: {
+                    [restaurantId]: [accountType] // closure_editor o liquidator
+                },
                 
                 // Timestamps
                 createdAt: serverTimestamp(),
@@ -134,20 +181,23 @@ const RegisterPage = () => {
                 isActive: true,
                 loginAttempts: 0,
                 lockedUntil: null,
+                
+                // Referencia al restaurante principal
+                primaryRestaurant: restaurantId,
             })
 
             // Enviar email de verificación
             try {
                 await sendEmailVerification(credentials.user)
-                setFormMessage("Cuenta creada. Revisa tu correo para verificar tu email.")
+                setFormMessage("¡Cuenta creada! Redirigiendo a tu dashboard...")
             } catch (emailError) {
                 console.error("Error al enviar email de verificación:", emailError)
-                setFormMessage("Cuenta creada, pero no se pudo enviar el email de verificación.")
+                setFormMessage("Cuenta creada. Redirigiendo a tu dashboard...")
             }
 
-            // Redirigir a página de pendiente (esperar asignación de roles)
+            // Redirigir al dashboard
             setTimeout(() => {
-                navigate("/pending", { replace: true })
+                navigate("/dashboard", { replace: true })
             }, 2000)
         } catch (error) {
             const firebaseError = error as { code?: string }
@@ -173,6 +223,8 @@ const RegisterPage = () => {
     const emailErrorId = fieldErrors.email ? "register-email-error" : undefined
     const passwordErrorId = fieldErrors.password ? "register-password-error" : undefined
     const confirmPasswordErrorId = fieldErrors.confirmPassword ? "register-confirm-password-error" : undefined
+    const restaurantNameErrorId = fieldErrors.restaurantName ? "register-restaurant-name-error" : undefined
+    const accountTypeErrorId = fieldErrors.accountType ? "register-account-type-error" : undefined
     const messageId = formMessage ? "register-form-message" : undefined
 
     return (
@@ -284,6 +336,61 @@ const RegisterPage = () => {
                                     {fieldErrors.confirmPassword}
                                 </p>
                             )}
+                        </div>
+
+                        <div className="space-y-2 text-left">
+                            <Label htmlFor="restaurantName">Nombre de tu restaurante</Label>
+                            <input
+                                id="restaurantName"
+                                name="restaurantName"
+                                type="text"
+                                autoComplete="organization"
+                                className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                                placeholder="Ej. Restaurante El Buen Sabor"
+                                value={formValues.restaurantName}
+                                onChange={handleInputChange("restaurantName")}
+                                aria-invalid={Boolean(fieldErrors.restaurantName)}
+                                aria-describedby={restaurantNameErrorId}
+                                tabIndex={0}
+                            />
+                            {fieldErrors.restaurantName && (
+                                <p id={restaurantNameErrorId} role="alert" className="text-sm text-destructive">
+                                    {fieldErrors.restaurantName}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2 text-left">
+                            <Label htmlFor="accountType">Tipo de cuenta</Label>
+                            <select
+                                id="accountType"
+                                name="accountType"
+                                className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                                value={formValues.accountType}
+                                onChange={(e) => {
+                                    setFormValues(prev => ({ ...prev, accountType: e.target.value as "closure_editor" | "liquidator" | "" }))
+                                    if (fieldErrors.accountType) {
+                                        const nextErrors = { ...fieldErrors }
+                                        delete nextErrors.accountType
+                                        setFieldErrors(nextErrors)
+                                    }
+                                }}
+                                aria-invalid={Boolean(fieldErrors.accountType)}
+                                aria-describedby={accountTypeErrorId}
+                                tabIndex={0}
+                            >
+                                <option value="">Selecciona un tipo</option>
+                                <option value="closure_editor">Gestor Principal (Crear y editar cierres, gestionar staff)</option>
+                                <option value="liquidator">Liquidador (Solo crear liquidaciones)</option>
+                            </select>
+                            {fieldErrors.accountType && (
+                                <p id={accountTypeErrorId} role="alert" className="text-sm text-destructive">
+                                    {fieldErrors.accountType}
+                                </p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                                Como <strong>Gestor Principal</strong> podrás invitar a otros usuarios a tu restaurante.
+                            </p>
                         </div>
 
                         <Button

@@ -27,13 +27,23 @@ const LoginPage = () => {
     const [formMessage, setFormMessage] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const navigate = useNavigate()
-    const { isAuthenticated, isLoading } = useAuth()
+    const { isAuthenticated, isLoading, userRoles } = useAuth()
 
     useEffect(() => {
-        if (!isLoading && isAuthenticated) {
-            navigate("/admin/overview", { replace: true })
+        if (!isLoading && isAuthenticated && userRoles) {
+            // Verificar si el usuario tiene roles asignados
+            const hasRoles = userRoles.siteRoles.length > 0 || 
+                           Object.keys(userRoles.restaurantRoles).length > 0
+            
+            if (hasRoles) {
+                // Usuario con roles → redirigir al dashboard
+                navigate("/admin/overview", { replace: true })
+            } else {
+                // Usuario sin roles → redirigir a página de pendiente
+                navigate("/pending", { replace: true })
+            }
         }
-    }, [isAuthenticated, isLoading, navigate])
+    }, [isAuthenticated, isLoading, userRoles, navigate])
 
     const handleInputChange = (field: keyof LoginFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
         const { value } = event.target

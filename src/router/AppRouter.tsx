@@ -3,6 +3,8 @@ import LayoutPage from "../appPropinaSegura/home/layout/LayoutPage"
 import LandingPage from "../appPropinaSegura/home/LandingPage"
 import LoginPage from "@/auth/LoginPage"
 import RegisterPage from "@/auth/RegisterPage"
+import PendingPage from "@/pages/PendingPage"
+import AcceptInvitationPage from "@/pages/AcceptInvitationPage"
 import InitialSetupPage from "../appPropinaSegura/setup/InitialSetupPage"
 import CierreDiarioPage from "@/appPropinaSegura/cierre/CierreDiarioPage"
 import DashboardPage from "@/appPropinaSegura/dashboard/DashboardPage"
@@ -89,7 +91,14 @@ const AppRouter = createBrowserRouter([
             },
         ],
     },
-    
+    {
+        path: "/pending",
+        element: <PendingPage />,
+    },
+    {
+        path: "/invite/:invitationId",
+        element: <AcceptInvitationPage />,
+    },
 ])
 
 export default AppRouter
