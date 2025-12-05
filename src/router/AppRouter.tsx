@@ -5,6 +5,7 @@ import LoginPage from "@/auth/LoginPage"
 import RegisterPage from "@/auth/RegisterPage"
 import PendingPage from "@/pages/PendingPage"
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage"
+import { ProtectedRoute } from "@/router/ProtectedRoute"
 import InitialSetupPage from "../appPropinaSegura/setup/InitialSetupPage"
 import CierreDiarioPage from "@/appPropinaSegura/cierre/CierreDiarioPage"
 import DashboardPage from "@/appPropinaSegura/dashboard/DashboardPage"
@@ -28,37 +29,69 @@ const AppRouter = createBrowserRouter([
             },
             {
                 path: "setup",
-                element: <InitialSetupPage />,
+                element: (
+                    <ProtectedRoute>
+                        <InitialSetupPage />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "cierre",
-                element: <CierreDiarioPage />,
+                element: (
+                    <ProtectedRoute requireRestaurantRole={["closure_editor"]}>
+                        <CierreDiarioPage />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "dashboard",
-                element: <DashboardPage />,
+                element: (
+                    <ProtectedRoute requireRestaurantRole={["closure_editor", "liquidator", "owner", "restaurant_viewer"]}>
+                        <DashboardPage />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "dashboard/closures/:closureId",
-                element: <ClosureDetailPage />,
+                element: (
+                    <ProtectedRoute requireRestaurantRole={["closure_editor", "liquidator", "owner", "restaurant_viewer"]}>
+                        <ClosureDetailPage />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "dashboard/liquidacion",
-                element: <LiquidacionPage />,
+                element: (
+                    <ProtectedRoute requireRestaurantRole={["liquidator", "closure_editor"]}>
+                        <LiquidacionPage />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "dashboard/liquidaciones-pagadas",
-                element: <PaidSettlementsPage />,
+                element: (
+                    <ProtectedRoute requireRestaurantRole={["closure_editor", "liquidator", "owner", "restaurant_viewer"]}>
+                        <PaidSettlementsPage />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "dashboard/personal",
-                element: <StaffManagementPage />,
+                element: (
+                    <ProtectedRoute requireRestaurantRole={["closure_editor"]}>
+                        <StaffManagementPage />
+                    </ProtectedRoute>
+                ),
             },
         ],
     },
     {
         path: "/admin",
-        element: <AdminLayout />,
+        element: (
+            <ProtectedRoute requireSiteRole={["super_admin", "admin", "support", "viewer"]}>
+                <AdminLayout />
+            </ProtectedRoute>
+        ),
         children: [
             {
                 index: true,
