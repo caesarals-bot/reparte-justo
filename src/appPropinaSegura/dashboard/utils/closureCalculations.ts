@@ -28,6 +28,16 @@ export type LiquidacionGeneralExpenseSummary = {
     total: number
 }
 
+export type UnpaidDaysInfo = {
+    memberId: string
+    memberName: string
+    memberRole?: string | null
+    startDate: Date | null
+    totalClosuresSinceStart: number
+    closuresWithPayment: number
+    closuresWithoutPayment: number
+}
+
 export const aggregateGeneralExpensesFromClosures = (
     closures: ClosureDocument[],
 ): LiquidacionGeneralExpenseSummary[] => {
@@ -168,6 +178,52 @@ const collectAssignments = (closure: ClosureDocument): StaffAssignment[] => [
     ...closure.assignments.ventaDirecta,
     ...closure.assignments.pocilloSecundario,
 ]
+
+export const calculateUnpaidDaysForMember = (
+    memberId: string,
+    memberName: string,
+    memberRole: string | null | undefined,
+    startDate: Date | null,
+    allClosures: ClosureDocument[],
+): UnpaidDaysInfo => {
+    if (!startDate || !allClosures.length) {
+        return {
+            memberId,
+            memberName,
+            memberRole: memberRole ?? null,
+            startDate,
+            totalClosuresSinceStart: 0,
+            closuresWithPayment: 0,
+            closuresWithoutPayment: 0,
+        }
+    }
+
+    // Filtrar cierres desde la fecha de ingreso
+    const closuresSinceStart = allClosures.filter((closure) => {
+        const closureDate = normalizeReferenceDate(closure.metadata.referenceDate)
+        return closureDate && closureDate >= startDate
+    })
+
+    // Identificar cierres donde el miembro SÍ recibió pago
+    const closuresWithMember = closuresSinceStart.filter((closure) => {
+        const allAssignments = collectAssignments(closure)
+        return allAssignments.some((assignment) => {
+            if (!assignment.present) return false
+            const assignmentId = buildMemberIdentifier(assignment.staffId, assignment.nombre, assignment.role)
+            return assignmentId === memberId
+        })
+    })
+
+    return {
+        memberId,
+        memberName,
+        memberRole: memberRole ?? null,
+        startDate,
+        totalClosuresSinceStart: closuresSinceStart.length,
+        closuresWithPayment: closuresWithMember.length,
+        closuresWithoutPayment: closuresSinceStart.length - closuresWithMember.length,
+    }
+}
 
 export const buildClosureHighlights = (closures: ClosureDocument[]) => {
     if (!closures.length) {
