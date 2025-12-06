@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
 
 import { useAuth } from "@/context/AuthContext"
+import { usePermissions } from "@/hooks/usePermissions"
 import { db } from "@/firebase/config"
 import type { StaffMember, RestaurantConfigurationDocument, SettlementMode } from "../../setup/staffTypes"
 import { mapStaffMemberForStorage, mapStoredStaffMember, isValidEmail } from "../../setup/staffUtils"
@@ -48,7 +49,9 @@ const validateMemberDraft = (draft: StaffMember) => {
 }
 
 export const useStaffManagement = () => {
-    const { uid, email } = useAuth()
+    const { email } = useAuth()
+    const { accessibleRestaurants } = usePermissions()
+    const restaurantId = accessibleRestaurants[0]
     const normalizedUserEmail = email ? email.toLowerCase() : null
 
     const [serviceStaff, setServiceStaff] = useState<StaffMember[]>([])
@@ -84,8 +87,8 @@ export const useStaffManagement = () => {
     )
 
     useEffect(() => {
-        if (!uid) {
-            setSaveError("No encontramos una sesión válida. Inicia sesión nuevamente.")
+        if (!restaurantId) {
+            setSaveError("No tienes acceso a ningún restaurante.")
             setIsLoading(false)
             return
         }
@@ -93,7 +96,7 @@ export const useStaffManagement = () => {
         const fetchStaff = async () => {
             try {
                 setIsLoading(true)
-                const restaurantReference = doc(db, "restaurants", uid)
+                const restaurantReference = doc(db, "restaurants", restaurantId)
                 const snapshot = await getDoc(restaurantReference)
 
                 if (!snapshot.exists()) {
@@ -118,7 +121,7 @@ export const useStaffManagement = () => {
         }
 
         void fetchStaff()
-    }, [uid, setStaffEditors])
+    }, [restaurantId, setStaffEditors])
 
     const updateModalDraft = (updater: (draft: StaffMember) => StaffMember) => {
         setModalDraft((previousDraft) => (previousDraft ? updater(previousDraft) : previousDraft))
@@ -128,8 +131,8 @@ export const useStaffManagement = () => {
         nextServiceStaff?: StaffMember[],
         nextSupportStaff?: StaffMember[],
     ): Promise<boolean> => {
-        if (!uid) {
-            setSaveError("No se pudo identificar al restaurante")
+        if (!restaurantId) {
+            setSaveError("No tienes acceso a ningún restaurante")
             return false
         }
 
@@ -141,7 +144,7 @@ export const useStaffManagement = () => {
         setSaveSuccess(null)
 
         try {
-            const restaurantReference = doc(db, "restaurants", uid)
+            const restaurantReference = doc(db, "restaurants", restaurantId)
             await setDoc(
                 restaurantReference,
                 {
