@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { AlertCircle, CalendarRange, Loader2, PiggyBank } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
+import { usePermissions } from "@/hooks/usePermissions"
 import { useLiquidacionWorkflow } from "./hooks/useLiquidacionWorkflow"
 import { Badge } from "@/components/ui/badge"
 
@@ -24,7 +25,9 @@ const formatCurrency = (value: number) =>
 
 const LiquidacionPage = () => {
     const navigate = useNavigate()
-    const { uid, email: ownerEmail, displayName: ownerName } = useAuth()
+    const { email: ownerEmail, displayName: ownerName } = useAuth()
+    const { accessibleRestaurants } = usePermissions()
+    const restaurantId = accessibleRestaurants[0]
     const {
         isLoading,
         dateRange,
@@ -58,7 +61,7 @@ const LiquidacionPage = () => {
         unnamedDeductionSample,
         handlePrepareLiquidacion,
         handleConfirmLiquidacion,
-    } = useLiquidacionWorkflow({ uid, ownerEmail, ownerName })
+    } = useLiquidacionWorkflow({ restaurantId, ownerEmail, ownerName })
 
     const modeLabel = selectedMode === "directa" ? "Venta directa" : selectedMode === "pool" ? "Pool" : "Sin modo"
     const prepareDisabled =

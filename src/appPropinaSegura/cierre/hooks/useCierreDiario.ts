@@ -225,8 +225,9 @@ type ConfigurationVersionSnapshot = {
 }
 
 type UseCierreDiarioArgs = {
-    uid?: string | null
+    restaurantId?: string | null
     userInfo?: {
+        uid?: string | null
         name?: string | null
         email?: string | null
     }
@@ -498,7 +499,7 @@ const normalizeEntryDate = (value: StoredStaffMember["entryDate"]) => {
     return undefined
 }
 
-export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCierreDiarioResult => {
+export const useCierreDiario = ({ restaurantId, userInfo }: UseCierreDiarioArgs): UseCierreDiarioResult => {
     const [poolDate, setPoolDate] = useState<Date | undefined>(new Date())
     const [directDate, setDirectDate] = useState<Date | undefined>(new Date())
     const [isLoadingConfig, setIsLoadingConfig] = useState(true)
@@ -727,8 +728,8 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     }
 
     useEffect(() => {
-        if (!uid) {
-            setLoadError("No se encontró una sesión activa. Inicia sesión para registrar cierres.")
+        if (!restaurantId) {
+            setLoadError("No se encontró un restaurante. Verifica tus permisos.")
             setIsLoadingConfig(false)
             reset(defaultCierreValues)
             return
@@ -737,7 +738,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         const handleLoadConfiguration = async () => {
             try {
                 setIsLoadingConfig(true)
-                const restaurantReference = doc(db, "restaurants", uid)
+                const restaurantReference = doc(db, "restaurants", restaurantId)
                 const snapshot = await getDoc(restaurantReference)
 
                 if (!snapshot.exists()) {
@@ -785,7 +786,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         }
 
         void handleLoadConfiguration()
-    }, [uid, reset])
+    }, [reset, restaurantId])
 
     const poolDateLabel = useMemo(() => {
         if (!poolDate) {
@@ -806,7 +807,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
     const buildClosureSnapshotPayload = useCallback((): ClosureSnapshotPayload => {
         const submittedAt = new Date().toISOString()
         const submittedBy: SubmittedBySnapshot = {
-            uid: uid ?? undefined,
+            uid: userInfo?.uid ?? undefined,
             name: userInfo?.name ?? undefined,
             email: userInfo?.email ?? undefined,
         }
@@ -968,7 +969,7 @@ export const useCierreDiario = ({ uid, userInfo }: UseCierreDiarioArgs): UseCier
         poolPercentages.kitchen,
         poolPercentages.transbank,
         initialStaffConfig,
-        uid,
+        userInfo?.uid,
         userInfo?.name,
         userInfo?.email,
     ])

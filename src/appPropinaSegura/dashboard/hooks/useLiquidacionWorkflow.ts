@@ -101,7 +101,7 @@ const applyDeductionFallbackToClosure = (closure: ClosureDocument): ClosureDocum
 }
 
 export type UseLiquidacionWorkflowArgs = {
-    uid?: string | null
+    restaurantId?: string | null
     ownerEmail?: string | null
     ownerName?: string | null
 }
@@ -111,7 +111,7 @@ export type UseLiquidacionWorkflowArgs = {
  * y bloqueo de fechas liquidadas. Devuelve todo lo necesario para que el componente
  * de UI solo se enfoque en renderizar.
  */
-export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquidacionWorkflowArgs) => {
+export const useLiquidacionWorkflow = ({ restaurantId, ownerEmail, ownerName }: UseLiquidacionWorkflowArgs) => {
     const [dateRange, setDateRange] = useState<DateRangeValue>(emptyRange)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [isSubmittingLiquidacion, setIsSubmittingLiquidacion] = useState(false)
@@ -120,7 +120,7 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
     >(null)
     const [prepareError, setPrepareError] = useState<string | null>(null)
     const [locallySettledDates, setLocallySettledDates] = useState<Date[]>([])
-    const { closures, pendingClosures, isLoading, refresh } = useClosuresDashboard({ uid })
+    const { closures, pendingClosures, isLoading, refresh } = useClosuresDashboard({ restaurantId })
     const { buildLiquidacionPayload, liquidarPeriodo } = useLiquidacionActions()
 
     const availablePendingClosures = useMemo(() => {
@@ -348,8 +348,8 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
         : null
 
     const handleConfirmLiquidacion = useCallback(async () => {
-        if (!uid) {
-            setLiquidacionFeedback({ type: "error", message: "Inicia sesión para enviar la liquidación." })
+        if (!restaurantId) {
+            setLiquidacionFeedback({ type: "error", message: "No tienes acceso a ningún restaurante." })
             return
         }
 
@@ -387,7 +387,7 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
                 : undefined
             
             const payload = buildLiquidacionPayload({
-                restaurantId: uid,
+                restaurantId,
                 closures: normalizedClosures,
                 dateRange,
                 contact: notificationContact,
@@ -450,7 +450,7 @@ export const useLiquidacionWorkflow = ({ uid, ownerEmail, ownerName }: UseLiquid
             setIsSubmittingLiquidacion(false)
         }
     }, [
-        uid,
+        restaurantId,
         dateRange,
         filteredClosures,
         normalizedClosures,

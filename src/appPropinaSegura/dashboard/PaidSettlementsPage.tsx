@@ -19,6 +19,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { useAuth } from "@/context/AuthContext"
+import { usePermissions } from "@/hooks/usePermissions"
 import {
     useClosuresDashboard,
     resolveClosureMode,
@@ -124,8 +125,10 @@ const getModeBadgeProps = (info: GroupModeInfo): ModeBadgeProps => {
 
 const PaidSettlementsPage = () => {
     const { uid } = useAuth()
+    const { accessibleRestaurants } = usePermissions()
+    const restaurantId = accessibleRestaurants[0]
     const navigate = useNavigate()
-    const { paidSettlementGroups, isLoading, error } = useClosuresDashboard({ uid })
+    const { paidSettlementGroups, isLoading, error } = useClosuresDashboard({ restaurantId })
     const [selectedSettlementId, setSelectedSettlementId] = useState<string | null>(null)
 
     const selectedSettlement = useMemo(

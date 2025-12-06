@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, Loader2, Users, Trash2, Pencil } from "lucide-react"
 
 import { useAuth } from "@/context/AuthContext"
+import { usePermissions } from "@/hooks/usePermissions"
 import { buildMemberIdentifier, useClosureDetail } from "./hooks/useClosureDetail"
 
 const formatCurrency = (value: number) =>
@@ -76,9 +77,11 @@ const formatAdjustmentTimestamp = (timestamp?: Timestamp | null) => {
  * manteniendo este componente enfocado en la presentación.
  */
 const ClosureDetailPage = () => {
-    const { closureId } = useParams()
+    const { closureId } = useParams<{ closureId: string }>()
     const navigate = useNavigate()
     const { uid, displayName, email } = useAuth()
+    const { accessibleRestaurants } = usePermissions()
+    const restaurantId = accessibleRestaurants[0]
     const {
         isLoading,
         error,
@@ -108,13 +111,16 @@ const ClosureDetailPage = () => {
         deleteFeedback,
         isDeletingClosure,
         isClosurePaid,
-    } = useClosureDetail({ uid, closureId, displayName, email })
+    } = useClosureDetail({ restaurantId, closureId, displayName, email })
 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
     const [deleteReason, setDeleteReason] = useState("")
 
     const handleDeleteConfirm = async () => {
-        const success = await handleDeleteClosure(deleteReason.trim() ? deleteReason.trim() : undefined)
+        const success = await handleDeleteClosure(
+            deleteReason.trim() ? deleteReason.trim() : undefined,
+            uid ?? undefined
+        )
         if (success) {
             setIsDeleteDialogOpen(false)
             navigate("/dashboard")

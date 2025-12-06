@@ -652,15 +652,15 @@ export const createClosureAdjustment = async (params: {
     })
 }
 
-export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
+export const useClosuresDashboard = ({ restaurantId }: { restaurantId?: string | null }) => {
     const [closures, setClosures] = useState<ClosureDocument[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [aggregatedAssignments, setAggregatedAssignments] = useState<StaffAggregate[]>([])
 
     const fetchClosures = useCallback(async () => {
-        if (!uid) {
-            setError("No se encontró una sesión activa. Inicia sesión para ver el dashboard.")
+        if (!restaurantId) {
+            setError("No se encontró un restaurante. Verifica tus permisos.")
             setClosures([])
             setIsLoading(false)
             return
@@ -668,13 +668,13 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
 
         setIsLoading(true)
         try {
-            const closuresRef = collection(db, "restaurants", uid, "registros_diarios")
+            const closuresRef = collection(db, "restaurants", restaurantId, "registros_diarios")
             const closuresQuery = query(closuresRef, orderBy("createdAt", "desc"))
             const snapshots = await getDocs(closuresQuery)
 
             const nextClosures = await Promise.all(
                 snapshots.docs.map(async (docSnapshot) => {
-                    const adjustments = await fetchClosureAdjustments(uid, docSnapshot.id)
+                    const adjustments = await fetchClosureAdjustments(restaurantId, docSnapshot.id)
                     const baseClosure = mapSnapshotToClosure(docSnapshot, adjustments)
                     return applyPercentageAdjustmentsToClosure(baseClosure)
                 }),
@@ -764,7 +764,7 @@ export const useClosuresDashboard = ({ uid }: { uid?: string | null }) => {
         } finally {
             setIsLoading(false)
         }
-    }, [uid])
+    }, [restaurantId])
 
     useEffect(() => {
         void fetchClosures()

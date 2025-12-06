@@ -21,7 +21,7 @@ export const buildMemberIdentifier = (staffId?: string, name?: string, role?: st
     staffId ?? `${name ?? ""}|${role ?? ""}`
 
 export type UseClosureDetailArgs = {
-    uid?: string | null
+    restaurantId?: string | null
     closureId?: string
     displayName?: string | null
     email?: string | null
@@ -51,8 +51,8 @@ export type StaffMemberOption = {
  * Maneja toda la lógica de la página de detalle de cierre: carga de datos,
  * registro de ajustes y agregaciones auxiliares que la UI necesita para renderizar.
  */
-export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClosureDetailArgs) => {
-    const { refresh } = useClosuresDashboard({ uid })
+export const useClosureDetail = ({ restaurantId, closureId, displayName, email }: UseClosureDetailArgs) => {
+    const { refresh } = useClosuresDashboard({ restaurantId })
 
     const [closure, setClosure] = useState<ClosureDocument | null>(null)
     const [isLoading, setIsLoading] = useState(true)
@@ -80,14 +80,14 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
     const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false)
 
     const refreshClosureAdjustments = useCallback(async () => {
-        if (!uid || !closureId) {
+        if (!restaurantId || !closureId) {
             return [] as ClosureAdjustment[]
         }
 
-        const adjustments = await fetchClosureAdjustments(uid, closureId)
+        const adjustments = await fetchClosureAdjustments(restaurantId, closureId)
         setClosure((previous) => (previous ? { ...previous, adjustments } : previous))
         return adjustments
-    }, [closureId, uid])
+    }, [closureId, restaurantId])
 
     const resetAdjustmentForm = useCallback(() => {
         setAdjustmentForm({
@@ -102,8 +102,8 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
     }, [])
 
     const loadClosure = useCallback(async () => {
-        if (!uid) {
-            setError("Inicia sesión para ver el detalle del cierre.")
+        if (!restaurantId) {
+            setError("No tienes acceso a ningún restaurante.")
             setIsLoading(false)
             return
         }
@@ -116,7 +116,7 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
 
         try {
             setIsLoading(true)
-            const reference = doc(db, "restaurants", uid, "registros_diarios", closureId)
+            const reference = doc(db, "restaurants", restaurantId, "registros_diarios", closureId)
             const snapshot = await getDoc(reference)
 
             if (!snapshot.exists()) {
@@ -131,7 +131,7 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
                 data: () => (snapshot.data() as Record<string, unknown>) ?? {},
             })
 
-            const adjustments = await fetchClosureAdjustments(uid, snapshot.id)
+            const adjustments = await fetchClosureAdjustments(restaurantId, snapshot.id)
 
             setClosure({ ...mapped, adjustments })
             setError(null)
@@ -143,7 +143,7 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
         } finally {
             setIsLoading(false)
         }
-    }, [closureId, refresh, uid])
+    }, [closureId, refresh, restaurantId])
 
     useEffect(() => {
         void loadClosure()
@@ -333,8 +333,8 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
         async (event: FormEvent<HTMLFormElement>) => {
             event.preventDefault()
 
-            if (!uid || !closureId) {
-                setAdjustmentFormError("Necesitas una sesión activa para registrar ajustes.")
+            if (!restaurantId || !closureId) {
+                setAdjustmentFormError("No tienes acceso a ningún restaurante.")
                 return
             }
 
@@ -387,7 +387,7 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
             try {
                 setIsSubmittingAdjustment(true)
                 await createClosureAdjustment({
-                    restaurantId: uid,
+                    restaurantId,
                     closureId,
                     adjustment: {
                         staffId: staffData?.staffId,
@@ -434,14 +434,14 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
             refreshClosureAdjustments,
             resetAdjustmentForm,
             staffMembers,
-            uid,
+            restaurantId,
         ],
     )
 
     const handleDeleteClosure = useCallback(
-        async (reason?: string) => {
-            if (!uid || !closureId) {
-                setDeleteFeedback({ type: "error", message: "Necesitas una sesión activa para eliminar el cierre." })
+        async (reason?: string, userUid?: string) => {
+            if (!restaurantId || !closureId) {
+                setDeleteFeedback({ type: "error", message: "No tienes acceso a ningún restaurante." })
                 return false
             }
 
@@ -450,11 +450,11 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
 
             try {
                 await eliminarCierreDiario({
-                    restaurantId: uid,
+                    restaurantId,
                     closureId,
                     reason,
                     deletedBy: {
-                        uid,
+                        uid: userUid,
                         name: displayName ?? undefined,
                         email: email ?? undefined,
                     },
@@ -478,7 +478,7 @@ export const useClosureDetail = ({ uid, closureId, displayName, email }: UseClos
                 setIsDeletingClosure(false)
             }
         },
-        [closureId, displayName, email, refresh, uid],
+        [closureId, displayName, email, refresh, restaurantId],
     )
 
     return {

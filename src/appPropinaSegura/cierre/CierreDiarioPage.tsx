@@ -20,6 +20,7 @@ import { ArrowLeft, CalendarIcon, PlusCircle, Trash2 } from "lucide-react"
 import StaffAsistenciaCard from "./StaffAsistenciaCard"
 import { amountInputClassName } from "./constants"
 import { useAuth } from "@/context/AuthContext"
+import { usePermissions } from "@/hooks/usePermissions"
 import { useNavigate, useSearchParams } from "react-router"
 import { useCierreDiario, type ClosureSnapshotPayload } from "./hooks/useCierreDiario"
 import { useClosuresDashboard } from "@/appPropinaSegura/dashboard/hooks/useClosuresDashboard"
@@ -40,6 +41,8 @@ const calendarModifiersClassNames = {
 
 const CierreDiarioPage = () => {
     const { uid, displayName, email } = useAuth()
+    const { accessibleRestaurants } = usePermissions()
+    const restaurantId = accessibleRestaurants[0]
     const navigate = useNavigate()
     const [searchParams, setSearchParams] = useSearchParams()
     const {
@@ -80,8 +83,9 @@ const CierreDiarioPage = () => {
         markEditingOriginalDeleted,
         clearEditingState,
     } = useCierreDiario({
-        uid,
+        restaurantId,
         userInfo: {
+            uid: uid ?? undefined,
             name: displayName ?? undefined,
             email: email ?? undefined,
         },
@@ -90,7 +94,7 @@ const CierreDiarioPage = () => {
     const { register } = formMethods
 
     const { asistenciaServicio, asistenciaCocina, ventaDirecta, pocilloSecundario, generalExpenses } = fieldArrays
-    const { closures, refresh: refreshClosures } = useClosuresDashboard({ uid })
+    const { closures, refresh: refreshClosures } = useClosuresDashboard({ restaurantId })
     const [hasSavedPendingClosure, setHasSavedPendingClosure] = useState(false)
     const [lastSavedResponse, setLastSavedResponse] = useState<GuardarCierreDiarioResponse | null>(null)
     const [isNetWarningOpen, setIsNetWarningOpen] = useState(false)

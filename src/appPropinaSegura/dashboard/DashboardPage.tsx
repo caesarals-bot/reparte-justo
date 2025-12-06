@@ -7,6 +7,7 @@ import { Dashboard } from "../component/dashboard/dashboard"
 import type { DashboardMember, DashboardPaymentGroup, DashboardSettlement } from "@/data/dashboard"
 import { useClosuresDashboard } from "./hooks/useClosuresDashboard"
 import { useAuth } from "@/context/AuthContext"
+import { usePermissions } from "@/hooks/usePermissions"
 import { db } from "@/firebase/config"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -39,12 +40,15 @@ const buildMemberIdentifier = (staffId?: string, name?: string, role?: string | 
 
 const DashboardPage = () => {
     const { uid } = useAuth()
+    const { accessibleRestaurants } = usePermissions()
+    const restaurantId = accessibleRestaurants[0] // Obtener el primer restaurante accesible
+    
     const [restaurantName, setRestaurantName] = useState<string>("Tu restaurante")
     const [liquidacionMode, setLiquidacionMode] = useState<"pool" | "directa">("pool")
     const [isLoadingConfig, setIsLoadingConfig] = useState(true)
     const [configError, setConfigError] = useState<string | null>(null)
 
-    const { historicalClosures, pendingClosures, isLoading, error } = useClosuresDashboard({ uid })
+    const { historicalClosures, pendingClosures, isLoading, error } = useClosuresDashboard({ restaurantId })
 
     useEffect(() => {
         if (!uid) {
@@ -53,10 +57,16 @@ const DashboardPage = () => {
             return
         }
 
+        if (!restaurantId) {
+            setConfigError("No tienes acceso a ningún restaurante. Contacta al administrador.")
+            setIsLoadingConfig(false)
+            return
+        }
+
         const fetchConfiguration = async () => {
             try {
                 setIsLoadingConfig(true)
-                const restaurantReference = doc(db, "restaurants", uid)
+                const restaurantReference = doc(db, "restaurants", restaurantId)
                 const snapshot = await getDoc(restaurantReference)
 
                 if (!snapshot.exists()) {
@@ -86,7 +96,7 @@ const DashboardPage = () => {
         }
 
         void fetchConfiguration()
-    }, [uid])
+    }, [uid, restaurantId])
 
     const pendingData = useMemo<DashboardPaymentGroup[]>(() => {
         if (!pendingClosures.length) {
