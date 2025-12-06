@@ -3,6 +3,7 @@ import LayoutPage from "../appPropinaSegura/home/layout/LayoutPage"
 import LandingPage from "../appPropinaSegura/home/LandingPage"
 import LoginPage from "@/auth/LoginPage"
 import RegisterPage from "@/auth/RegisterPage"
+import ResetPasswordPage from "@/auth/ResetPasswordPage"
 import PendingPage from "@/pages/PendingPage"
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage"
 import { ProtectedRoute } from "@/router/ProtectedRoute"
@@ -121,6 +122,10 @@ const AppRouter = createBrowserRouter([
             {
                 path: "register",
                 element: <RegisterPage />,
+            },
+            {
+                path: "reset-password",
+                element: <ResetPasswordPage />,
             },
         ],
     },

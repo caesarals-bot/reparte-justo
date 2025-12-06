@@ -202,6 +202,17 @@ const LoginPage = () => {
                         >
                             {isSubmitting || isLoading ? "Ingresando..." : "Ingresar"}
                         </Button>
+
+                        <div className="text-center">
+                            <Link
+                                to="/auth/reset-password"
+                                className="text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+                                aria-label="Recuperar contraseña"
+                                tabIndex={0}
+                            >
+                                ¿Olvidaste tu contraseña?
+                            </Link>
+                        </div>
                     </form>
                 </CardContent>
                 <CardFooter className="flex flex-col gap-3 text-sm text-muted-foreground">
