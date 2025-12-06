@@ -2,7 +2,7 @@ import { getApps, initializeApp } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 
 declare global {
-    // eslint-disable-next-line no-var
+    // eslint-disable-next-line no-var -- Required for global type declaration
     var __reparteJustoAdminApp__: ReturnType<typeof initializeApp> | undefined
 }
 

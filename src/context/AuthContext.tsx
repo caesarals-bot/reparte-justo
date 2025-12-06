@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { onAuthStateChanged, signOut, type User } from "firebase/auth"
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore"
+import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { auth, db } from "@/firebase/config"
 import type { UserRoles } from "@/types/user"
 
@@ -49,32 +49,45 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           lastActivity: serverTimestamp(),
         })
       } else {
-        // Usuario sin documento en Firestore - crear uno automáticamente
-        console.warn(`No existe documento para usuario ${uid} - creando documento automáticamente`)
+        // Usuario sin documento en Firestore
+        // Esto debería ser raro, ya que la Cloud Function onUserCreate
+        // crea el documento automáticamente
+        console.warn(
+          `No existe documento para usuario ${uid}. ` +
+          `La Cloud Function onUserCreate debería haberlo creado. ` +
+          `Esperando a que se cree...`
+        )
         
-        const newUserDoc = {
-          uid,
-          email: auth.currentUser?.email || null,
-          displayName: auth.currentUser?.displayName || null,
-          siteRoles: [],
-          restaurantRoles: {},
-          createdAt: serverTimestamp(),
-          lastLogin: serverTimestamp(),
-          lastActivity: serverTimestamp(),
-          emailVerified: auth.currentUser?.emailVerified || false,
-          isActive: true,
-          loginAttempts: 0,
-          lockedUntil: null,
+        // Intentar esperar un poco y verificar de nuevo
+        // (la Cloud Function puede tardar unos segundos)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        const retryDoc = await getDoc(userDocRef)
+        if (retryDoc.exists()) {
+          const data = retryDoc.data()
+          setUserRoles({
+            siteRoles: data.siteRoles || [],
+            restaurantRoles: data.restaurantRoles || {},
+          })
+          
+          await updateDoc(userDocRef, {
+            lastLogin: serverTimestamp(),
+            lastActivity: serverTimestamp(),
+          })
+          
+          console.log(`Documento encontrado después de retry para usuario ${uid}`)
+        } else {
+          // Si después de esperar aún no existe, establecer roles vacíos
+          // El usuario verá la página /pending
+          console.error(
+            `No se pudo encontrar documento para usuario ${uid} después de reintentar. ` +
+            `Verificar que la Cloud Function onUserCreate esté desplegada.`
+          )
+          setUserRoles({
+            siteRoles: [],
+            restaurantRoles: {},
+          })
         }
-        
-        await setDoc(userDocRef, newUserDoc)
-        
-        setUserRoles({
-          siteRoles: [],
-          restaurantRoles: {},
-        })
-        
-        console.log(`Documento creado para usuario ${uid}`)
       }
     } catch (error) {
       console.error("Error al obtener roles del usuario:", error)

@@ -38,7 +38,7 @@ export const eliminarCierreDiarioHandler = async (payload: unknown): Promise<Eli
         .collection(`restaurants/${input.restaurantId}/registros_diarios`)
         .doc(input.closureId)
 
-    const summary = await firestoreAdmin.runTransaction(async (transaction) => {
+    await firestoreAdmin.runTransaction(async (transaction) => {
         const closureSnapshot = await fetchClosureSnapshot(transaction, closureRef)
         ensureClosureCanBeDeleted(closureSnapshot)
         const dailySummary = resolveDailySummary(closureSnapshot)

@@ -33,12 +33,15 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.guardarCierreDiario = void 0;
+exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.guardarCierreDiario = exports.onUserCreate = void 0;
 const functions = __importStar(require("firebase-functions/v1"));
 const zod_1 = require("zod");
 const guardarCierreDiario_1 = require("./handlers/guardarCierreDiario");
 const liquidarPeriodo_1 = require("./handlers/liquidarPeriodo");
 const eliminarCierreDiario_1 = require("./handlers/eliminarCierreDiario");
+// Triggers
+var onUserCreate_1 = require("./triggers/onUserCreate");
+Object.defineProperty(exports, "onUserCreate", { enumerable: true, get: function () { return onUserCreate_1.onUserCreate; } });
 const allowedOrigins = new Set([
     "http://localhost:5173",
     "https://repartejusto.netlify.app",
@@ -86,7 +89,7 @@ const safeLogError = (label, error) => {
     try {
         console.error("Error data:", JSON.stringify(error, null, 2));
     }
-    catch (stringifyError) {
+    catch {
         console.error("Error (string):", String(error));
     }
 };

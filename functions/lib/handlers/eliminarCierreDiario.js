@@ -16,7 +16,7 @@ const eliminarCierreDiarioHandler = async (payload) => {
     const closureRef = firebaseAdmin_1.firestoreAdmin
         .collection(`restaurants/${input.restaurantId}/registros_diarios`)
         .doc(input.closureId);
-    const summary = await firebaseAdmin_1.firestoreAdmin.runTransaction(async (transaction) => {
+    await firebaseAdmin_1.firestoreAdmin.runTransaction(async (transaction) => {
         const closureSnapshot = await fetchClosureSnapshot(transaction, closureRef);
         ensureClosureCanBeDeleted(closureSnapshot);
         const dailySummary = resolveDailySummary(closureSnapshot);

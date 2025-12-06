@@ -108,7 +108,7 @@ const liquidarPeriodoHandler = async (payload) => {
             throw new Error("PAYLOAD_MODE_MISMATCH");
         }
         // Fase 3: TODAS las escrituras (después de todas las lecturas)
-        for (const { docRef, referenceDate, mode, directSalesAdjustmentApplied } of closuresToUpdate) {
+        for (const { docRef, mode, directSalesAdjustmentApplied } of closuresToUpdate) {
             transaction.update(docRef, {
                 estado: "pagado",
                 liquidatedAt: now,

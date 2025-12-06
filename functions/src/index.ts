@@ -5,6 +5,9 @@ import { guardarCierreDiarioHandler } from "./handlers/guardarCierreDiario"
 import { liquidarPeriodoHandler } from "./handlers/liquidarPeriodo"
 import { eliminarCierreDiarioHandler } from "./handlers/eliminarCierreDiario"
 
+// Triggers
+export { onUserCreate } from "./triggers/onUserCreate"
+
 const allowedOrigins = new Set([
     "http://localhost:5173",
     "https://repartejusto.netlify.app",
@@ -60,7 +63,7 @@ const safeLogError = (label: string, error: unknown) => {
 
     try {
         console.error("Error data:", JSON.stringify(error, null, 2))
-    } catch (stringifyError) {
+    } catch {
         console.error("Error (string):", String(error))
     }
 }
