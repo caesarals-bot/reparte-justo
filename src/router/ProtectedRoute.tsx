@@ -71,6 +71,13 @@ export const ProtectedRoute = ({
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
+  // super_admin tiene acceso a TODO - bypass de verificaciones
+  const isSuperAdmin = userRoles?.siteRoles?.includes('super_admin')
+  
+  if (isSuperAdmin) {
+    return <>{children}</>
+  }
+
   // Si requiere rol de sitio
   if (requireSiteRole && requireSiteRole.length > 0) {
     const hasRequiredSiteRole = requireSiteRole.some((role) =>
