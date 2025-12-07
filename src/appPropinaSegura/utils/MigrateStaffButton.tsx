@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 
 export const MigrateStaffButton = () => {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const { userRoles } = useAuth();
 
   const handleMigrate = async () => {
     const uid = 'xTbuyXF7C5NqBIPQj6FBYukMBFc2';
@@ -13,6 +15,12 @@ export const MigrateStaffButton = () => {
 
     setStatus('loading');
     setMessage('Migrando datos...');
+    
+    console.log('🔍 Iniciando migración...');
+    console.log('  - UID origen:', uid);
+    console.log('  - Restaurant ID destino:', restaurantId);
+    console.log('  - Roles del usuario:', JSON.stringify(userRoles, null, 2));
+    console.log('  - ¿Tiene rol closure_editor?:', userRoles?.restaurantRoles?.[restaurantId]?.includes('closure_editor'));
 
     try {
       // 1. Leer datos del documento del UID
