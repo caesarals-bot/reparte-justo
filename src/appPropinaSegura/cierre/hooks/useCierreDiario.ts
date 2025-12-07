@@ -752,6 +752,14 @@ export const useCierreDiario = ({ restaurantId, userInfo }: UseCierreDiarioArgs)
                 const data = snapshot.data() as RestaurantConfigurationSnapshot
                 const serviceStaff = data.serviceStaff ?? []
                 const supportStaff = data.supportStaff ?? []
+                
+                console.log("🔍 DEBUG - Datos cargados de Firestore:", {
+                    serviceStaff,
+                    supportStaff,
+                    serviceStaffCount: serviceStaff.length,
+                    supportStaffCount: supportStaff.length
+                })
+                
                 const mode = data.settlementMode ?? "pool"
                 const kitchenPercentage = sanitizePercentageValue(data.poolConfig?.kitchenPercentage)
                 const transbankPercentage = sanitizePercentageValue(data.poolConfig?.transbankPercentage)
@@ -759,6 +767,13 @@ export const useCierreDiario = ({ restaurantId, userInfo }: UseCierreDiarioArgs)
                 const deductions = (data.additionalDeductions ?? []).map((item) => sanitizePercentageValue(item?.percentage))
 
                 const initialValues = buildInitialFormValues(serviceStaff, supportStaff, mode)
+                
+                console.log("🔍 DEBUG - Valores iniciales del formulario:", {
+                    asistenciaServicio: initialValues.asistenciaServicio,
+                    asistenciaCocina: initialValues.asistenciaCocina,
+                    serviceCount: initialValues.asistenciaServicio.length,
+                    supportCount: initialValues.asistenciaCocina.length
+                })
 
                 setInitialStaffConfig({ serviceStaff, supportStaff, mode })
                 reset(initialValues)
