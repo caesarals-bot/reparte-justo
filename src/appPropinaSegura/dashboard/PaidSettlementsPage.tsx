@@ -124,11 +124,13 @@ const getModeBadgeProps = (info: GroupModeInfo): ModeBadgeProps => {
 }
 
 const PaidSettlementsPage = () => {
-    const { uid } = useAuth()
+    const { uid, isLoading: isLoadingAuth } = useAuth()
     const { accessibleRestaurants } = usePermissions()
     const restaurantId = accessibleRestaurants[0]
     const navigate = useNavigate()
-    const { paidSettlementGroups, isLoading, error } = useClosuresDashboard({ restaurantId })
+    const { paidSettlementGroups, isLoading, error } = useClosuresDashboard({ 
+        restaurantId: isLoadingAuth ? null : restaurantId 
+    })
     const [selectedSettlementId, setSelectedSettlementId] = useState<string | null>(null)
 
     const selectedSettlement = useMemo(

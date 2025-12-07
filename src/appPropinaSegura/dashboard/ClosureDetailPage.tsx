@@ -79,7 +79,7 @@ const formatAdjustmentTimestamp = (timestamp?: Timestamp | null) => {
 const ClosureDetailPage = () => {
     const { closureId } = useParams<{ closureId: string }>()
     const navigate = useNavigate()
-    const { uid, displayName, email } = useAuth()
+    const { uid, displayName, email, isLoading: isLoadingAuth } = useAuth()
     const { accessibleRestaurants } = usePermissions()
     const restaurantId = accessibleRestaurants[0]
     const {
@@ -111,7 +111,12 @@ const ClosureDetailPage = () => {
         deleteFeedback,
         isDeletingClosure,
         isClosurePaid,
-    } = useClosureDetail({ restaurantId, closureId, displayName, email })
+    } = useClosureDetail({ 
+        restaurantId: isLoadingAuth ? null : restaurantId, 
+        closureId, 
+        displayName, 
+        email 
+    })
 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
     const [deleteReason, setDeleteReason] = useState("")

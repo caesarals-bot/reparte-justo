@@ -40,7 +40,7 @@ const calendarModifiersClassNames = {
 }
 
 const CierreDiarioPage = () => {
-    const { uid, displayName, email } = useAuth()
+    const { uid, displayName, email, isLoading: isLoadingAuth } = useAuth()
     const { accessibleRestaurants } = usePermissions()
     const restaurantId = accessibleRestaurants[0]
     const navigate = useNavigate()
@@ -83,7 +83,7 @@ const CierreDiarioPage = () => {
         markEditingOriginalDeleted,
         clearEditingState,
     } = useCierreDiario({
-        restaurantId,
+        restaurantId: isLoadingAuth ? null : restaurantId,
         userInfo: {
             uid: uid ?? undefined,
             name: displayName ?? undefined,
@@ -94,7 +94,9 @@ const CierreDiarioPage = () => {
     const { register } = formMethods
 
     const { asistenciaServicio, asistenciaCocina, ventaDirecta, pocilloSecundario, generalExpenses } = fieldArrays
-    const { closures, refresh: refreshClosures } = useClosuresDashboard({ restaurantId })
+    const { closures, refresh: refreshClosures } = useClosuresDashboard({ 
+        restaurantId: isLoadingAuth ? null : restaurantId 
+    })
     const [hasSavedPendingClosure, setHasSavedPendingClosure] = useState(false)
     const [lastSavedResponse, setLastSavedResponse] = useState<GuardarCierreDiarioResponse | null>(null)
     const [isNetWarningOpen, setIsNetWarningOpen] = useState(false)

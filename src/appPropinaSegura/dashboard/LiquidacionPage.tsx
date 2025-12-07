@@ -25,7 +25,7 @@ const formatCurrency = (value: number) =>
 
 const LiquidacionPage = () => {
     const navigate = useNavigate()
-    const { email: ownerEmail, displayName: ownerName } = useAuth()
+    const { email: ownerEmail, displayName: ownerName, isLoading: isLoadingAuth } = useAuth()
     const { accessibleRestaurants } = usePermissions()
     const restaurantId = accessibleRestaurants[0]
     const {
@@ -61,7 +61,11 @@ const LiquidacionPage = () => {
         unnamedDeductionSample,
         handlePrepareLiquidacion,
         handleConfirmLiquidacion,
-    } = useLiquidacionWorkflow({ restaurantId, ownerEmail, ownerName })
+    } = useLiquidacionWorkflow({ 
+        restaurantId: isLoadingAuth ? null : restaurantId, 
+        ownerEmail, 
+        ownerName 
+    })
 
     const modeLabel = selectedMode === "directa" ? "Venta directa" : selectedMode === "pool" ? "Pool" : "Sin modo"
     const prepareDisabled =

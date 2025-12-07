@@ -39,7 +39,7 @@ const buildMemberIdentifier = (staffId?: string, name?: string, role?: string | 
     staffId ?? `${name ?? ""}|${role ?? ""}`
 
 const DashboardPage = () => {
-    const { uid } = useAuth()
+    const { uid, isLoading: isLoadingAuth } = useAuth()
     const { accessibleRestaurants } = usePermissions()
     const restaurantId = accessibleRestaurants[0] // Obtener el primer restaurante accesible
     
@@ -48,7 +48,9 @@ const DashboardPage = () => {
     const [isLoadingConfig, setIsLoadingConfig] = useState(true)
     const [configError, setConfigError] = useState<string | null>(null)
 
-    const { historicalClosures, pendingClosures, isLoading, error } = useClosuresDashboard({ restaurantId })
+    const { historicalClosures, pendingClosures, isLoading, error } = useClosuresDashboard({ 
+        restaurantId: isLoadingAuth ? null : restaurantId 
+    })
 
     useEffect(() => {
         if (!uid) {
