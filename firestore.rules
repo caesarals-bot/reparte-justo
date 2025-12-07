@@ -252,6 +252,15 @@ service cloud.firestore {
     }
     
     // ═══════════════════════════════════════════════════════════════
+    // COLLECTION GROUP: registros_diarios
+    // Permite consultas de collectionGroup para admin dashboard
+    // ═══════════════════════════════════════════════════════════════
+    match /{path=**}/registros_diarios/{closureId} {
+      // LEER: Solo super_admin y admin pueden hacer queries de collectionGroup
+      allow read: if isAuthenticated() && hasAnySiteRole(['super_admin', 'admin']);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
     // BLOQUEO GENERAL: Todo lo demás está bloqueado por defecto
     // ═══════════════════════════════════════════════════════════════
     // Cualquier colección no especificada arriba está completamente bloqueada
