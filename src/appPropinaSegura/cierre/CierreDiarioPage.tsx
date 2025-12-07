@@ -30,6 +30,7 @@ import {
     type GuardarCierreDiarioResponse,
     eliminarCierreDiario,
 } from "./services/closuresApi"
+import { MigrateStaffButton } from "../utils/MigrateStaffButton"
 
 const calendarModifiersClassNames = {
     pendingClosure:
@@ -847,6 +848,8 @@ const CierreDiarioPage = () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            
+            <MigrateStaffButton />
         </>
     )
 }
