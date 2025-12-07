@@ -750,6 +750,10 @@ export const useCierreDiario = ({ restaurantId, userInfo }: UseCierreDiarioArgs)
                 }
 
                 const data = snapshot.data() as RestaurantConfigurationSnapshot
+                
+                console.log("🔍 DEBUG - Documento completo de Firestore:", data)
+                console.log("🔍 DEBUG - Claves del documento:", Object.keys(data))
+                
                 const serviceStaff = data.serviceStaff ?? []
                 const supportStaff = data.supportStaff ?? []
                 
