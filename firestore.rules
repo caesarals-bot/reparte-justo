@@ -123,30 +123,29 @@ service cloud.firestore {
     }
     
     // ═══════════════════════════════════════════════════════════════
-    // COLECCIÓN: /registros_diarios
+    // SUBCOLECCIÓN: /restaurants/{restaurantId}/registros_diarios
     // Cierres diarios de propinas
     // ⚠️ CUMPLIMIENTO LEGAL: Solo trabajadores (closure_editor) pueden escribir
     // ═══════════════════════════════════════════════════════════════
-    match /registros_diarios/{closureId} {
+    match /restaurants/{restaurantId}/registros_diarios/{closureId} {
       // LEER: Cualquier miembro del restaurante o admins
       allow read: if isAuthenticated() && (
-        hasAnyRestaurantRole(resource.data.restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
+        hasAnyRestaurantRole(restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
         hasAnySiteRole(['super_admin', 'admin'])
       );
       
       // CREAR: Solo closure_editor del restaurante
       // ⚠️ owner NO puede crear (Ley 20.549 chilena)
       allow create: if isAuthenticated() && 
-        hasRestaurantRole(request.resource.data.restaurantId, 'closure_editor') &&
-        request.resource.data.restaurantId is string;
+        hasRestaurantRole(restaurantId, 'closure_editor');
       
       // ACTUALIZAR: Solo closure_editor del restaurante
       allow update: if isAuthenticated() && 
-        hasRestaurantRole(resource.data.restaurantId, 'closure_editor');
+        hasRestaurantRole(restaurantId, 'closure_editor');
       
       // ELIMINAR: Solo closure_editor del restaurante o super_admin
       allow delete: if isAuthenticated() && (
-        hasRestaurantRole(resource.data.restaurantId, 'closure_editor') ||
+        hasRestaurantRole(restaurantId, 'closure_editor') ||
         isSuperAdmin()
       );
     }
