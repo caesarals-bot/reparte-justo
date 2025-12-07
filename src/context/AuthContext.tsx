@@ -38,6 +38,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (userDocSnap.exists()) {
         const data = userDocSnap.data()
+        console.log('🔍 DEBUG AuthContext - Documento de usuario encontrado:', {
+          uid,
+          siteRoles: data.siteRoles,
+          restaurantRoles: data.restaurantRoles,
+        })
         setUserRoles({
           siteRoles: data.siteRoles || [],
           restaurantRoles: data.restaurantRoles || {},
