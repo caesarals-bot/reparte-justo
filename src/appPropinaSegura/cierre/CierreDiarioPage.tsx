@@ -43,6 +43,11 @@ const CierreDiarioPage = () => {
     const { uid, displayName, email, isLoading: isLoadingAuth } = useAuth()
     const { accessibleRestaurants } = usePermissions()
     const restaurantId = accessibleRestaurants[0]
+    
+    console.log("🔍 DEBUG CierreDiarioPage - uid:", uid)
+    console.log("🔍 DEBUG CierreDiarioPage - accessibleRestaurants:", accessibleRestaurants)
+    console.log("🔍 DEBUG CierreDiarioPage - restaurantId seleccionado:", restaurantId)
+    
     const navigate = useNavigate()
     const [searchParams, setSearchParams] = useSearchParams()
     const {

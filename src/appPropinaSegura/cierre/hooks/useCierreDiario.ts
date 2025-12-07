@@ -738,7 +738,9 @@ export const useCierreDiario = ({ restaurantId, userInfo }: UseCierreDiarioArgs)
         const handleLoadConfiguration = async () => {
             try {
                 setIsLoadingConfig(true)
+                console.log("🔍 DEBUG - restaurantId usado:", restaurantId)
                 const restaurantReference = doc(db, "restaurants", restaurantId)
+                console.log("🔍 DEBUG - Ruta completa:", `restaurants/${restaurantId}`)
                 const snapshot = await getDoc(restaurantReference)
 
                 if (!snapshot.exists()) {
