@@ -21,7 +21,7 @@ type RegisterFormValues = {
     password: string
     confirmPassword: string
     restaurantName: string
-    accountType: "closure_editor" | "liquidator" | ""
+    accountType: "closure_editor" | "owner" | ""
 }
 
 type RegisterFieldErrors = Partial<Record<keyof RegisterFormValues, string>>
@@ -33,7 +33,7 @@ const RegisterPage = () => {
         password: "",
         confirmPassword: "",
         restaurantName: "",
-        accountType: "",
+        accountType: "closure_editor",
     })
     const [fieldErrors, setFieldErrors] = useState<RegisterFieldErrors>({})
     const [formMessage, setFormMessage] = useState<string | null>(null)
@@ -143,7 +143,8 @@ const RegisterPage = () => {
             }
 
             // Crear restaurante automáticamente
-            const restaurantId = `rest_${credentials.user.uid}_${Date.now()}`
+            // Usar el UID del usuario como restaurantId para simplificar
+            const restaurantId = credentials.user.uid
             const restaurantDoc = doc(db, "restaurants", restaurantId)
             await setDoc(restaurantDoc, {
                 id: restaurantId,
@@ -371,7 +372,7 @@ const RegisterPage = () => {
                                 className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                                 value={formValues.accountType}
                                 onChange={(e) => {
-                                    setFormValues(prev => ({ ...prev, accountType: e.target.value as "closure_editor" | "liquidator" | "" }))
+                                    setFormValues(prev => ({ ...prev, accountType: e.target.value as "closure_editor" | "owner" | "" }))
                                     if (fieldErrors.accountType) {
                                         const nextErrors = { ...fieldErrors }
                                         delete nextErrors.accountType
@@ -382,9 +383,8 @@ const RegisterPage = () => {
                                 aria-describedby={accountTypeErrorId}
                                 tabIndex={0}
                             >
-                                <option value="">Selecciona un tipo</option>
-                                <option value="closure_editor">Gestor Principal (Crear y editar cierres, gestionar staff)</option>
-                                <option value="liquidator">Liquidador (Solo crear liquidaciones)</option>
+                                <option value="closure_editor">Gestor de Cierres (Crear y editar cierres, liquidar, gestionar staff)</option>
+                                <option value="owner">Propietario (Solo observador - Ley 20.549)</option>
                             </select>
                             {fieldErrors.accountType && (
                                 <p id={accountTypeErrorId} role="alert" className="text-sm text-destructive">

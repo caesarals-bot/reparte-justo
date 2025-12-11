@@ -19,7 +19,7 @@ export function HistoricalSettlement({ settlement }: HistoricalSettlementProps) 
       return
     }
 
-    console.log("Ver detalles de liquidación:", settlement.id)
+    // TODO: Implementar vista de detalles de liquidación
   }
 
   const statusLabel = settlement.status?.toUpperCase()

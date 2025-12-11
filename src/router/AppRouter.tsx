@@ -14,6 +14,7 @@ import ClosureDetailPage from "@/appPropinaSegura/dashboard/ClosureDetailPage"
 import LiquidacionPage from "@/appPropinaSegura/dashboard/LiquidacionPage"
 import PaidSettlementsPage from "@/appPropinaSegura/dashboard/PaidSettlementsPage"
 import StaffManagementPage from "@/appPropinaSegura/staff/StaffManagementPage"
+import RestaurantSettingsPage from "@/appPropinaSegura/settings/RestaurantSettingsPage"
 import AdminLayout from "@/appPropinaSegura/admin/components/AdminLayout"
 import AdminOverviewPage from "@/appPropinaSegura/admin/pages/AdminOverviewPage"
 import AdminRestaurantsPage from "@/appPropinaSegura/admin/pages/AdminRestaurantsPage"
@@ -81,6 +82,14 @@ const AppRouter = createBrowserRouter([
                 element: (
                     <ProtectedRoute requireRestaurantRole={["closure_editor"]}>
                         <StaffManagementPage />
+                    </ProtectedRoute>
+                ),
+            },
+            {
+                path: "settings",
+                element: (
+                    <ProtectedRoute requireRestaurantRole={["closure_editor"]}>
+                        <RestaurantSettingsPage />
                     </ProtectedRoute>
                 ),
             },
