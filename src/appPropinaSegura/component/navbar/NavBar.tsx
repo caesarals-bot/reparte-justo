@@ -14,6 +14,7 @@ const NAV_LINKS = [
     { label: "Ajustes", path: "/setup" },
     { label: "Cierres", path: "/cierre" },
     { label: "Dashboard", path: "/dashboard" },
+    { label: "Configuración", path: "/settings" },
     { label: "Admin", path: "/admin" },
 ]
 

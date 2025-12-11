@@ -49,7 +49,7 @@ const baseInputClass =
 const MAX_STAFF_EDITORS = 1
 
 const InitialSetupPage = () => {
-    const { displayName, email, uid } = useAuth()
+    const { displayName, email, uid, refreshUserRoles } = useAuth()
     const navigate = useNavigate()
     const [settlementMode, setSettlementMode] = useState<SettlementMode>("pool")
     const [poolConfig, setPoolConfig] = useState<PoolConfig>(defaultPoolConfig)
@@ -365,6 +365,7 @@ const InitialSetupPage = () => {
 
             if (!hasExistingConfig) {
                 payload.createdAt = timestamp
+                payload.ownerId = uid // Requerido por las reglas de Firestore
             }
 
             if (settlementMode === "pool") {
@@ -381,6 +382,19 @@ const InitialSetupPage = () => {
             }
 
             await setDoc(restaurantReference, payload, { merge: true })
+
+            // Si es un nuevo restaurante, actualizar los roles del usuario
+            if (!hasExistingConfig) {
+                const userReference = doc(db, "users", uid)
+                await setDoc(userReference, {
+                    restaurantRoles: { [uid]: ["closure_editor"] },
+                    primaryRestaurant: uid,
+                    updatedAt: timestamp,
+                }, { merge: true })
+                
+                // Refrescar roles en el contexto para que la app reconozca los nuevos permisos
+                await refreshUserRoles()
+            }
 
             setHasExistingConfig(true)
             navigate("/cierre")

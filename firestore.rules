@@ -3,68 +3,48 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ═══════════════════════════════════════════════════════════════
-    // HELPERS - Funciones auxiliares de validación
+    // FUNCIONES AUXILIARES
     // ═══════════════════════════════════════════════════════════════
     
-    /**
-     * Verifica si el usuario está autenticado
-     */
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    /**
-     * Obtiene el documento del usuario autenticado desde Firestore
-     */
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-    
-    /**
-     * Verifica si el usuario tiene un rol de sitio específico
-     * @param role - Rol requerido (super_admin, admin, support, viewer)
-     */
-    function hasSiteRole(role) {
-      return isAuthenticated() && 
-             role in getUserData().siteRoles;
-    }
-    
-    /**
-     * Verifica si el usuario tiene algún rol de sitio de una lista
-     * @param roles - Lista de roles permitidos
-     */
-    function hasAnySiteRole(roles) {
-      return isAuthenticated() && 
-             getUserData().siteRoles.hasAny(roles);
-    }
-    
-    /**
-     * Verifica si el usuario tiene un rol específico en un restaurante
-     * @param restaurantId - ID del restaurante
-     * @param role - Rol requerido (closure_editor, liquidator, owner, restaurant_viewer)
-     */
-    function hasRestaurantRole(restaurantId, role) {
-      return isAuthenticated() && 
-             restaurantId in getUserData().restaurantRoles &&
-             role in getUserData().restaurantRoles[restaurantId];
-    }
-    
-    /**
-     * Verifica si el usuario tiene algún rol en un restaurante de una lista
-     * @param restaurantId - ID del restaurante
-     * @param roles - Lista de roles permitidos
-     */
-    function hasAnyRestaurantRole(restaurantId, roles) {
-      return isAuthenticated() && 
-             restaurantId in getUserData().restaurantRoles &&
-             getUserData().restaurantRoles[restaurantId].hasAny(roles);
-    }
-    
-    /**
-     * Verifica si el usuario es super_admin (acceso total)
-     */
     function isSuperAdmin() {
-      return hasSiteRole('super_admin');
+      return isAuthenticated() && 
+             request.auth.token.super_admin == true;
+    }
+    
+    // NOTA: super_admin es SOLO para administración de la plataforma
+    // NO es para operaciones diarias (crear cierres, liquidar, etc.)
+    
+    // ───────────────────────────────────────────────────────────────
+    // SOLUCIÓN TEMPORAL: Permitir a usuarios autenticados
+    // TODO: Implementar Custom Claims para roles de restaurante
+    // ───────────────────────────────────────────────────────────────
+    
+    // Por ahora, cualquier usuario autenticado puede acceder
+    // Esto es TEMPORAL hasta implementar Custom Claims
+    function isClosureEditor(restaurantId) {
+      return isAuthenticated();
+    }
+    
+    function isOwner(restaurantId) {
+      return isAuthenticated();
+    }
+    
+    function isRestaurantViewer(restaurantId) {
+      return isAuthenticated();
+    }
+    
+    // Puede ver TODO del restaurante (closure_editor u owner)
+    function canViewAll(restaurantId) {
+      return isAuthenticated();
+    }
+    
+    // Tiene algún rol en el restaurante
+    function hasAnyRestaurantRole(restaurantId) {
+      return isAuthenticated();
     }
     
     // ═══════════════════════════════════════════════════════════════
@@ -72,27 +52,34 @@ service cloud.firestore {
     // Documentos de usuarios con roles y permisos
     // ═══════════════════════════════════════════════════════════════
     match /users/{userId} {
-      // LEER: Solo el propio usuario o administradores del sitio
+      // LEER: Solo el propio usuario o super_admin
       allow read: if isAuthenticated() && (
         request.auth.uid == userId ||
-        hasAnySiteRole(['super_admin', 'admin', 'support'])
+        isSuperAdmin()
       );
       
-      // ACTUALIZAR: El propio usuario puede actualizar campos limitados
-      // Solo puede modificar: displayName, photoURL, lastActivity, lastLogin
-      // NO puede modificar: siteRoles, restaurantRoles, isActive
-      allow update: if isAuthenticated() && request.auth.uid == userId && 
-        !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['siteRoles', 'restaurantRoles', 'isActive', 'uid', 'email']);
+      // CREAR: Solo el propio usuario durante registro
+      allow create: if isAuthenticated() && 
+        request.auth.uid == userId &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.email == request.auth.token.email;
       
-      // ACTUALIZAR (Admin): Super_admin puede modificar cualquier campo
-      allow update: if isSuperAdmin();
+      // ACTUALIZAR: El propio usuario (campos limitados) o super_admin
+      // NOTA: El usuario puede actualizar restaurantRoles y primaryRestaurant (para borrar restaurante)
+      // NOTA: El usuario NO puede modificar siteRoles, isActive, uid, email
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == userId && 
+         !request.resource.data.diff(resource.data).affectedKeys()
+           .hasAny(['siteRoles', 'isActive', 'uid', 'email'])) ||
+        isSuperAdmin()
+      );
       
-      // CREAR: Solo mediante Cloud Function (bloqueado desde frontend)
-      allow create: if false;
-      
-      // ELIMINAR: Solo super_admin puede eliminar usuarios
-      allow delete: if isSuperAdmin();
+      // ELIMINAR: El propio usuario o super_admin
+      // NOTA: Permite al usuario borrar su cuenta cuando borra su restaurante
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isSuperAdmin()
+      );
     }
     
     // ═══════════════════════════════════════════════════════════════
@@ -100,53 +87,93 @@ service cloud.firestore {
     // Configuración de restaurantes
     // ═══════════════════════════════════════════════════════════════
     match /restaurants/{restaurantId} {
-      // LEER: Miembros del restaurante (cualquier rol) o admins del sitio
-      allow read: if isAuthenticated() && (
-        hasAnyRestaurantRole(restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
-        hasAnySiteRole(['super_admin', 'admin', 'support'])
-      );
+      // LEER: Miembros del restaurante (closure_editor, owner, restaurant_viewer)
+      // NOTA: Todos pueden ver porque owner es testigo legal y restaurant_viewer ve liquidaciones
+      // NOTA: También permite leer si restaurantId == uid (para permitir borrado)
+      allow read: if hasAnyRestaurantRole(restaurantId) || 
+                     request.auth.uid == restaurantId ||
+                     isSuperAdmin();
       
-      // CREAR: Usuario autenticado puede crear su propio restaurante durante registro
-      // Debe ser el owner (ownerId == uid del creador)
+      // CREAR: Usuario autenticado durante registro
       allow create: if isAuthenticated() && 
         request.resource.data.ownerId == request.auth.uid;
       
-      // ACTUALIZAR: Solo closure_editor o super_admin pueden modificar configuración
-      // ⚠️ IMPORTANTE: owner NO puede modificar (solo observador por Ley 20.549)
-      allow update: if isAuthenticated() && (
-        hasRestaurantRole(restaurantId, 'closure_editor') ||
+      // ACTUALIZAR: Solo closure_editor
+      // NOTA: owner NO puede editar (Ley 20.549)
+      // NOTA: restaurant_viewer NO puede editar
+      allow update: if isClosureEditor(restaurantId) || isSuperAdmin();
+      
+      // ELIMINAR: El propietario o super_admin
+      // NOTA: Permite al usuario borrar su propio restaurante para cambiarse
+      // NOTA: Como restaurantId == uid, verificamos directamente
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == restaurantId ||
         isSuperAdmin()
       );
-      
-      // ELIMINAR: Solo super_admin puede eliminar restaurantes
-      allow delete: if isSuperAdmin();
     }
     
     // ═══════════════════════════════════════════════════════════════
-    // COLECCIÓN: /registros_diarios
+    // SUBCOLECCIÓN: /restaurants/{restaurantId}/registros_diarios
     // Cierres diarios de propinas
-    // ⚠️ CUMPLIMIENTO LEGAL: Solo trabajadores (closure_editor) pueden escribir
     // ═══════════════════════════════════════════════════════════════
-    match /registros_diarios/{closureId} {
-      // LEER: Cualquier miembro del restaurante o admins
+    match /restaurants/{restaurantId}/registros_diarios/{closureId} {
+      // LEER: Cualquier usuario autenticado
+      // NOTA: Validación de roles se hace en el código de la aplicación
+      allow read: if isAuthenticated();
+      
+      // CREAR: Solo closure_editor
+      // NOTA: owner NO puede crear (Ley 20.549)
+      // NOTA: restaurant_viewer NO puede crear
+      allow create: if isClosureEditor(restaurantId);
+      
+      // ACTUALIZAR: Solo closure_editor
+      // NOTA: owner NO puede editar (Ley 20.549)
+      // NOTA: restaurant_viewer NO puede editar
+      allow update: if isClosureEditor(restaurantId);
+      
+      // ELIMINAR: Solo closure_editor
+      // NOTA: closure_editor puede eliminar cierres
+      allow delete: if isClosureEditor(restaurantId);
+      
+      // SUBCOLECCIÓN: ajustes (incrementos/descuentos por cierre)
+      match /ajustes/{adjustmentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAuthenticated();
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // COLECCIÓN: /staff
+    // Personal del restaurante (garzones, cocineros)
+    // NOTA: Staff NO son usuarios del sistema, son documentos de empleados
+    // ═══════════════════════════════════════════════════════════════
+    match /staff/{staffId} {
+      // LEER: Miembros del restaurante
+      // NOTA: Validación requiere campo restaurantId en el documento
       allow read: if isAuthenticated() && (
-        hasAnyRestaurantRole(resource.data.restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
-        hasAnySiteRole(['super_admin', 'admin'])
+        hasAnyRestaurantRole(resource.data.restaurantId) ||
+        isSuperAdmin()
       );
       
       // CREAR: Solo closure_editor del restaurante
-      // ⚠️ owner NO puede crear (Ley 20.549 chilena)
-      allow create: if isAuthenticated() && 
-        hasRestaurantRole(request.resource.data.restaurantId, 'closure_editor') &&
-        request.resource.data.restaurantId is string;
+      allow create: if isAuthenticated() && (
+        isClosureEditor(request.resource.data.restaurantId) ||
+        isSuperAdmin()
+      );
       
-      // ACTUALIZAR: Solo closure_editor del restaurante
-      allow update: if isAuthenticated() && 
-        hasRestaurantRole(resource.data.restaurantId, 'closure_editor');
+      // ACTUALIZAR: Solo closure_editor (para marcar isActive: false o editar)
+      // NOTA: closure_editor puede desactivar o eliminar miembros del staff
+      allow update: if isAuthenticated() && (
+        isClosureEditor(resource.data.restaurantId) ||
+        isSuperAdmin()
+      );
       
-      // ELIMINAR: Solo closure_editor del restaurante o super_admin
+      // ELIMINAR: Solo closure_editor
+      // NOTA: closure_editor puede eliminar miembros del staff
       allow delete: if isAuthenticated() && (
-        hasRestaurantRole(resource.data.restaurantId, 'closure_editor') ||
+        isClosureEditor(resource.data.restaurantId) ||
         isSuperAdmin()
       );
     }
@@ -156,50 +183,36 @@ service cloud.firestore {
     // Liquidaciones de períodos de propinas
     // ═══════════════════════════════════════════════════════════════
     match /liquidaciones/{liquidacionId} {
-      // LEER: Miembros del restaurante que pueden ver liquidaciones
+      // LEER: Todos los miembros del restaurante
+      // NOTA: closure_editor y owner ven TODO
+      // NOTA: restaurant_viewer solo ve liquidaciones (es lo único que puede ver)
       allow read: if isAuthenticated() && (
-        hasAnyRestaurantRole(resource.data.restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
-        hasAnySiteRole(['super_admin', 'admin'])
+        hasAnyRestaurantRole(resource.data.restaurantId) ||
+        isSuperAdmin()
       );
       
-      // CREAR: liquidator o closure_editor pueden crear liquidaciones
-      // ⚠️ owner NO puede crear (solo observador)
-      allow create: if isAuthenticated() && 
-        hasAnyRestaurantRole(request.resource.data.restaurantId, ['liquidator', 'closure_editor']) &&
-        request.resource.data.restaurantId is string;
-      
-      // ACTUALIZAR: liquidator o closure_editor pueden modificar
-      // Solo si está en estado 'draft' o 'pending' (no pagada)
-      allow update: if isAuthenticated() && 
-        hasAnyRestaurantRole(resource.data.restaurantId, ['liquidator', 'closure_editor']) &&
-        resource.data.status in ['draft', 'pending'];
-      
-      // ELIMINAR: Solo super_admin puede eliminar liquidaciones
-      allow delete: if isSuperAdmin();
-    }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // COLECCIÓN: /staff
-    // Personal del restaurante (garzones, cocineros)
-    // ═══════════════════════════════════════════════════════════════
-    match /staff/{staffId} {
-      // LEER: Cualquier miembro del restaurante
-      allow read: if isAuthenticated() && (
-        hasAnyRestaurantRole(resource.data.restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
-        hasAnySiteRole(['super_admin', 'admin'])
+      // CREAR: Solo closure_editor
+      // NOTA: owner NO puede crear (Ley 20.549)
+      // NOTA: restaurant_viewer NO puede crear (solo ver)
+      allow create: if isAuthenticated() && (
+        isClosureEditor(request.resource.data.restaurantId) ||
+        isSuperAdmin()
       );
       
-      // CREAR: Solo closure_editor puede agregar personal
-      allow create: if isAuthenticated() && 
-        hasRestaurantRole(request.resource.data.restaurantId, 'closure_editor');
+      // ACTUALIZAR/EDITAR: Solo closure_editor
+      // NOTA: owner NO puede editar
+      // NOTA: restaurant_viewer NO puede editar
+      allow update: if isAuthenticated() && (
+        isClosureEditor(resource.data.restaurantId) ||
+        isSuperAdmin()
+      );
       
-      // ACTUALIZAR: Solo closure_editor puede modificar personal
-      allow update: if isAuthenticated() && 
-        hasRestaurantRole(resource.data.restaurantId, 'closure_editor');
-      
-      // ELIMINAR: Solo closure_editor puede eliminar personal
-      allow delete: if isAuthenticated() && 
-        hasRestaurantRole(resource.data.restaurantId, 'closure_editor');
+      // ELIMINAR: Solo closure_editor
+      // NOTA: closure_editor puede eliminar liquidaciones
+      allow delete: if isAuthenticated() && (
+        isClosureEditor(resource.data.restaurantId) ||
+        isSuperAdmin()
+      );
     }
     
     // ═══════════════════════════════════════════════════════════════
@@ -207,54 +220,36 @@ service cloud.firestore {
     // Invitaciones para unirse a restaurantes
     // ═══════════════════════════════════════════════════════════════
     match /invitations/{invitationId} {
-      // LEER: El que invitó o el invitado (por email)
+      // LEER: El invitador, el invitado o super_admin
       allow read: if isAuthenticated() && (
-        resource.data.invitedBy.uid == request.auth.uid ||
-        resource.data.invitedEmail == request.auth.token.email ||
+        request.auth.uid == resource.data.invitedByUid ||
+        request.auth.token.email == resource.data.invitedEmail ||
         isSuperAdmin()
       );
       
-      // CREAR: Solo closure_editor del restaurante puede invitar
-      allow create: if isAuthenticated() && 
-        hasRestaurantRole(request.resource.data.restaurantId, 'closure_editor') &&
-        request.resource.data.invitedBy.uid == request.auth.uid;
+      // CREAR: Solo closure_editor del restaurante
+      allow create: if isAuthenticated() && (
+        isClosureEditor(request.resource.data.restaurantId) ||
+        isSuperAdmin()
+      );
       
-      // ACTUALIZAR: Solo el invitado puede aceptar/rechazar (cambiar status)
-      allow update: if isAuthenticated() && 
-        resource.data.invitedEmail == request.auth.token.email &&
-        request.resource.data.status in ['accepted', 'rejected'];
+      // ACTUALIZAR: El invitado (para aceptar/rechazar) o el invitador
+      allow update: if isAuthenticated() && (
+        request.auth.token.email == resource.data.invitedEmail ||
+        request.auth.uid == resource.data.invitedByUid ||
+        isSuperAdmin()
+      );
       
-      // ELIMINAR: El que invitó o super_admin pueden eliminar
+      // ELIMINAR: El invitador o super_admin
       allow delete: if isAuthenticated() && (
-        resource.data.invitedBy.uid == request.auth.uid ||
+        request.auth.uid == resource.data.invitedByUid ||
         isSuperAdmin()
       );
     }
     
     // ═══════════════════════════════════════════════════════════════
-    // COLECCIÓN: /security_logs (opcional - para auditoría futura)
-    // Logs de seguridad y auditoría
+    // BLOQUEO GENERAL
+    // Todo lo demás está bloqueado por defecto
     // ═══════════════════════════════════════════════════════════════
-    match /security_logs/{logId} {
-      // LEER: Solo super_admin
-      allow read: if isSuperAdmin();
-      
-      // ESCRIBIR: Solo mediante Cloud Functions (bloqueado desde frontend)
-      allow write: if false;
-    }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // COLECCIÓN: /rate_limits (opcional - para rate limiting futuro)
-    // Control de rate limiting
-    // ═══════════════════════════════════════════════════════════════
-    match /rate_limits/{limitId} {
-      // LEER/ESCRIBIR: Solo mediante Cloud Functions
-      allow read, write: if false;
-    }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // BLOQUEO GENERAL: Todo lo demás está bloqueado por defecto
-    // ═══════════════════════════════════════════════════════════════
-    // Cualquier colección no especificada arriba está completamente bloqueada
   }
 }

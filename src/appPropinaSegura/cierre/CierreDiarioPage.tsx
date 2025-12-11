@@ -810,6 +810,18 @@ const CierreDiarioPage = () => {
             </main>
             </FormProvider>
 
+            {/* Botón flotante de Guardar - siempre visible */}
+            <div className="fixed bottom-6 right-6 z-50">
+                <Button
+                    type="button"
+                    onClick={handleSaveClosure}
+                    disabled={isSavingClosure || isHydratingFromClosure}
+                    className="h-14 gap-2 rounded-full bg-primary px-6 text-primary-foreground shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition hover:bg-primary/90 hover:shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+                >
+                    {isHydratingFromClosure ? "Cargando..." : isSavingClosure ? "Guardando..." : "Guardar"}
+                </Button>
+            </div>
+
             <AlertDialog
                 open={isNetWarningOpen}
                 onOpenChange={(open) => (!open ? handleCancelNetWarning() : setIsNetWarningOpen(true))}
