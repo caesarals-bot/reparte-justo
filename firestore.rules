@@ -101,9 +101,10 @@ service cloud.firestore {
     // ═══════════════════════════════════════════════════════════════
     match /restaurants/{restaurantId} {
       // LEER: Miembros del restaurante (cualquier rol) o admins del sitio
+      // Nota: Los admins pueden leer TODOS los restaurantes para el dashboard admin
       allow read: if isAuthenticated() && (
-        hasAnyRestaurantRole(restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
-        hasAnySiteRole(['super_admin', 'admin', 'support'])
+        hasAnySiteRole(['super_admin', 'admin', 'support']) ||
+        hasAnyRestaurantRole(restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer'])
       );
       
       // CREAR: Usuario autenticado puede crear su propio restaurante durante registro
