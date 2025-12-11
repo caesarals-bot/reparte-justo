@@ -19,6 +19,7 @@ import AdminLayout from "@/appPropinaSegura/admin/components/AdminLayout"
 import AdminOverviewPage from "@/appPropinaSegura/admin/pages/AdminOverviewPage"
 import AdminRestaurantsPage from "@/appPropinaSegura/admin/pages/AdminRestaurantsPage"
 import AdminUsersPage from "@/appPropinaSegura/admin/pages/AdminUsersPage"
+import ContactPage from "@/appPropinaSegura/contact/ContactPage"
 
 const AppRouter = createBrowserRouter([
     {
@@ -36,6 +37,10 @@ const AppRouter = createBrowserRouter([
                         <InitialSetupPage />
                     </ProtectedRoute>
                 ),
+            },
+            {
+                path: "contact",
+                element: <ContactPage />,
             },
             {
                 path: "cierre",

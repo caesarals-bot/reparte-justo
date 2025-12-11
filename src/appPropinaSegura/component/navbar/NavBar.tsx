@@ -11,6 +11,7 @@ import { db } from "@/firebase/config"
 
 const NAV_LINKS = [
     { label: "Inicio", path: "/" },
+    { label: "Contacto", path: "/contact" },
     { label: "Ajustes", path: "/setup" },
     { label: "Cierres", path: "/cierre" },
     { label: "Dashboard", path: "/dashboard" },
