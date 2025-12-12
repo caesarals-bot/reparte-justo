@@ -149,6 +149,23 @@ service cloud.firestore {
         hasRestaurantRole(restaurantId, 'closure_editor') ||
         isSuperAdmin()
       );
+
+      // SUBCOLECCIÓN: /restaurants/{restaurantId}/registros_diarios/{closureId}/ajustes
+      // Ajustes manuales (descuentos/bonos) aplicados a un cierre.
+      // Necesario para el dashboard: el hook carga ajustes por cierre.
+      match /ajustes/{adjustmentId} {
+        // LEER: Cualquier miembro del restaurante o admins
+        allow read: if isAuthenticated() && (
+          hasAnyRestaurantRole(restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer']) ||
+          hasAnySiteRole(['super_admin', 'admin'])
+        );
+
+        // ESCRIBIR: Solo closure_editor (y super_admin para soporte)
+        allow create, update, delete: if isAuthenticated() && (
+          hasRestaurantRole(restaurantId, 'closure_editor') ||
+          isSuperAdmin()
+        );
+      }
     }
     
     // ═══════════════════════════════════════════════════════════════

@@ -82,12 +82,6 @@ export const guardarCierreDiario = async (params: {
     const url = `${baseUrl}/guardarCierreDiario`
     const requestBody = { restaurantId, ...payload }
 
-    if (import.meta.env.DEV) {
-        console.groupCollapsed("[closuresApi] guardarCierreDiario request")
-        console.log(JSON.parse(JSON.stringify(requestBody)))
-        console.groupEnd()
-    }
-
     const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -105,12 +99,6 @@ export const guardarCierreDiario = async (params: {
     }
 
     const body = await parseBody()
-
-    if (import.meta.env.DEV) {
-        console.groupCollapsed("[closuresApi] guardarCierreDiario response")
-        console.log(body)
-        console.groupEnd()
-    }
 
     if (!response.ok) {
         const error = (body as GuardarCierreDiarioError) ?? {

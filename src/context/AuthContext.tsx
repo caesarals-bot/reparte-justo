@@ -38,11 +38,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (userDocSnap.exists()) {
         const data = userDocSnap.data()
-        console.log('🔍 DEBUG AuthContext - Documento de usuario encontrado:', {
-          uid,
-          siteRoles: data.siteRoles,
-          restaurantRoles: data.restaurantRoles,
-        })
         setUserRoles({
           siteRoles: data.siteRoles || [],
           restaurantRoles: data.restaurantRoles || {},
@@ -79,8 +74,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             lastLogin: serverTimestamp(),
             lastActivity: serverTimestamp(),
           })
-          
-          console.log(`Documento encontrado después de retry para usuario ${uid}`)
         } else {
           // Si después de esperar aún no existe, establecer roles vacíos
           // El usuario verá la página /pending

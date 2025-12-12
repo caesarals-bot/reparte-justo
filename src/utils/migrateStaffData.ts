@@ -11,10 +11,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 
 export async function migrateStaffData(uid: string, restaurantId: string) {
-  console.log('🔄 Iniciando migración de datos de staff...');
-  console.log(`   Origen: restaurants/${uid}`);
-  console.log(`   Destino: restaurants/${restaurantId}`);
-
   try {
     // 1. Leer datos del documento del UID
     const uidDocRef = doc(db, 'restaurants', uid);
@@ -26,10 +22,6 @@ export async function migrateStaffData(uid: string, restaurantId: string) {
     }
 
     const uidData = uidSnapshot.data();
-    console.log('\n✅ Datos encontrados en documento UID:');
-    console.log('   - serviceStaff:', uidData.serviceStaff?.length || 0, 'miembros');
-    console.log('   - supportStaff:', uidData.supportStaff?.length || 0, 'miembros');
-    console.log('   - settlementMode:', uidData.settlementMode);
 
     // 2. Leer documento del restaurante
     const restaurantDocRef = doc(db, 'restaurants', restaurantId);
@@ -55,9 +47,6 @@ export async function migrateStaffData(uid: string, restaurantId: string) {
     };
 
     await setDoc(restaurantDocRef, dataToMigrate, { merge: true });
-
-    console.log('\n✅ Migración completada exitosamente!');
-    console.log('   Los datos del staff ahora están en el documento del restaurante.');
     
     return { 
       success: true, 
