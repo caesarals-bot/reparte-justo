@@ -13,6 +13,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { AlertCircle, CalendarRange, Loader2, PiggyBank } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/context/AuthContext"
 import { usePermissions } from "@/hooks/usePermissions"
 import { useLiquidacionWorkflow } from "./hooks/useLiquidacionWorkflow"
@@ -437,8 +438,17 @@ const LiquidacionPage = () => {
                                 Cancelar
                             </Button>
                             <Button type="button" onClick={handleConfirmLiquidacion} disabled={isSubmittingLiquidacion} className="gap-2">
-                                {isSubmittingLiquidacion ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                Confirmar envío (placeholder)
+                                {isSubmittingLiquidacion ? (
+                                    <>
+                                        <Spinner className="size-4" />
+                                        Procesando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Loader2 className="h-4 w-4 opacity-0" />
+                                        Confirmar envío (placeholder)
+                                    </>
+                                )}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

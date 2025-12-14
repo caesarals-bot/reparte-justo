@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Spinner } from "@/components/ui/spinner"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -30,7 +31,6 @@ import {
     type GuardarCierreDiarioResponse,
     eliminarCierreDiario,
 } from "./services/closuresApi"
-import { MigrateStaffButton } from "../utils/MigrateStaffButton"
 
 const calendarModifiersClassNames = {
     pendingClosure:
@@ -492,7 +492,14 @@ const CierreDiarioPage = () => {
                                 aria-disabled={isSavingClosure || isHydratingFromClosure}
                                 className="w-full gap-2 rounded-full border border-white/20 bg-white/10 px-5 text-white transition hover:bg-white/15 sm:w-auto"
                             >
-                                {isHydratingFromClosure ? "Cargando cierre..." : isSavingClosure ? "Guardando..." : "Guardar"}
+                                {isHydratingFromClosure || isSavingClosure ? (
+                                    <span className="inline-flex items-center justify-center gap-2">
+                                        <Spinner className="size-5" />
+                                        {isHydratingFromClosure ? "Cargando cierre..." : "Guardando..."}
+                                    </span>
+                                ) : (
+                                    "Guardar"
+                                )}
                             </Button>
                             {showPayButton ? (
                                 <Button
@@ -826,7 +833,14 @@ const CierreDiarioPage = () => {
                     disabled={isSavingClosure || isHydratingFromClosure}
                     className="h-14 gap-2 rounded-full bg-primary px-6 text-primary-foreground shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition hover:bg-primary/90 hover:shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
                 >
-                    {isHydratingFromClosure ? "Cargando..." : isSavingClosure ? "Guardando..." : "Guardar"}
+                    {isHydratingFromClosure || isSavingClosure ? (
+                        <span className="inline-flex items-center justify-center gap-2">
+                            <Spinner className="size-5" />
+                            {isHydratingFromClosure ? "Cargando..." : "Guardando..."}
+                        </span>
+                    ) : (
+                        "Guardar"
+                    )}
                 </Button>
             </div>
 
@@ -851,13 +865,18 @@ const CierreDiarioPage = () => {
                             Revisar montos
                         </AlertDialogCancel>
                         <AlertDialogAction type="button" onClick={handleConfirmNetWarning} disabled={isSavingClosure}>
-                            Guardar de todas maneras
+                            {isSavingClosure ? (
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <Spinner className="size-4" />
+                                    Guardando...
+                                </span>
+                            ) : (
+                                "Guardar de todas maneras"
+                            )}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-            
-            <MigrateStaffButton />
         </>
     )
 }
