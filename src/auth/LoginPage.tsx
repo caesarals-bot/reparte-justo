@@ -9,6 +9,7 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Spinner } from "@/components/ui/spinner"
 import { Link, useNavigate } from "react-router"
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth"
 import { auth, db, googleProvider } from "@/firebase/config"
@@ -254,7 +255,14 @@ const LoginPage = () => {
                             tabIndex={0}
                             disabled={isSubmitting || isLoading || isGoogleLoading}
                         >
-                            {isSubmitting || isLoading ? "Ingresando..." : "Ingresar"}
+                            {isSubmitting || isLoading ? (
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <Spinner className="size-5" />
+                                    Ingresando...
+                                </span>
+                            ) : (
+                                "Ingresar"
+                            )}
                         </Button>
 
                         <div className="relative my-4">
@@ -275,7 +283,10 @@ const LoginPage = () => {
                             tabIndex={0}
                         >
                             {isGoogleLoading ? (
-                                "Conectando..."
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <Spinner className="size-5" />
+                                    Conectando...
+                                </span>
                             ) : (
                                 <>
                                     <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">

@@ -9,6 +9,7 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Spinner } from "@/components/ui/spinner"
 import { Link, useNavigate } from "react-router"
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithPopup, updateProfile } from "firebase/auth"
 import { auth, db, googleProvider } from "@/firebase/config"
@@ -397,7 +398,14 @@ const RegisterPage = () => {
                             tabIndex={0}
                             disabled={isSubmitting || isLoading || isGoogleLoading}
                         >
-                            {isSubmitting || isLoading ? "Creando cuenta..." : "Crear cuenta"}
+                            {isSubmitting || isLoading ? (
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <Spinner className="size-5" />
+                                    Creando cuenta...
+                                </span>
+                            ) : (
+                                "Crear cuenta"
+                            )}
                         </Button>
 
                         <div className="relative my-4">
@@ -418,7 +426,10 @@ const RegisterPage = () => {
                             tabIndex={0}
                         >
                             {isGoogleLoading ? (
-                                "Conectando..."
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <Spinner className="size-5" />
+                                    Conectando...
+                                </span>
                             ) : (
                                 <>
                                     <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
