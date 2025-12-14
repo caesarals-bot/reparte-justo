@@ -10,6 +10,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Plus, Trash2 } from "lucide-react"
 import { useNavigate } from "react-router"
 import { deleteField, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
@@ -394,21 +395,40 @@ const InitialSetupPage = () => {
 
             await setDoc(restaurantReference, payload, { merge: true })
 
+            let rolesWereUpdated = true
+
             // Si es un nuevo restaurante, actualizar los roles del usuario
             if (!hasExistingConfig) {
-                const userReference = doc(db, "users", uid)
-                await setDoc(userReference, {
-                    restaurantRoles: { [resolvedRestaurantId]: ["closure_editor"] },
-                    primaryRestaurant: resolvedRestaurantId,
-                    updatedAt: timestamp,
-                }, { merge: true })
-                
-                // Refrescar roles en el contexto para que la app reconozca los nuevos permisos
-                await refreshUserRoles()
-                localStorage.removeItem("rj_pending_restaurant_name")
+                try {
+                    const userReference = doc(db, "users", uid)
+                    await setDoc(
+                        userReference,
+                        {
+                            restaurantRoles: { [resolvedRestaurantId]: ["closure_editor"] },
+                            primaryRestaurant: resolvedRestaurantId,
+                            updatedAt: timestamp,
+                        },
+                        { merge: true },
+                    )
+
+                    // Refrescar roles en el contexto para que la app reconozca los nuevos permisos
+                    await refreshUserRoles()
+                    localStorage.removeItem("rj_pending_restaurant_name")
+                } catch (error) {
+                    rolesWereUpdated = false
+                    console.error("Error al activar permisos del usuario", error)
+                }
             }
 
             setHasExistingConfig(true)
+
+            if (!rolesWereUpdated) {
+                setSaveError(
+                    "Guardamos tu configuración, pero aún estamos activando tus permisos. Espera unos segundos y vuelve a presionar Guardar para continuar.",
+                )
+                return
+            }
+
             navigate("/cierre")
         } catch (error) {
             console.error("Error al guardar la configuración del restaurante", error)
@@ -697,7 +717,14 @@ const InitialSetupPage = () => {
                             disabled={isSaving || !hasServiceStaff}
                             aria-busy={isSaving}
                         >
-                            {isSaving ? "Guardando configuración..." : "Guardar configuración y continuar"}
+                            {isSaving ? (
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <Spinner className="size-5" />
+                                    Guardando configuración...
+                                </span>
+                            ) : (
+                                "Guardar configuración y continuar"
+                            )}
                         </Button>
                         {!hasServiceStaff ? (
                             <p className="text-center text-sm text-white/60">
