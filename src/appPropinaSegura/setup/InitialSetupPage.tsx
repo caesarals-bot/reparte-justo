@@ -51,6 +51,7 @@ const MAX_STAFF_EDITORS = 1
 const InitialSetupPage = () => {
     const { displayName, email, uid, refreshUserRoles } = useAuth()
     const navigate = useNavigate()
+    const [restaurantId, setRestaurantId] = useState<string | null>(null)
     const [settlementMode, setSettlementMode] = useState<SettlementMode>("pool")
     const [poolConfig, setPoolConfig] = useState<PoolConfig>(defaultPoolConfig)
     const [additionalDeductions, setAdditionalDeductions] = useState<AdditionalDeduction[]>([])
@@ -228,28 +229,32 @@ const InitialSetupPage = () => {
             return
         }
 
+        setRestaurantId(uid)
+
         const handleFetchConfiguration = async () => {
             try {
                 // Primero consultar el documento del usuario para obtener primaryRestaurant
                 const userDocRef = doc(db, "users", uid)
                 const userSnapshot = await getDoc(userDocRef)
                 
-                let restaurantId = uid // Fallback: usar uid como antes
+                let resolvedRestaurantId = uid // Fallback: usar uid como antes
                 let restaurantNameFromRegistration = ""
+                const pendingRestaurantName = localStorage.getItem("rj_pending_restaurant_name")?.trim() ?? ""
                 
                 if (userSnapshot.exists()) {
                     const userData = userSnapshot.data()
                     if (userData.primaryRestaurant) {
-                        restaurantId = userData.primaryRestaurant
+                        resolvedRestaurantId = userData.primaryRestaurant
+                        setRestaurantId(userData.primaryRestaurant)
                         
                         // Consultar el restaurante para obtener el nombre
-                        const restaurantDocRef = doc(db, "restaurants", restaurantId)
+                        const restaurantDocRef = doc(db, "restaurants", resolvedRestaurantId)
                         const restaurantSnapshot = await getDoc(restaurantDocRef)
                         
                         if (restaurantSnapshot.exists()) {
                             const restaurantData = restaurantSnapshot.data()
-                            if (restaurantData.name) {
-                                restaurantNameFromRegistration = restaurantData.name
+                            if (restaurantData.restaurantName) {
+                                restaurantNameFromRegistration = restaurantData.restaurantName
                                 setRestaurantNameExists(true)
                             }
                         }
@@ -257,14 +262,19 @@ const InitialSetupPage = () => {
                 }
                 
                 // Ahora consultar la configuración en /restaurants/{restaurantId}
-                const restaurantReference = doc(db, "restaurants", restaurantId)
+                const restaurantReference = doc(db, "restaurants", resolvedRestaurantId)
                 const snapshot = await getDoc(restaurantReference)
 
                 if (!snapshot.exists()) {
                     setHasExistingConfig(false)
-                    // Si tenemos nombre del registro, usarlo
                     if (restaurantNameFromRegistration) {
                         setRestaurantForm({ restaurantName: restaurantNameFromRegistration })
+                        return
+                    }
+
+                    if (pendingRestaurantName) {
+                        setRestaurantForm({ restaurantName: pendingRestaurantName })
+                        return
                     }
                     return
                 }
@@ -345,7 +355,8 @@ const InitialSetupPage = () => {
         setSaveError(null)
 
         try {
-            const restaurantReference = doc(db, "restaurants", uid)
+            const resolvedRestaurantId = restaurantId ?? uid
+            const restaurantReference = doc(db, "restaurants", resolvedRestaurantId)
             const timestamp = serverTimestamp()
             const payload: Record<string, unknown> = {
                 responsibleName: responsibleName.trim() || null,
@@ -387,13 +398,14 @@ const InitialSetupPage = () => {
             if (!hasExistingConfig) {
                 const userReference = doc(db, "users", uid)
                 await setDoc(userReference, {
-                    restaurantRoles: { [uid]: ["closure_editor"] },
-                    primaryRestaurant: uid,
+                    restaurantRoles: { [resolvedRestaurantId]: ["closure_editor"] },
+                    primaryRestaurant: resolvedRestaurantId,
                     updatedAt: timestamp,
                 }, { merge: true })
                 
                 // Refrescar roles en el contexto para que la app reconozca los nuevos permisos
                 await refreshUserRoles()
+                localStorage.removeItem("rj_pending_restaurant_name")
             }
 
             setHasExistingConfig(true)

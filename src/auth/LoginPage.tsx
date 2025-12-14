@@ -44,8 +44,8 @@ const LoginPage = () => {
                 // Usuario normal con roles de restaurante → dashboard
                 navigate("/dashboard", { replace: true })
             } else {
-                // Usuario sin roles → página de pendiente
-                navigate("/pending", { replace: true })
+                // Usuario sin roles → flujo de setup para crear restaurante
+                navigate("/setup", { replace: true })
             }
         }
     }, [isAuthenticated, isLoading, userRoles, navigate])
@@ -84,31 +84,13 @@ const LoginPage = () => {
             const userSnapshot = await getDoc(userDocRef)
 
             if (!userSnapshot.exists()) {
-                // Usuario nuevo - crear restaurante y documento de usuario
-                const restaurantId = user.uid
-                const restaurantDoc = doc(db, "restaurants", restaurantId)
-                await setDoc(restaurantDoc, {
-                    id: restaurantId,
-                    name: "",
-                    ownerId: user.uid,
-                    ownerEmail: user.email,
-                    ownerName: user.displayName || null,
-                    createdAt: serverTimestamp(),
-                    isActive: true,
-                    settings: {
-                        timezone: "America/Santiago",
-                        currency: "CLP",
-                    },
-                })
-
+                // Usuario nuevo - crear documento de usuario sin roles.
                 await setDoc(userDocRef, {
                     uid: user.uid,
                     email: user.email,
                     displayName: user.displayName || null,
                     siteRoles: [],
-                    restaurantRoles: {
-                        [restaurantId]: ["closure_editor"]
-                    },
+                    restaurantRoles: {},
                     createdAt: serverTimestamp(),
                     lastLogin: serverTimestamp(),
                     lastActivity: null,
@@ -116,7 +98,7 @@ const LoginPage = () => {
                     isActive: true,
                     loginAttempts: 0,
                     lockedUntil: null,
-                    primaryRestaurant: restaurantId,
+                    primaryRestaurant: null,
                     authProvider: "google",
                 })
 

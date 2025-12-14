@@ -11,11 +11,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/context/AuthContext"
 import { Clock, Mail, RefreshCw } from "lucide-react"
 import { useState } from "react"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 
 const PendingPage = () => {
   const { user, signOutUser, refreshUserRoles, userRoles } = useAuth()
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const navigate = useNavigate()
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -31,6 +32,10 @@ const PendingPage = () => {
     } finally {
       setIsRefreshing(false)
     }
+  }
+
+  const handleGoToSetup = () => {
+    navigate("/setup")
   }
 
   const handleLogout = async () => {
@@ -93,6 +98,10 @@ const PendingPage = () => {
 
           {/* Acciones */}
           <div className="flex flex-col gap-3 pt-4">
+            <Button onClick={handleGoToSetup} variant="secondary" className="w-full">
+              Crear mi restaurante
+            </Button>
+
             <Button
               onClick={handleRefresh}
               disabled={isRefreshing}

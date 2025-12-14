@@ -66,6 +66,28 @@ service cloud.firestore {
     function isSuperAdmin() {
       return hasSiteRole('super_admin');
     }
+
+    /**
+     * Permite el bootstrap de onboarding: el usuario puede asignarse UNA vez
+     * el rol closure_editor para su restaurante inicial y setear primaryRestaurant.
+     */
+    function isBootstrapRoleAssignment(userId) {
+      return isAuthenticated() &&
+        // Solo sobre su propio documento
+        request.auth.uid == userId &&
+        // Debe ser primera asignación
+        (resource.data.primaryRestaurant == null) &&
+        (resource.data.restaurantRoles == null || resource.data.restaurantRoles.size() == 0) &&
+        // Solo puede afectar estos campos (sin tocar siteRoles, isActive, etc.)
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['restaurantRoles', 'primaryRestaurant', 'updatedAt', 'lastActivity', 'lastLogin', 'displayName', 'photoURL']) &&
+        // El primaryRestaurant debe ser el mismo ID de restaurante asignado
+        request.resource.data.primaryRestaurant is string &&
+        request.resource.data.primaryRestaurant.size() > 0 &&
+        // Solo puede asignar closure_editor al restaurante primaryRestaurant
+        request.resource.data.restaurantRoles[request.resource.data.primaryRestaurant]
+          .hasOnly(['closure_editor']);
+    }
     
     // ═══════════════════════════════════════════════════════════════
     // COLECCIÓN: /users
@@ -84,6 +106,9 @@ service cloud.firestore {
       allow update: if isAuthenticated() && request.auth.uid == userId && 
         !request.resource.data.diff(resource.data).affectedKeys()
           .hasAny(['siteRoles', 'restaurantRoles', 'isActive', 'uid', 'email']);
+
+      // ACTUALIZAR (Bootstrap): permitir asignación inicial de rol en onboarding (/setup)
+      allow update: if isBootstrapRoleAssignment(userId);
       
       // ACTUALIZAR (Admin): Super_admin puede modificar cualquier campo
       allow update: if isSuperAdmin();
@@ -104,6 +129,9 @@ service cloud.firestore {
       // Nota: Los admins pueden leer TODOS los restaurantes para el dashboard admin
       allow read: if isAuthenticated() && (
         hasAnySiteRole(['super_admin', 'admin', 'support']) ||
+        // Bootstrap onboarding: permitir leer el restaurante propio durante /setup
+        // (aun cuando el usuario todavía no tiene restaurantRoles)
+        restaurantId == request.auth.uid ||
         hasAnyRestaurantRole(restaurantId, ['closure_editor', 'liquidator', 'owner', 'restaurant_viewer'])
       );
       
