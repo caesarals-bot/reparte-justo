@@ -638,8 +638,47 @@ export const useCierreDiario = ({ restaurantId, userInfo }: UseCierreDiarioArgs)
     const netAfterDeductions = Math.max(netBeforeGeneralExpense - generalExpenseTotal, 0)
     const transbankAmount = totalPropinasGeneradas * (effectiveTransbankPercentage / 100)
 
-    const formattedKitchenShare = currencyFormatter.format(totalKitchenShare)
-    const formattedGarzonShare = currencyFormatter.format(totalGarzonShare)
+    const serviceWeightTotal = useMemo(() => {
+        if (settlementModeConfig === "directa") {
+            return 0
+        }
+
+        return asistenciaServicioValues.reduce((sum, entry) => {
+            const baseWeight = parseWeightValue(entry?.ponderacion)
+            return entry?.presente === false ? sum : sum + baseWeight
+        }, 0)
+    }, [asistenciaServicioValues, settlementModeConfig])
+
+    const supportWeightTotal = useMemo(() => {
+        if (settlementModeConfig === "directa") {
+            return 0
+        }
+
+        return asistenciaCocinaValues.reduce((sum, entry) => {
+            const baseWeight = parseWeightValue(entry?.ponderacion)
+            return entry?.presente === false ? sum : sum + baseWeight
+        }, 0)
+    }, [asistenciaCocinaValues, settlementModeConfig])
+
+    const effectiveKitchenShare = useMemo(() => {
+        if (settlementModeConfig !== "pool") {
+            return 0
+        }
+
+        return supportWeightTotal > 0 ? totalKitchenShare : 0
+    }, [settlementModeConfig, supportWeightTotal, totalKitchenShare])
+
+    const effectiveGarzonShare = useMemo(() => {
+        if (settlementModeConfig !== "pool") {
+            return totalGarzonShare
+        }
+
+        const serviceShare = Math.max(netBeforeGeneralExpense - effectiveKitchenShare, 0)
+        return Math.max(serviceShare - generalExpenseTotal, 0)
+    }, [effectiveKitchenShare, generalExpenseTotal, netBeforeGeneralExpense, settlementModeConfig, totalGarzonShare])
+
+    const formattedKitchenShare = currencyFormatter.format(effectiveKitchenShare)
+    const formattedGarzonShare = currencyFormatter.format(effectiveGarzonShare)
     const formattedTransbankAmount = currencyFormatter.format(transbankAmount)
     const formattedGeneralExpense = currencyFormatter.format(generalExpenseTotal)
 
@@ -670,42 +709,32 @@ export const useCierreDiario = ({ restaurantId, userInfo }: UseCierreDiarioArgs)
     ])
 
     const serviceAssignedAmounts = useMemo(() => {
-        if (settlementModeConfig === "directa" || (totalGarzonShare <= 0 && totalKitchenShare <= 0)) {
+        if (settlementModeConfig === "directa" || (effectiveGarzonShare <= 0 && effectiveKitchenShare <= 0)) {
             return asistenciaServicioValues.map(() => 0)
         }
-
-        const serviceWeightTotal = asistenciaServicioValues.reduce((sum, entry) => {
-            const baseWeight = parseWeightValue(entry?.ponderacion)
-            return entry?.presente === false ? sum : sum + baseWeight
-        }, 0)
 
         return asistenciaServicioValues.map((entry) => {
             if (entry?.presente === false || serviceWeightTotal <= 0) {
                 return 0
             }
 
-            return totalGarzonShare * (parseWeightValue(entry?.ponderacion) / serviceWeightTotal)
+            return effectiveGarzonShare * (parseWeightValue(entry?.ponderacion) / serviceWeightTotal)
         })
-    }, [asistenciaServicioValues, settlementModeConfig, totalGarzonShare, totalKitchenShare])
+    }, [asistenciaServicioValues, effectiveGarzonShare, effectiveKitchenShare, serviceWeightTotal, settlementModeConfig])
 
     const supportAssignedAmounts = useMemo(() => {
-        if (settlementModeConfig === "directa" || (totalGarzonShare <= 0 && totalKitchenShare <= 0)) {
+        if (settlementModeConfig === "directa" || (effectiveGarzonShare <= 0 && effectiveKitchenShare <= 0)) {
             return asistenciaCocinaValues.map(() => 0)
         }
-
-        const supportWeightTotal = asistenciaCocinaValues.reduce((sum, entry) => {
-            const baseWeight = parseWeightValue(entry?.ponderacion)
-            return entry?.presente === false ? sum : sum + baseWeight
-        }, 0)
 
         return asistenciaCocinaValues.map((entry) => {
             if (entry?.presente === false || supportWeightTotal <= 0) {
                 return 0
             }
 
-            return totalKitchenShare * (parseWeightValue(entry?.ponderacion) / supportWeightTotal)
+            return effectiveKitchenShare * (parseWeightValue(entry?.ponderacion) / supportWeightTotal)
         })
-    }, [asistenciaCocinaValues, settlementModeConfig, totalGarzonShare, totalKitchenShare])
+    }, [asistenciaCocinaValues, effectiveGarzonShare, effectiveKitchenShare, settlementModeConfig, supportWeightTotal])
 
     const directAssignedAmounts = useMemo(() => {
         return ventaDirectaValues.map((entry) => {

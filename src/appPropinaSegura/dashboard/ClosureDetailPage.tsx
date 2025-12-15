@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react"
+import { useMemo, useState, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -120,6 +120,28 @@ const ClosureDetailPage = () => {
 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
     const [deleteReason, setDeleteReason] = useState("")
+
+    const weightByStaffId = useMemo(() => {
+        const map = new Map<string, number>()
+        const config = closure?.configurationSnapshot
+
+        const push = (items?: { id?: string; weight?: number }[]) => {
+            items?.forEach((item) => {
+                if (!item?.id) {
+                    return
+                }
+
+                if (typeof item.weight === "number" && Number.isFinite(item.weight)) {
+                    map.set(item.id, item.weight)
+                }
+            })
+        }
+
+        push(config?.serviceStaff)
+        push(config?.supportStaff)
+
+        return map
+    }, [closure?.configurationSnapshot])
 
     const handleDeleteConfirm = async () => {
         const success = await handleDeleteClosure(
@@ -590,11 +612,23 @@ const ClosureDetailPage = () => {
                                                             <p className="text-xs uppercase tracking-wide text-muted-foreground">
                                                                 {assignment.role ?? "Sin rol"}
                                                             </p>
+                                                            {assignment.staffId && weightByStaffId.has(assignment.staffId) ? (
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Ponderación: {weightByStaffId.get(assignment.staffId)}
+                                                                </p>
+                                                            ) : null}
                                                         </div>
                                                         <div className="flex flex-col items-end gap-2">
                                                             <Badge variant="secondary" className="text-xs">
                                                                 Neto snapshot: {formatCurrency(assignment.netAmount)}
                                                             </Badge>
+                                                            {typeof assignment.netAmountAdjusted === "number" &&
+                                                            Number.isFinite(assignment.netAmountAdjusted) &&
+                                                            assignment.netAmountAdjusted !== assignment.netAmount ? (
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    Neto redistribuido: {formatCurrency(assignment.netAmountAdjusted)}
+                                                                </Badge>
+                                                            ) : null}
                                                             {adjustmentData && (adjustmentData.amountTotal !== 0 || porcentajeAcumulado !== 0) ? (
                                                                 <Badge
                                                                     variant="outline"

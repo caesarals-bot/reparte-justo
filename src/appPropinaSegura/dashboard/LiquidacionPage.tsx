@@ -262,16 +262,49 @@ const LiquidacionPage = () => {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <DateRangePicker
-                            dateRange={dateRange}
-                            setDateRange={setDateRange}
-                            highlightedDates={highlightedDates}
-                            settledDates={settledDates}
-                        />
+                        <div className="rounded-lg border border-primary/15 bg-primary/5 p-3">
+                            <div className="flex flex-col gap-3">
+                                <DateRangePicker
+                                    dateRange={dateRange}
+                                    setDateRange={setDateRange}
+                                    highlightedDates={highlightedDates}
+                                    settledDates={settledDates}
+                                />
 
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            <span>Por ahora solo filtramos los cierres para preparar el payload de liquidación.</span>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <Badge
+                                            variant={dateRange.from ? "default" : "outline"}
+                                            className={dateRange.from ? "bg-primary/90" : "text-foreground"}
+                                        >
+                                            {filteredClosures.length} / {availablePendingClosures.length} cierres
+                                        </Badge>
+                                        <span className="text-[11px]">
+                                            {dateRange.from
+                                                ? "Mostrando solo cierres dentro del rango seleccionado."
+                                                : "Selecciona un rango para filtrar los cierres pendientes."}
+                                        </span>
+                                    </div>
+
+                                    {dateRange.from ? (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            className="h-9 px-3 text-xs"
+                                            onClick={() => setDateRange({ from: undefined, to: undefined })}
+                                        >
+                                            Limpiar filtro
+                                        </Button>
+                                    ) : null}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    <span>
+                                        Por ahora solo filtramos los cierres para preparar el payload de liquidación.
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

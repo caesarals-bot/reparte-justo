@@ -76,12 +76,12 @@ export const mapStoredAdditionalDeduction = (deduction: StoredAdditionalDeductio
 })
 
 export const defaultPoolConfig: PoolConfig = {
-    kitchenPercentage: "35",
-    transbankPercentage: "5",
+    kitchenPercentage: "0",
+    transbankPercentage: "0",
 }
 
 export const defaultDirectConfig: DirectConfig = {
-    directWaiterPercentage: "70",
+    directWaiterPercentage: "0",
 }
 
 export const defaultStaffForm: StaffFormValues = {

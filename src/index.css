@@ -118,9 +118,21 @@
     @apply bg-background text-foreground antialiased;
     background-image:
       radial-gradient(circle at 20% 20%, rgba(94, 100, 255, 0.18), transparent 45%),
-      radial-gradient(circle at 80% 0%, rgba(74, 80, 192, 0.15), transparent 40%),
-      linear-gradient(120deg, #0d1224 0%, #0f1a35 45%, #141a2e 100%);
+      radial-gradient(circle at 80% 0%, rgba(74, 80, 192, 0.16), transparent 40%),
+      radial-gradient(circle at 0% 90%, rgba(74, 80, 192, 0.14), transparent 35%),
+      radial-gradient(circle at 100% 80%, rgba(94, 100, 255, 0.12), transparent 45%);
     background-attachment: fixed;
     min-height: 100vh;
+  }
+
+  input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 }

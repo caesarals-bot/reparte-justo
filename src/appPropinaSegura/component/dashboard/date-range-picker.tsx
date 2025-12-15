@@ -21,21 +21,31 @@ export function DateRangePicker({ dateRange, setDateRange, highlightedDates, set
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className={cn("justify-start gap-2 text-left font-normal", !dateRange.from && "text-muted-foreground")}
-        >
-          <CalendarIcon className="h-4 w-4" />
-          {dateRange.from ? (
-            dateRange.to ? (
-              <>
-                {format(dateRange.from, "dd/MM/yyyy", { locale: es })} -{" "}
-                {format(dateRange.to, "dd/MM/yyyy", { locale: es })}
-              </>
-            ) : (
-              format(dateRange.from, "dd/MM/yyyy", { locale: es })
-            )
-          ) : (
-            <span>Filtrar por fecha</span>
+          className={cn(
+            "h-11 w-full max-w-md justify-between gap-3 rounded-lg border-2 px-4 text-left text-sm font-semibold shadow-sm sm:w-[360px]",
+            dateRange.from
+              ? "border-primary/60 bg-primary/15 text-foreground hover:bg-primary/20"
+              : "border-muted-foreground/30 bg-muted/30 text-foreground hover:bg-muted/40",
           )}
+        >
+          <span className="flex items-center gap-2">
+            <CalendarIcon className="h-4 w-4" />
+            {dateRange.from ? (
+              dateRange.to ? (
+                <>
+                  {format(dateRange.from, "dd/MM/yyyy", { locale: es })} -{" "}
+                  {format(dateRange.to, "dd/MM/yyyy", { locale: es })}
+                </>
+              ) : (
+                format(dateRange.from, "dd/MM/yyyy", { locale: es })
+              )
+            ) : (
+              <span>Filtrar por fecha</span>
+            )}
+          </span>
+          <span className="text-[11px] font-medium uppercase tracking-wide">
+            {dateRange.from ? "Cambiar" : "Elegir"}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="end">

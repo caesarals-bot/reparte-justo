@@ -20,6 +20,125 @@ export type ClosureAdjustment = {
     createdBy?: string
 }
 
+const applyPenaltyRedistributionToClosure = (closure: ClosureDocument): ClosureDocument => {
+    const config = closure.configurationSnapshot
+
+    const weightByStaffId = new Map<string, number>()
+    const pushWeights = (items?: { id?: string; weight?: number }[]) => {
+        items?.forEach((item) => {
+            if (!item?.id) {
+                return
+            }
+
+            if (typeof item.weight === "number" && Number.isFinite(item.weight)) {
+                weightByStaffId.set(item.id, item.weight)
+            }
+        })
+    }
+
+    pushWeights(config?.serviceStaff)
+    pushWeights(config?.supportStaff)
+
+    const resolveWeight = (assignment: StaffAssignment) => {
+        if (!assignment.present) {
+            return 0
+        }
+
+        const weight = assignment.staffId ? weightByStaffId.get(assignment.staffId) : undefined
+        return typeof weight === "number" && Number.isFinite(weight) && weight > 0 ? weight : 1
+    }
+
+    const applyToGroup = (assignments: StaffAssignment[]): StaffAssignment[] => {
+        if (!assignments.length) {
+            return assignments
+        }
+
+        const totalPenalty = assignments.reduce((sum, assignment) => {
+            if (!assignment.present) {
+                return sum
+            }
+
+            return sum + (assignment.penaltyAmount > 0 ? assignment.penaltyAmount : 0)
+        }, 0)
+
+        const totalDeductions = assignments.reduce((sum, assignment) => {
+            if (!assignment.present) {
+                return sum
+            }
+
+            return sum + (assignment.deductionAmount > 0 ? assignment.deductionAmount : 0)
+        }, 0)
+
+        const totalToRedistribute = totalPenalty + totalDeductions
+
+        if (totalToRedistribute <= 0) {
+            return assignments
+        }
+
+        const eligible = assignments.filter(
+            (assignment) =>
+                assignment.present &&
+                !(assignment.penaltyAmount > 0) &&
+                !(assignment.deductionAmount > 0) &&
+                resolveWeight(assignment) > 0,
+        )
+
+        const totalWeightEligible = eligible.reduce((sum, assignment) => sum + resolveWeight(assignment), 0)
+
+        if (totalWeightEligible <= 0) {
+            return assignments
+        }
+
+        return assignments.map((assignment) => {
+            const previousAdjusted = assignment.netAmountAdjusted ?? assignment.netAmount
+
+            if (!assignment.present) {
+                return assignment
+            }
+
+            if (assignment.penaltyAmount > 0 || assignment.deductionAmount > 0) {
+                return {
+                    ...assignment,
+                    netAmountAdjusted: previousAdjusted,
+                }
+            }
+
+            const redistributed = totalToRedistribute * (resolveWeight(assignment) / totalWeightEligible)
+            const adjustedNet = previousAdjusted + redistributed
+            const previousSummary = assignment.adjustmentSummary ?? {
+                totalAmount: 0,
+                totalPercentage: 0,
+                redistributedDelta: 0,
+            }
+
+            return {
+                ...assignment,
+                netAmountAdjusted: adjustedNet,
+                adjustmentSummary: {
+                    ...previousSummary,
+                    redistributedDelta: previousSummary.redistributedDelta + redistributed,
+                },
+            }
+        })
+    }
+
+    return {
+        ...closure,
+        assignments: {
+            servicio: applyToGroup(closure.assignments.servicio),
+            cocina: applyToGroup(closure.assignments.cocina),
+            ventaDirecta: applyToGroup(closure.assignments.ventaDirecta),
+            pocilloSecundario: applyToGroup(closure.assignments.pocilloSecundario),
+        },
+    }
+}
+
+export const applyClosureAdjustmentsForDisplay = (closure: ClosureDocument): ClosureDocument =>
+    applyPenaltyRedistributionToClosure(applyPercentageAdjustmentsToClosure(closure))
+
+export const applyPenaltyRedistributionForDisplay = (closure: ClosureDocument): ClosureDocument =>
+    applyPenaltyRedistributionToClosure(closure)
+
 const mapDirectSalesAdjustmentsSnapshot = (value: unknown): DirectSalesAdjustmentsSnapshot | null => {
     const record = extractRecord(value)
 
@@ -74,10 +193,37 @@ const mapConfigurationSnapshot = (value: unknown): ClosureConfigurationSnapshot 
         }
         : undefined
 
+    const mapStaffMemberSnapshot = (input: unknown) => {
+        const memberRecord = extractRecord(input)
+        if (!memberRecord) {
+            return null
+        }
+
+        return {
+            id: typeof memberRecord.id === "string" ? memberRecord.id : undefined,
+            name: typeof memberRecord.name === "string" ? memberRecord.name : undefined,
+            role: typeof memberRecord.role === "string" ? memberRecord.role : null,
+            weight: typeof memberRecord.weight !== "undefined" ? toNumber(memberRecord.weight) : undefined,
+            email: typeof memberRecord.email === "string" ? memberRecord.email : undefined,
+            isActive: typeof memberRecord.isActive === "boolean" ? memberRecord.isActive : undefined,
+            entryDate: typeof memberRecord.entryDate === "string" ? memberRecord.entryDate : undefined,
+            inactiveSince: typeof memberRecord.inactiveSince === "string" ? memberRecord.inactiveSince : undefined,
+        }
+    }
+
+    const serviceStaff = extractArray(record.serviceStaff)
+        .map(mapStaffMemberSnapshot)
+        .filter((member): member is NonNullable<typeof member> => Boolean(member))
+    const supportStaff = extractArray(record.supportStaff)
+        .map(mapStaffMemberSnapshot)
+        .filter((member): member is NonNullable<typeof member> => Boolean(member))
+
     return {
         settlementMode,
         poolPercentages,
         directConfig,
+        serviceStaff: serviceStaff.length ? serviceStaff : undefined,
+        supportStaff: supportStaff.length ? supportStaff : undefined,
     }
 }
 
@@ -152,6 +298,26 @@ export type ClosureConfigurationSnapshot = {
     directConfig?: {
         directWaiterPercentage?: number
     }
+    serviceStaff?: {
+        id?: string
+        name?: string
+        role?: string | null
+        weight?: number
+        email?: string
+        isActive?: boolean
+        entryDate?: string
+        inactiveSince?: string
+    }[]
+    supportStaff?: {
+        id?: string
+        name?: string
+        role?: string | null
+        weight?: number
+        email?: string
+        isActive?: boolean
+        entryDate?: string
+        inactiveSince?: string
+    }[]
 }
 
 export type DirectSalesAdjustmentsSnapshot = {
@@ -672,11 +838,11 @@ export const useClosuresDashboard = ({ restaurantId }: { restaurantId?: string |
             const closuresQuery = query(closuresRef, orderBy("createdAt", "desc"))
             const snapshots = await getDocs(closuresQuery)
 
-            const nextClosures = await Promise.all(
+            const closuresWithAdjustments = await Promise.all(
                 snapshots.docs.map(async (docSnapshot) => {
                     const adjustments = await fetchClosureAdjustments(restaurantId, docSnapshot.id)
                     const baseClosure = mapSnapshotToClosure(docSnapshot, adjustments)
-                    return applyPercentageAdjustmentsToClosure(baseClosure)
+                    return applyPenaltyRedistributionToClosure(applyPercentageAdjustmentsToClosure(baseClosure))
                 }),
             )
 
@@ -715,7 +881,7 @@ export const useClosuresDashboard = ({ restaurantId }: { restaurantId?: string |
                 }
             }
 
-            nextClosures.forEach((closure) => {
+            closuresWithAdjustments.forEach((closure) => {
                 const pools = [
                     ...closure.assignments.servicio,
                     ...closure.assignments.cocina,
@@ -754,7 +920,7 @@ export const useClosuresDashboard = ({ restaurantId }: { restaurantId?: string |
             })
 
             setAggregatedAssignments(Array.from(aggregatesMap.values()))
-            setClosures(nextClosures)
+            setClosures(closuresWithAdjustments)
             setError(null)
         } catch (fetchError) {
             console.error("Error al cargar los cierres para el dashboard", fetchError)

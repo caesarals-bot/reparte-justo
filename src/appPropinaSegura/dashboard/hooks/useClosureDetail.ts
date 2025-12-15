@@ -14,6 +14,7 @@ import {
     type StaffAssignment,
     createClosureAdjustment,
     fetchClosureAdjustments,
+    applyClosureAdjustmentsForDisplay,
     mapSnapshotToClosure,
 } from "./useClosuresDashboard"
 
@@ -133,7 +134,7 @@ export const useClosureDetail = ({ restaurantId, closureId, displayName, email }
 
             const adjustments = await fetchClosureAdjustments(restaurantId, snapshot.id)
 
-            setClosure({ ...mapped, adjustments })
+            setClosure(applyClosureAdjustmentsForDisplay({ ...mapped, adjustments }))
             setError(null)
             void refresh()
         } catch (fetchError) {

@@ -44,7 +44,7 @@ import { StaffPermissionsCard } from "./components/StaffPermissionsCard.tsx"
 import { StaffFormCard, type StaffPopoverId, getStaffCategoryFromRole } from "./components/StaffFormCard.tsx"
 
 const percentageInputClassName =
-    "w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-[rgba(5,8,21,0.85)]"
+    "w-full rounded-xl border border-white/15 bg-white/5 pl-4 pr-14 py-2 text-right text-sm text-white placeholder:text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-[rgba(5,8,21,0.85)]"
 const baseInputClass =
     "w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-[rgba(5,8,21,0.85)]"
 const MAX_STAFF_EDITORS = 1
@@ -53,6 +53,7 @@ const InitialSetupPage = () => {
     const { displayName, email, uid, refreshUserRoles } = useAuth()
     const navigate = useNavigate()
     const [restaurantId, setRestaurantId] = useState<string | null>(null)
+    const [canAccessPersonal, setCanAccessPersonal] = useState(false)
     const [settlementMode, setSettlementMode] = useState<SettlementMode>("pool")
     const [poolConfig, setPoolConfig] = useState<PoolConfig>(defaultPoolConfig)
     const [additionalDeductions, setAdditionalDeductions] = useState<AdditionalDeduction[]>([])
@@ -88,7 +89,10 @@ const InitialSetupPage = () => {
         setNewStaffEditorValue,
         handleAddStaffEditor,
         handleRemoveStaffEditor,
-    } = useStaffEditors({ normalizedUserEmail, maxEditors: MAX_STAFF_EDITORS })
+    } = useStaffEditors({
+        normalizedUserEmail,
+        maxEditors: MAX_STAFF_EDITORS,
+    })
 
     const availableStaffForPermissions = useMemo(
         () =>
@@ -101,15 +105,11 @@ const InitialSetupPage = () => {
     )
 
     const hasServiceStaff = serviceStaff.length > 0
-    const canContinueToStaff = restaurantNameExists || Boolean(restaurantForm.restaurantName.trim())
 
     useEffect(() => {
         const authName = displayName ?? email ?? ""
-
-        if (!responsibleName && authName) {
-            setResponsibleName(authName)
-        }
-    }, [displayName, email, responsibleName])
+        setResponsibleName((previousValue) => previousValue || authName)
+    }, [displayName, email])
 
     const handleResponsibleChange = (event: ChangeEvent<HTMLInputElement>) => {
         setResponsibleName(event.target.value)
@@ -129,6 +129,13 @@ const InitialSetupPage = () => {
 
     const handlePoolConfigChange = (field: keyof PoolConfig) => (event: ChangeEvent<HTMLInputElement>) => {
         setPoolConfig((previousState) => ({
+            ...previousState,
+            [field]: event.target.value,
+        }))
+    }
+
+    const handleDirectConfigChange = (field: keyof DirectConfig) => (event: ChangeEvent<HTMLInputElement>) => {
+        setDirectConfig((previousState) => ({
             ...previousState,
             [field]: event.target.value,
         }))
@@ -160,15 +167,6 @@ const InitialSetupPage = () => {
 
     const handleRemoveAdditionalDeduction = (deductionId: string) => {
         setAdditionalDeductions((previousState) => previousState.filter((item) => item.id !== deductionId))
-    }
-
-    const handleContinueToStaffSection = () => {
-        if (!canContinueToStaff) {
-            return
-        }
-
-        setSaveError(null)
-        setActiveTab("personal")
     }
 
     const handleAddStaffMember = () => {
@@ -270,11 +268,13 @@ const InitialSetupPage = () => {
                     setHasExistingConfig(false)
                     if (restaurantNameFromRegistration) {
                         setRestaurantForm({ restaurantName: restaurantNameFromRegistration })
+                        setCanAccessPersonal(false)
                         return
                     }
 
                     if (pendingRestaurantName) {
                         setRestaurantForm({ restaurantName: pendingRestaurantName })
+                        setCanAccessPersonal(false)
                         return
                     }
                     return
@@ -283,6 +283,7 @@ const InitialSetupPage = () => {
                 const data = snapshot.data() as RestaurantConfigurationDocument
 
                 setHasExistingConfig(true)
+                setCanAccessPersonal(true)
                 setRestaurantForm({
                     restaurantName: restaurantNameFromRegistration || data.restaurantName || "",
                 })
@@ -329,6 +330,18 @@ const InitialSetupPage = () => {
 
         void handleFetchConfiguration()
     }, [uid])
+
+    const handleContinueToPersonal = () => {
+        const trimmedRestaurantName = restaurantForm.restaurantName.trim()
+        if (!restaurantNameExists && !trimmedRestaurantName) {
+            setSaveError("Ingresa el nombre del restaurante para continuar.")
+            return
+        }
+
+        setSaveError(null)
+        setCanAccessPersonal(true)
+        setActiveTab("personal")
+    }
 
     const handleSaveConfiguration = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
@@ -440,7 +453,7 @@ const InitialSetupPage = () => {
 
     return (
         <main className="flex min-h-screen items-center justify-center bg-transparent px-4 py-14 text-white">
-            <section className="w-full max-w-5xl">
+            <section className="w-full max-w-4xl">
                 <form className="space-y-10" onSubmit={handleSaveConfiguration}>
                     <header className="rounded-3xl border border-white/10 bg-[rgba(8,11,25,0.85)] p-8 text-center shadow-[0_30px_65px_rgba(3,6,23,0.55)] backdrop-blur-xl">
                         <p className="text-xs font-semibold uppercase tracking-[0.45em] text-white/60">Primeros pasos</p>
@@ -452,7 +465,13 @@ const InitialSetupPage = () => {
 
                     <Tabs
                         value={activeTab}
-                        onValueChange={(value) => setActiveTab(value as "restaurante" | "personal")}
+                        onValueChange={(value) => {
+                            const nextValue = value as "restaurante" | "personal"
+                            if (nextValue === "personal" && !canAccessPersonal) {
+                                return
+                            }
+                            setActiveTab(nextValue)
+                        }}
                         className="w-full"
                     >
                         <TabsList className="flex w-full overflow-hidden rounded-full border border-white/20 bg-transparent p-0.5 text-white shadow-[0_12px_30px_rgba(2,4,15,0.65)]">
@@ -462,12 +481,14 @@ const InitialSetupPage = () => {
                             >
                                 Restaurante
                             </TabsTrigger>
-                            <TabsTrigger
-                                value="personal"
-                                className="flex-1 rounded-full px-6 py-3 text-sm font-semibold text-white/70 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 data-[state=active]:bg-linear-to-r data-[state=active]:from-white/65 data-[state=active]:to-white/25 data-[state=active]:text-[#0b0f1d] data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] data-[state=inactive]:hover:text-white"
-                            >
-                                Personal
-                            </TabsTrigger>
+                            {canAccessPersonal ? (
+                                <TabsTrigger
+                                    value="personal"
+                                    className="flex-1 rounded-full px-6 py-3 text-sm font-semibold text-white/70 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 data-[state=active]:bg-linear-to-r data-[state=active]:from-white/65 data-[state=active]:to-white/25 data-[state=active]:text-[#0b0f1d] data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] data-[state=inactive]:hover:text-white"
+                                >
+                                    Personal
+                                </TabsTrigger>
+                            ) : null}
                         </TabsList>
 
                         <TabsContent value="restaurante" className="mt-6">
@@ -564,102 +585,99 @@ const InitialSetupPage = () => {
                                                     />
                                                 </div>
                                             </div>
-
-                                            <div className="space-y-3">
-                                                <Label>Otros Descuentos</Label>
-                                                <div className="grid gap-3 sm:grid-cols-[1fr_minmax(0,140px)_auto] sm:items-end">
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="additional-discount-name" className="sr-only">
-                                                            Nombre del descuento
-                                                        </Label>
-                                                        <input
-                                                            id="additional-discount-name"
-                                                            type="text"
-                                                            placeholder="Nombre del descuento"
-                                                            value={additionalDeductionForm.name}
-                                                            onChange={handleAdditionalDeductionChange("name")}
-                                                            className={baseInputClass}
-                                                            tabIndex={0}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="additional-discount-percentage" className="sr-only">
-                                                            Porcentaje
-                                                        </Label>
-                                                        <input
-                                                            id="additional-discount-percentage"
-                                                            type="number"
-                                                            inputMode="decimal"
-                                                            placeholder="%"
-                                                            value={additionalDeductionForm.percentage}
-                                                            onChange={handleAdditionalDeductionChange("percentage")}
-                                                            className={percentageInputClassName}
-                                                            tabIndex={0}
-                                                        />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        className="h-11 w-full rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/15 sm:w-auto"
-                                                        onClick={handleAddAdditionalDeduction}
-                                                        aria-label="Añadir descuento"
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    {additionalDeductions.length === 0 ? (
-                                                        <p className="text-sm text-white/60">
-                                                            Agrega descuentos adicionales que quieras considerar en el reparto.
-                                                        </p>
-                                                    ) : (
-                                                        <ul className="space-y-2">
-                                                            {additionalDeductions.map((deduction) => (
-                                                                <li
-                                                                    key={deduction.id}
-                                                                    className="flex items-center justify-between rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm"
-                                                                >
-                                                                    <div className="flex flex-col">
-                                                                        <span className="font-medium">{deduction.name}</span>
-                                                                        <span className="text-white/60">{deduction.percentage}%</span>
-                                                                    </div>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="rounded-full text-white hover:bg-white/10"
-                                                                        aria-label={`Eliminar ${deduction.name}`}
-                                                                        onClick={() => handleRemoveAdditionalDeduction(deduction.id)}
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                    </Button>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-col gap-3 pt-2">
-                                                    <Button
-                                                        type="button"
-                                                        onClick={handleContinueToStaffSection}
-                                                        disabled={!canContinueToStaff}
-                                                        className="w-full rounded-full border border-white/25 bg-white/10 py-3 text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:text-white/40"
-                                                    >
-                                                        Continuar para añadir garzones
-                                                    </Button>
-                                                    {!canContinueToStaff ? (
-                                                        <p className="text-center text-xs text-white/60">
-                                                            Ingresa el nombre del restaurante para poder continuar.
-                                                        </p>
-                                                    ) : (
-                                                        <p className="text-center text-xs text-white/60">
-                                                            Revisa los datos y continúa para registrar a tu staff antes de guardar.
-                                                        </p>
-                                                    )}
-                                                </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-inner shadow-black/30">
+                                            <h4 className="text-lg font-semibold text-white">Configuración Venta Directa</h4>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="direct-percentage">Porcentaje Garzón Directo (%)</Label>
+                                                <input
+                                                    id="direct-percentage"
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    value={directConfig.directWaiterPercentage}
+                                                    onChange={handleDirectConfigChange("directWaiterPercentage")}
+                                                    className={percentageInputClassName}
+                                                    tabIndex={0}
+                                                />
                                             </div>
                                         </div>
-                                    ) : null}
+                                    )}
+
+                                    <div className="space-y-3">
+                                        <Label>Otros Descuentos</Label>
+                                        <div className="grid gap-3 sm:grid-cols-[1fr_minmax(0,140px)_auto] sm:items-end">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="additional-discount-name" className="sr-only">
+                                                    Nombre del descuento
+                                                </Label>
+                                                <input
+                                                    id="additional-discount-name"
+                                                    type="text"
+                                                    placeholder="Nombre del descuento"
+                                                    value={additionalDeductionForm.name}
+                                                    onChange={handleAdditionalDeductionChange("name")}
+                                                    className={baseInputClass}
+                                                    tabIndex={0}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="additional-discount-percentage" className="sr-only">
+                                                    Porcentaje
+                                                </Label>
+                                                <input
+                                                    id="additional-discount-percentage"
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    placeholder="%"
+                                                    value={additionalDeductionForm.percentage}
+                                                    onChange={handleAdditionalDeductionChange("percentage")}
+                                                    className={percentageInputClassName}
+                                                    tabIndex={0}
+                                                />
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="h-11 w-full rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/15 sm:w-auto"
+                                                onClick={handleAddAdditionalDeduction}
+                                                aria-label="Añadir descuento"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {additionalDeductions.length === 0 ? (
+                                                <p className="text-sm text-white/60">
+                                                    Agrega descuentos adicionales que quieras considerar en el reparto.
+                                                </p>
+                                            ) : (
+                                                <ul className="space-y-2">
+                                                    {additionalDeductions.map((deduction) => (
+                                                        <li
+                                                            key={deduction.id}
+                                                            className="flex items-center justify-between rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm"
+                                                        >
+                                                            <div className="flex flex-col">
+                                                                <span className="font-medium">{deduction.name}</span>
+                                                                <span className="text-white/60">{deduction.percentage}%</span>
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="rounded-full text-white hover:bg-white/10"
+                                                                aria-label={`Eliminar ${deduction.name}`}
+                                                                onClick={() => handleRemoveAdditionalDeduction(deduction.id)}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -713,8 +731,12 @@ const InitialSetupPage = () => {
                         <Button
                             size="lg"
                             className="w-full max-w-md gap-2 rounded-full bg-linear-to-r from-primary to-accent py-6 text-base text-primary-foreground shadow-[0_20px_45px_rgba(26,31,77,0.55)] transition hover:opacity-90"
-                            type="submit"
-                            disabled={isSaving || !hasServiceStaff}
+                            type={activeTab === "personal" ? "submit" : "button"}
+                            onClick={activeTab === "personal" ? undefined : handleContinueToPersonal}
+                            disabled={
+                                isSaving ||
+                                (activeTab === "personal" ? !hasServiceStaff : (!restaurantNameExists && !restaurantForm.restaurantName.trim()))
+                            }
                             aria-busy={isSaving}
                         >
                             {isSaving ? (
@@ -723,10 +745,10 @@ const InitialSetupPage = () => {
                                     Guardando configuración...
                                 </span>
                             ) : (
-                                "Guardar configuración y continuar"
+                                activeTab === "personal" ? "Guardar configuración y continuar" : "Continuar"
                             )}
                         </Button>
-                        {!hasServiceStaff ? (
+                        {activeTab === "personal" && !hasServiceStaff ? (
                             <p className="text-center text-sm text-white/60">
                                 Añade al menos un garzón antes de guardar la configuración.
                             </p>

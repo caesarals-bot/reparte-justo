@@ -71,73 +71,75 @@ export const StaffFormCard = ({
 
     const renderStaffTable = (category: "service" | "support", members: StaffMember[]) => (
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[0_20px_45px_rgba(3,6,23,0.35)]">
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
                 <h4 className="text-sm font-semibold text-white">{staffCategoryLabels[category]}</h4>
                 <span className="text-xs uppercase tracking-widest text-white/60">{members.length} integrantes</span>
             </div>
-            <table className="w-full min-w-full divide-y divide-white/10 text-left text-sm text-white">
-                <thead className="bg-white/5 text-[11px] uppercase tracking-wide text-white/70">
-                    <tr>
-                        <th scope="col" className="px-5 py-3 font-semibold">Nombre</th>
-                        <th scope="col" className="px-5 py-3 font-semibold">Rol</th>
-                        <th scope="col" className="px-5 py-3 font-semibold">Peso</th>
-                        <th scope="col" className="px-5 py-3 font-semibold">Estado</th>
-                        <th scope="col" className="px-5 py-3 font-semibold">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                    {members.length === 0 ? (
+            <div className="w-full overflow-x-auto">
+                <table className="min-w-[720px] w-full divide-y divide-white/10 text-left text-sm text-white">
+                    <thead className="bg-white/5 text-[11px] uppercase tracking-wide text-white/70">
                         <tr>
-                            <td colSpan={5} className="px-5 py-6 text-center text-white/60">
-                                {emptyStateText[category]}
-                            </td>
+                            <th scope="col" className="px-4 py-3 font-semibold">Nombre</th>
+                            <th scope="col" className="px-4 py-3 font-semibold">Rol</th>
+                            <th scope="col" className="px-4 py-3 font-semibold">Peso</th>
+                            <th scope="col" className="px-4 py-3 font-semibold">Estado</th>
+                            <th scope="col" className="px-4 py-3 font-semibold">Acciones</th>
                         </tr>
-                    ) : (
-                        members.map((member) => (
-                            <tr key={member.id} className="hover:bg-white/5">
-                                <td className="px-5 py-3">
-                                    <div className="flex flex-col">
-                                        <span className="font-medium text-white">{member.name}</span>
-                                        <span className="text-xs text-white/60">{member.email || "—"}</span>
-                                    </div>
-                                </td>
-                                <td className="px-5 py-3 capitalize text-white/80">{member.role.replace("_", " ")}</td>
-                                <td className="px-5 py-3 text-white">{member.weight}</td>
-                                <td className="px-5 py-3">
-                                    <div className="flex flex-col gap-1">
-                                        <span
-                                            className={`rounded-full border px-2 py-1 text-xs font-medium ${
-                                                member.isActive
-                                                    ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-200"
-                                                    : "border-white/20 text-white/60"
-                                            }`}
-                                        >
-                                            {member.isActive ? "Activo" : "Inactivo"}
-                                        </span>
-                                        {!member.isActive ? (
-                                            <span className="text-xs text-white/60">
-                                                Baja: {formatInactiveDateLabel(member.inactiveSince)}
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                </td>
-                                <td className="px-5 py-3">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="rounded-full text-white hover:bg-white/10"
-                                        onClick={() => onRemoveMember(category, member.id)}
-                                        aria-label={`Eliminar ${member.name}`}
-                                        disabled={staffInputsDisabled}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                        {members.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="px-4 py-6 text-center text-white/60">
+                                    {emptyStateText[category]}
                                 </td>
                             </tr>
-                        ))
-                    )}
-                </tbody>
-            </table>
+                        ) : (
+                            members.map((member) => (
+                                <tr key={member.id} className="hover:bg-white/5">
+                                    <td className="px-4 py-3">
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-white">{member.name}</span>
+                                            <span className="text-xs text-white/60">{member.email || "—"}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 capitalize text-white/80">{member.role.replace("_", " ")}</td>
+                                    <td className="px-4 py-3 text-white">{member.weight}</td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex flex-col gap-1">
+                                            <span
+                                                className={`rounded-full border px-2 py-1 text-xs font-medium ${
+                                                    member.isActive
+                                                        ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-200"
+                                                        : "border-white/20 text-white/60"
+                                                }`}
+                                            >
+                                                {member.isActive ? "Activo" : "Inactivo"}
+                                            </span>
+                                            {!member.isActive ? (
+                                                <span className="text-xs text-white/60">
+                                                    Baja: {formatInactiveDateLabel(member.inactiveSince)}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="rounded-full text-white hover:bg-white/10"
+                                            onClick={() => onRemoveMember(category, member.id)}
+                                            aria-label={`Eliminar ${member.name}`}
+                                            disabled={staffInputsDisabled}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     )
 
@@ -179,7 +181,7 @@ export const StaffFormCard = ({
                             step="0.25"
                             value={formValues.weight}
                             onChange={onFieldChange("weight")}
-                            className={baseInputClassName}
+                            className={`${baseInputClassName} pr-14 text-right`}
                             min={settlementMode === "pool" ? 0 : 0}
                             max={settlementMode === "pool" ? 5 : 100}
                             disabled={staffInputsDisabled}

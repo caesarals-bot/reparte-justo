@@ -23,12 +23,16 @@ const NavBar = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const [setupCompleted, setSetupCompleted] = useState(false)
     const { isAuthenticated, isLoading, displayName, email, signOutUser, user } = useAuth()
-    const { hasSiteRole } = usePermissions()
+    const { hasSiteRole, accessibleRestaurants } = usePermissions()
     const navigate = useNavigate()
     const location = useLocation()
 
     // Verificar si el usuario tiene roles administrativos
     const isAdmin = hasSiteRole("super_admin") || hasSiteRole("admin") || hasSiteRole("support") || hasSiteRole("viewer")
+
+    // Determina si el usuario tiene un restaurante definido/accesible
+    // (si no, está en onboarding y no debería ver navegación operativa)
+    const hasRestaurantDefined = accessibleRestaurants.length > 0
 
     // Consultar si el setup está completado
     useEffect(() => {
@@ -68,13 +72,22 @@ const NavBar = () => {
             if (link.path === "/admin") {
                 return isAdmin
             }
+
+            // Si el usuario está autenticado pero aún no tiene restaurante, ocultar navegación operativa
+            // y dejar solo /setup para completar onboarding.
+            if (isAuthenticated && !isAdmin && !hasRestaurantDefined) {
+                if (link.path === "/cierre" || link.path === "/dashboard" || link.path === "/settings") {
+                    return false
+                }
+            }
+
             // Ocultar link "Ajustes" si el setup ya está completado
             if (link.path === "/setup") {
                 return !setupCompleted
             }
             return true
         })
-    }, [isAdmin, setupCompleted])
+    }, [isAdmin, setupCompleted, isAuthenticated, hasRestaurantDefined])
 
     const userInitials = useMemo(() => {
         const source = displayName || email || ""
