@@ -1,3 +1,5 @@
+import { Link } from "react-router"
+
 const Footer = () => {
     return (
         <footer className="border-t bg-background/80 py-10">
@@ -14,6 +16,14 @@ const Footer = () => {
                     >
                         Características
                     </a>
+                    <Link
+                        to="/about"
+                        className="transition hover:text-primary"
+                        aria-label="Ir a quiénes somos"
+                        tabIndex={0}
+                    >
+                        Quiénes somos
+                    </Link>
                     <a
                         href="#contact"
                         className="transition hover:text-primary"

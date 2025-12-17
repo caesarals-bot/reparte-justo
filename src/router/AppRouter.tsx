@@ -20,6 +20,7 @@ import AdminOverviewPage from "@/appPropinaSegura/admin/pages/AdminOverviewPage"
 import AdminRestaurantsPage from "@/appPropinaSegura/admin/pages/AdminRestaurantsPage"
 import AdminUsersPage from "@/appPropinaSegura/admin/pages/AdminUsersPage"
 import ContactPage from "@/appPropinaSegura/contact/ContactPage"
+import AboutPage from "@/appPropinaSegura/about/AboutPage"
 
 const AppRouter = createBrowserRouter([
     {
@@ -41,6 +42,10 @@ const AppRouter = createBrowserRouter([
             {
                 path: "contact",
                 element: <ContactPage />,
+            },
+            {
+                path: "about",
+                element: <AboutPage />,
             },
             {
                 path: "cierre",

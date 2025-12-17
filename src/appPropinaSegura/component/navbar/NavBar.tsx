@@ -12,6 +12,7 @@ import { db } from "@/firebase/config"
 const NAV_LINKS = [
     { label: "Inicio", path: "/" },
     { label: "Contacto", path: "/contact" },
+    { label: "Quiénes somos", path: "/about" },
     { label: "Ajustes", path: "/setup" },
     { label: "Cierres", path: "/cierre" },
     { label: "Dashboard", path: "/dashboard" },
@@ -68,6 +69,10 @@ const NavBar = () => {
     // Filtrar links según permisos
     const visibleNavLinks = useMemo(() => {
         return NAV_LINKS.filter(link => {
+            if (!isAuthenticated) {
+                return link.path === "/" || link.path === "/contact" || link.path === "/about"
+            }
+
             // Mostrar link "Admin" solo si tiene roles administrativos
             if (link.path === "/admin") {
                 return isAdmin
