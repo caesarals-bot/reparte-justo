@@ -4,6 +4,7 @@ import { ZodError } from "zod"
 import { guardarCierreDiarioHandler } from "./handlers/guardarCierreDiario"
 import { liquidarPeriodoHandler } from "./handlers/liquidarPeriodo"
 import { eliminarCierreDiarioHandler } from "./handlers/eliminarCierreDiario"
+import { contactSubmitHandler, RESEND_FROM, RESEND_KEY, RESEND_TO, TURNSTILE_SECRET } from "./handlers/contactSubmit"
 
 // Triggers
 export { onUserCreate } from "./triggers/onUserCreate"
@@ -88,6 +89,27 @@ export const guardarCierreDiario = functions
         }
     })
 
+export const contactSubmit = functions
+    .runWith({ secrets: [TURNSTILE_SECRET, RESEND_KEY, RESEND_FROM, RESEND_TO] })
+    .region("us-central1")
+    .https.onRequest(async (req, res): Promise<void> => {
+        functions.logger.info("contactSubmit request", { method: req.method, origin: req.headers.origin })
+
+        setCorsHeaders(req, res)
+        if (handlePreflight(req, res)) {
+            return
+        }
+
+        try {
+            const result = await contactSubmitHandler({ payload: req.body, req })
+            res.status(200).json(result)
+        } catch (error) {
+            const { status, body } = mapHandlerError(error)
+            safeLogError("contactSubmit error", error)
+            res.status(status).json(body)
+        }
+    })
+
 export const eliminarCierreDiario = functions
     .region("us-central1")
     .https.onRequest(async (req, res): Promise<void> => {
@@ -141,7 +163,74 @@ const mapHandlerError = (error: unknown): { status: number; body: Record<string,
     }
 
     if (error instanceof Error) {
-        const normalizedCode = error.message.toUpperCase()
+        const rawCode = error.message
+        const normalizedCode = rawCode.toUpperCase()
+        if (normalizedCode === "RATE_LIMITED") {
+            return {
+                status: 429,
+                body: {
+                    code: normalizedCode,
+                    message: "Has enviado demasiados mensajes. Intenta nuevamente en unos minutos.",
+                },
+            }
+        }
+
+        if (normalizedCode.startsWith("TURNSTILE_FAILED") || normalizedCode.startsWith("TURNSTILE_UNAVAILABLE")) {
+            let details: unknown = undefined
+            if (rawCode.includes(":")) {
+                const [, tail] = rawCode.split(/:(.+)/)
+                if (tail) {
+                    try {
+                        details = JSON.parse(tail)
+                    } catch {
+                        details = tail
+                    }
+                }
+            }
+
+            const normalizedBaseCode = normalizedCode.startsWith("TURNSTILE_FAILED")
+                ? "TURNSTILE_FAILED"
+                : "TURNSTILE_UNAVAILABLE"
+            return {
+                status: 400,
+                body: {
+                    code: normalizedBaseCode,
+                    message: "No pudimos verificar el captcha. Intenta nuevamente.",
+                    ...(details ? { details } : {}),
+                },
+            }
+        }
+
+        if (normalizedCode === "TURNSTILE_NOT_CONFIGURED") {
+            return {
+                status: 500,
+                body: {
+                    code: normalizedCode,
+                    message: "El captcha no está configurado en el servidor.",
+                },
+            }
+        }
+
+        if (normalizedCode === "RESEND_FAILED") {
+            return {
+                status: 502,
+                body: {
+                    code: normalizedCode,
+                    message: "No pudimos enviar el correo en este momento. Intenta nuevamente.",
+                },
+            }
+        }
+
+        if (normalizedCode === "RESEND_NOT_CONFIGURED") {
+            return {
+                status: 500,
+                body: {
+                    code: normalizedCode,
+                    message: "El servicio de correo no está configurado en el servidor.",
+                },
+            }
+        }
+
         if (normalizedCode === "DUPLICATED_CLOSURE") {
             return {
                 status: 409,
@@ -167,7 +256,7 @@ const mapHandlerError = (error: unknown): { status: number; body: Record<string,
         status: 500,
         body: {
             code: "INTERNAL_ERROR",
-            message: "Ocurrió un error inesperado al guardar el cierre.",
+            message: "Ocurrió un error inesperado.",
         },
     }
 }

@@ -1,8 +1,7 @@
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
-import { addDoc, collection, serverTimestamp } from "firebase/firestore"
-import { db } from "@/firebase/config"
 import { useAuth } from "@/context/AuthContext"
+import { getApiBaseUrl } from "@/appPropinaSegura/cierre/services/closuresApi"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,11 +16,30 @@ type ContactFormValues = {
     message: string
 }
 
+declare global {
+    interface Window {
+        turnstile?: {
+            render: (container: HTMLElement, options: { sitekey: string; callback: (token: string) => void; "expired-callback"?: () => void; "error-callback"?: () => void }) => string
+            reset: (widgetId?: string) => void
+        }
+    }
+}
+
 const ContactPage = () => {
     const { user, displayName, email } = useAuth()
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isSuccess, setIsSuccess] = useState(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+    const [isTurnstileReady, setIsTurnstileReady] = useState(false)
+    const turnstileContainerRef = useRef<HTMLDivElement | null>(null)
+    const turnstileWidgetIdRef = useRef<string | null>(null)
+
+    const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || ""
+
+    const canSubmit = useMemo(() => {
+        return Boolean(turnstileSiteKey && turnstileToken)
+    }, [turnstileSiteKey, turnstileToken])
 
     const {
         register,
@@ -37,21 +55,120 @@ const ContactPage = () => {
         },
     })
 
+    useEffect(() => {
+        if (!turnstileSiteKey) {
+            setIsTurnstileReady(false)
+            return
+        }
+
+        if (typeof window === "undefined") {
+            return
+        }
+
+        const existing = document.querySelector(
+            'script[src="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
+        ) as HTMLScriptElement | null
+
+        const markReadyIfAvailable = () => {
+            if (window.turnstile?.render) {
+                setIsTurnstileReady(true)
+            }
+        }
+
+        if (!existing) {
+            const script = document.createElement("script")
+            script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js"
+            script.async = true
+            script.defer = true
+            script.onload = () => markReadyIfAvailable()
+            script.onerror = () => setIsTurnstileReady(false)
+            document.body.appendChild(script)
+        } else {
+            markReadyIfAvailable()
+
+            const handleLoad = () => markReadyIfAvailable()
+            const handleError = () => setIsTurnstileReady(false)
+
+            existing.addEventListener("load", handleLoad)
+            existing.addEventListener("error", handleError)
+
+            return () => {
+                existing.removeEventListener("load", handleLoad)
+                existing.removeEventListener("error", handleError)
+            }
+        }
+    }, [turnstileSiteKey])
+
+    useEffect(() => {
+        if (!isTurnstileReady) {
+            return
+        }
+
+        if (!turnstileContainerRef.current) {
+            return
+        }
+
+        if (!window.turnstile?.render) {
+            return
+        }
+
+        if (turnstileWidgetIdRef.current) {
+            return
+        }
+
+        const widgetId = window.turnstile.render(turnstileContainerRef.current, {
+            sitekey: turnstileSiteKey,
+            callback: (token) => {
+                setTurnstileToken(token)
+            },
+            "expired-callback": () => {
+                setTurnstileToken(null)
+            },
+            "error-callback": () => {
+                setTurnstileToken(null)
+            },
+        })
+
+        turnstileWidgetIdRef.current = widgetId
+    }, [isTurnstileReady, turnstileSiteKey])
+
     const handleFormSubmit = async (data: ContactFormValues) => {
         setIsSubmitting(true)
         setSubmitError(null)
 
         try {
-            await addDoc(collection(db, "contact_messages"), {
-                ...data,
-                userId: user?.uid || null,
-                createdAt: serverTimestamp(),
-                status: "unread",
-                source: "web_contact_form"
+            if (!turnstileSiteKey) {
+                throw new Error("TURNSTILE_SITE_KEY_MISSING")
+            }
+
+            if (!turnstileToken) {
+                throw new Error("TURNSTILE_TOKEN_MISSING")
+            }
+
+            const baseUrl = getApiBaseUrl()
+            const response = await fetch(`${baseUrl}/contactSubmit`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    ...data,
+                    userId: user?.uid || null,
+                    turnstileToken,
+                }),
             })
+
+            if (!response.ok) {
+                const body = (await response.json().catch(() => null)) as { message?: string } | null
+                throw new Error(body?.message ?? "Hubo un error al enviar tu mensaje. Por favor intenta nuevamente.")
+            }
 
             setIsSuccess(true)
             reset()
+            setTurnstileToken(null)
+            if (turnstileWidgetIdRef.current && window.turnstile?.reset) {
+                window.turnstile.reset(turnstileWidgetIdRef.current)
+            }
             
             setTimeout(() => {
                 setIsSuccess(false)
@@ -59,7 +176,12 @@ const ContactPage = () => {
 
         } catch (err) {
             console.error("Error sending message:", err)
-            setSubmitError("Hubo un error al enviar tu mensaje. Por favor intenta nuevamente.")
+            setSubmitError(err instanceof Error ? err.message : "Hubo un error al enviar tu mensaje. Por favor intenta nuevamente.")
+
+            setTurnstileToken(null)
+            if (turnstileWidgetIdRef.current && window.turnstile?.reset) {
+                window.turnstile.reset(turnstileWidgetIdRef.current)
+            }
         } finally {
             setIsSubmitting(false)
         }
@@ -197,10 +319,21 @@ const ContactPage = () => {
                             </div>
                         )}
 
+                        <div className="space-y-2">
+                            <Label className="text-white">Verificación</Label>
+                            {!turnstileSiteKey ? (
+                                <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+                                    El captcha no está configurado.
+                                </div>
+                            ) : (
+                                <div ref={turnstileContainerRef} />
+                            )}
+                        </div>
+
                         <Button 
                             type="submit" 
                             className="w-full"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || !canSubmit}
                             aria-label={isSubmitting ? "Enviando mensaje..." : "Enviar mensaje de contacto"}
                         >
                             {isSubmitting ? (

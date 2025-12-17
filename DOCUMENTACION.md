@@ -435,6 +435,50 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Una vez expuestos los mensajes reales, Firestore devolvió `transactions require all reads to be executed before all writes`. Se reescribió la transacción en `functions/src/handlers/liquidarPeriodo.ts` en tres fases (lecturas → cómputo → escrituras) para cumplir la regla y evitar 500.
 - **Liquidación y PDF enriquecidos con gastos generales**
   - `closureCalculations.ts` ahora agrega los `generalExpenses` por nombre/tipo, lo cual alimenta `useLiquidacionWorkflow`, el modal de confirmación y el PDF generado automáticamente. En la UI se lista explícitamente cada gasto (ej. "Sofía • anfitriona") para validar antes de pagar.
+
+## Formulario de contacto seguro (Turnstile + Cloud Functions + Firestore + Resend)
+
+### Objetivo
+- El formulario público de contacto debe:
+  - Validar CAPTCHA con Cloudflare Turnstile.
+  - Aplicar rate limit por IP.
+  - Guardar el mensaje en Firestore.
+  - Enviar correo vía Resend.
+
+### Frontend
+- **Componente**: `src/appPropinaSegura/contact/ContactPage.tsx`.
+- **Variables**:
+  - `VITE_TURNSTILE_SITE_KEY`: site key del widget Turnstile (pública).
+  - `VITE_API_BASE_URL`: base URL de Cloud Functions (`https://us-central1-...cloudfunctions.net`).
+
+### Backend (Cloud Functions)
+- **Endpoint**: `contactSubmit` (HTTPS)
+  - Código: `functions/src/handlers/contactSubmit.ts`
+  - Export: `functions/src/index.ts`
+- **Colecciones Firestore**:
+  - `contact_messages`: mensajes recibidos.
+  - `rate_limits`: control de envíos por IP.
+
+### Secrets (Google Secret Manager)
+- Secrets usados por `contactSubmit`:
+  - `TURNSTILE_SECRET`: secret key de Turnstile (privada).
+  - `RESEND_KEY`: API key de Resend.
+  - `RESEND_FROM`: remitente.
+  - `RESEND_TO`: destinatario.
+- Permisos requeridos:
+  - Service account runtime: `reparte-justo@appspot.gserviceaccount.com`
+  - Rol: `roles/secretmanager.secretAccessor` (a nivel proyecto o por secret).
+
+### Deploy
+- Comando recomendado (Windows) para evitar conflictos con `npx firebase`:
+  - `npx --package firebase-tools firebase deploy --only functions:contactSubmit`
+
+### Troubleshooting Turnstile
+- Errores comunes al validar `siteverify`:
+  - `invalid-input-secret`: `TURNSTILE_SECRET` no corresponde al widget o se pegó el site key.
+  - `invalid-input-response`: token inválido/expirado o mismatch sitekey/secret.
+  - `hostname mismatch`: el widget restringe hostnames que no incluyen el dominio actual.
+- Nota: en navegadores con Tracking Prevention puede aparecer ruido de consola (PAT/storage), pero si el submit devuelve 200 y llega el mail, no bloquea el flujo.
   - Se añadieron también los porcentajes de configuración (`configurationSnapshot.poolPercentages`) a `useClosuresDashboard`/`useLiquidacionWorkflow`, permitiendo mostrar el porcentaje de cocina aun cuando no haya personal de cocina en el rango seleccionado.
 - **Despliegue**
   - Se ejecutó `npm run build` en `functions/` y `firebase deploy --only functions` para publicar los fixes anteriores.

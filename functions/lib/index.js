@@ -33,12 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.guardarCierreDiario = exports.onUserCreate = void 0;
+exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.contactSubmit = exports.guardarCierreDiario = exports.onUserCreate = void 0;
 const functions = __importStar(require("firebase-functions/v1"));
 const zod_1 = require("zod");
 const guardarCierreDiario_1 = require("./handlers/guardarCierreDiario");
 const liquidarPeriodo_1 = require("./handlers/liquidarPeriodo");
 const eliminarCierreDiario_1 = require("./handlers/eliminarCierreDiario");
+const contactSubmit_1 = require("./handlers/contactSubmit");
 // Triggers
 var onUserCreate_1 = require("./triggers/onUserCreate");
 Object.defineProperty(exports, "onUserCreate", { enumerable: true, get: function () { return onUserCreate_1.onUserCreate; } });
@@ -111,6 +112,25 @@ exports.guardarCierreDiario = functions
         res.status(status).json(body);
     }
 });
+exports.contactSubmit = functions
+    .runWith({ secrets: [contactSubmit_1.TURNSTILE_SECRET, contactSubmit_1.RESEND_KEY, contactSubmit_1.RESEND_FROM, contactSubmit_1.RESEND_TO] })
+    .region("us-central1")
+    .https.onRequest(async (req, res) => {
+    functions.logger.info("contactSubmit request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
+    if (handlePreflight(req, res)) {
+        return;
+    }
+    try {
+        const result = await (0, contactSubmit_1.contactSubmitHandler)({ payload: req.body, req });
+        res.status(200).json(result);
+    }
+    catch (error) {
+        const { status, body } = mapHandlerError(error);
+        safeLogError("contactSubmit error", error);
+        res.status(status).json(body);
+    }
+});
 exports.eliminarCierreDiario = functions
     .region("us-central1")
     .https.onRequest(async (req, res) => {
@@ -159,7 +179,69 @@ const mapHandlerError = (error) => {
         };
     }
     if (error instanceof Error) {
-        const normalizedCode = error.message.toUpperCase();
+        const rawCode = error.message;
+        const normalizedCode = rawCode.toUpperCase();
+        if (normalizedCode === "RATE_LIMITED") {
+            return {
+                status: 429,
+                body: {
+                    code: normalizedCode,
+                    message: "Has enviado demasiados mensajes. Intenta nuevamente en unos minutos.",
+                },
+            };
+        }
+        if (normalizedCode.startsWith("TURNSTILE_FAILED") || normalizedCode.startsWith("TURNSTILE_UNAVAILABLE")) {
+            let details = undefined;
+            if (rawCode.includes(":")) {
+                const [, tail] = rawCode.split(/:(.+)/);
+                if (tail) {
+                    try {
+                        details = JSON.parse(tail);
+                    }
+                    catch {
+                        details = tail;
+                    }
+                }
+            }
+            const normalizedBaseCode = normalizedCode.startsWith("TURNSTILE_FAILED")
+                ? "TURNSTILE_FAILED"
+                : "TURNSTILE_UNAVAILABLE";
+            return {
+                status: 400,
+                body: {
+                    code: normalizedBaseCode,
+                    message: "No pudimos verificar el captcha. Intenta nuevamente.",
+                    ...(details ? { details } : {}),
+                },
+            };
+        }
+        if (normalizedCode === "TURNSTILE_NOT_CONFIGURED") {
+            return {
+                status: 500,
+                body: {
+                    code: normalizedCode,
+                    message: "El captcha no está configurado en el servidor.",
+                },
+            };
+        }
+        if (normalizedCode === "RESEND_FAILED") {
+            return {
+                status: 502,
+                body: {
+                    code: normalizedCode,
+                    message: "No pudimos enviar el correo en este momento. Intenta nuevamente.",
+                },
+            };
+        }
+        if (normalizedCode === "RESEND_NOT_CONFIGURED") {
+            return {
+                status: 500,
+                body: {
+                    code: normalizedCode,
+                    message: "El servicio de correo no está configurado en el servidor.",
+                },
+            };
+        }
         if (normalizedCode === "DUPLICATED_CLOSURE") {
             return {
                 status: 409,
@@ -183,7 +265,7 @@ const mapHandlerError = (error) => {
         status: 500,
         body: {
             code: "INTERNAL_ERROR",
-            message: "Ocurrió un error inesperado al guardar el cierre.",
+            message: "Ocurrió un error inesperado.",
         },
     };
 };
