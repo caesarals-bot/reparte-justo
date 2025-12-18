@@ -414,6 +414,21 @@ const InitialSetupPage = () => {
             if (!hasExistingConfig) {
                 try {
                     const userReference = doc(db, "users", uid)
+
+                    let userDocReady = false
+                    for (let attempt = 0; attempt < 6; attempt += 1) {
+                        const snapshot = await getDoc(userReference)
+                        if (snapshot.exists()) {
+                            userDocReady = true
+                            break
+                        }
+                        await new Promise((resolve) => setTimeout(resolve, 600))
+                    }
+
+                    if (!userDocReady) {
+                        throw new Error("USER_PROFILE_NOT_READY")
+                    }
+
                     await setDoc(
                         userReference,
                         {

@@ -12,8 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Link, useNavigate } from "react-router"
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithPopup, updateProfile } from "firebase/auth"
-import { auth, db, googleProvider } from "@/firebase/config"
-import { doc, serverTimestamp, setDoc } from "firebase/firestore"
+import { auth, googleProvider } from "@/firebase/config"
 import { useAuth } from "@/context/AuthContext"
 
 type RegisterFormValues = {
@@ -86,27 +85,7 @@ const RegisterPage = () => {
         setFormMessage(null)
 
         try {
-            const result = await signInWithPopup(auth, googleProvider)
-            const user = result.user
-
-            // Crear/asegurar documento de usuario SIN roles.
-            const userDocument = doc(db, "users", user.uid)
-            await setDoc(userDocument, {
-                uid: user.uid,
-                email: user.email,
-                displayName: user.displayName || null,
-                siteRoles: [],
-                restaurantRoles: {},
-                createdAt: serverTimestamp(),
-                lastLogin: serverTimestamp(),
-                lastActivity: null,
-                emailVerified: user.emailVerified,
-                isActive: true,
-                loginAttempts: 0,
-                lockedUntil: null,
-                primaryRestaurant: null,
-                authProvider: "google",
-            }, { merge: true })
+            await signInWithPopup(auth, googleProvider)
 
             setFormMessage("¡Cuenta creada con Google! Redirigiendo...")
             setTimeout(() => {
@@ -191,33 +170,6 @@ const RegisterPage = () => {
             }
 
             localStorage.setItem("rj_pending_restaurant_name", trimmedRestaurantName)
-
-            // Crear documento de usuario SIN roles (se asignan al crear el restaurante en /setup)
-            const userDocument = doc(db, "users", credentials.user.uid)
-            await setDoc(userDocument, {
-                uid: credentials.user.uid,
-                email: trimmedEmail,
-                displayName: trimmedName || null,
-                
-                // Sin roles de sitio (no es admin)
-                siteRoles: [],
-                
-                restaurantRoles: {},
-                
-                // Timestamps
-                createdAt: serverTimestamp(),
-                lastLogin: null,
-                lastActivity: null,
-                
-                // Estado de seguridad
-                emailVerified: false,
-                isActive: true,
-                loginAttempts: 0,
-                lockedUntil: null,
-                
-                // Referencia al restaurante principal
-                primaryRestaurant: null,
-            }, { merge: true })
 
             // Enviar email de verificación
             try {

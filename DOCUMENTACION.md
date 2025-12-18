@@ -479,7 +479,84 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - `invalid-input-response`: token inválido/expirado o mismatch sitekey/secret.
   - `hostname mismatch`: el widget restringe hostnames que no incluyen el dominio actual.
 - Nota: en navegadores con Tracking Prevention puede aparecer ruido de consola (PAT/storage), pero si el submit devuelve 200 y llega el mail, no bloquea el flujo.
-  - Se añadieron también los porcentajes de configuración (`configurationSnapshot.poolPercentages`) a `useClosuresDashboard`/`useLiquidacionWorkflow`, permitiendo mostrar el porcentaje de cocina aun cuando no haya personal de cocina en el rango seleccionado.
-- **Despliegue**
-  - Se ejecutó `npm run build` en `functions/` y `firebase deploy --only functions` para publicar los fixes anteriores.
-  - Status de endpoints: `guardarCierreDiario`, `eliminarCierreDiario` y `liquidarPeriodo` operativos en `reparte-justo/us-central1`.
+
+## Onboarding / Registro — asignación de rol `closure_editor` (issue móvil)
+
+### Comportamiento actual
+- En el registro (`/auth/register`) se crea el usuario en Firebase Auth y se redirige a `/setup`.
+- El rol `closure_editor` **no** se asigna en el registro: se asigna al finalizar el onboarding en `/setup` cuando se guarda la configuración inicial.
+- La asignación ocurre en `InitialSetupPage` escribiendo en `users/{uid}`:
+  - `restaurantRoles: { [restaurantId]: ["closure_editor"] }`
+  - `primaryRestaurant: restaurantId`
+
+### Qué falló (observado en móvil con email/contraseña)
+- Las reglas Firestore bloquean la creación de documentos en `/users` desde el frontend (`allow create: if false`).
+- El documento `users/{uid}` debe existir previamente, y se crea vía Cloud Function trigger `onUserCreate` (Auth onCreate).
+- En móvil puede ocurrir una condición de carrera:
+  - el usuario llega a `/setup` y guarda antes de que el trigger haya creado `users/{uid}`
+  - la app intenta `setDoc(users/{uid}, ..., { merge: true })`, lo cual implicaría crear el doc
+  - Firestore rechaza con `permission-denied`
+  - resultado: el usuario queda sin `restaurantRoles`, por lo que no tiene acceso a flujos protegidos.
+
+### Corrección aplicada (diciembre 2025)
+- `RegisterPage` deja de intentar escribir/crear `users/{uid}` desde el frontend.
+- `InitialSetupPage` ahora espera/reintenta hasta que `users/{uid}` exista antes de escribir roles.
+  - si el doc aún no está listo, se aborta el guardado de permisos y se muestra el mensaje de “permisos activándose”.
+
+### Recomendación futura (robustez)
+- Mover el bootstrap a una Cloud Function dedicada (ej. `bootstrapOnboarding`) que cree restaurante + asigne roles en una sola operación con Admin SDK.
+- Usar el sistema de invitaciones para asignar otros roles (owner/restaurant_viewer/liquidator) sin permitir que cualquiera se vincule a un restaurante existente.
+
+## Panel Admin (/admin) — análisis y microplanes
+
+### Estado actual (diciembre 2025)
+- **Rutas**: `src/router/AppRouter.tsx`
+  - `/admin` (index) → `AdminOverviewPage`
+  - `/admin/overview` → `AdminOverviewPage`
+  - `/admin/restaurants` → `AdminRestaurantsPage`
+  - `/admin/users` → `AdminUsersPage`
+- **Layout**: `src/appPropinaSegura/admin/components/AdminLayout.tsx`
+  - Sidebar + navegación móvil (Sheet).
+- **Protección**: `src/router/ProtectedRoute.tsx`
+  - Requiere `requireSiteRole={['super_admin','admin','support','viewer']}`.
+  - Bypass total para `super_admin`.
+- **Roles**: `src/types/roles.ts`
+  - `SiteRole`: `super_admin | admin | support | viewer`.
+  - `SITE_ROLE_PERMISSIONS` define permisos (hoy se usa en `usePermissions`).
+
+### Fuentes de datos
+- `AdminOverviewPage` usa datos reales mediante `useAdminOverview`:
+  - Lee `restaurants` (colección raíz).
+  - Lee `collectionGroup('registros_diarios')` (muestra limitada) para métricas/eventos.
+- `AdminRestaurantsPage` y `AdminUsersPage` hoy usan **seed/mock** desde `src/data/admin.ts`.
+
+### Observaciones técnicas
+- `useAdminOverview` calcula:
+  - métricas agregadas (restaurantes, staff total, cierres 30 días, pendientes).
+  - últimos cierres por restaurante y “días sin liquidar”.
+- El muestreo de cierres usa `limit(MAX_CLOSURE_SAMPLE)` sin `orderBy`, por lo que la muestra puede no ser representativa.
+- El panel Admin por ahora es “read-heavy”; las acciones en UI ("Agregar restaurante", "Invitar usuario") son placeholders.
+
+---
+
+## Microplanes de trabajo (Admin)
+
+### Microplan A — Datos reales para /admin/restaurants
+1. Reemplazar `src/data/admin.ts` por queries reales a `restaurants`.
+2. Definir el modelo de tabla Admin (campos canónicos en el doc `restaurants/{id}`).
+3. Agregar navegación a detalle (ej. `/admin/restaurants/:id`) con vista read-only inicial.
+
+### Microplan B — Datos reales para /admin/users
+1. Definir fuente de verdad de usuarios: `users/{uid}` (roles, estado, último acceso).
+2. Implementar listado paginado/buscable (por email, rol, restaurante).
+3. Preparar acciones: suspender/reactivar (solo UI/validaciones; backend luego).
+
+### Microplan C — Permisos y hardening
+1. Validar que solo `siteRoles` (super_admin/admin/support/viewer) acceden a /admin.
+2. Definir qué acciones quedan habilitadas por rol (ej. `support` solo lectura).
+3. Añadir guardrails en Firestore Rules / Cloud Functions (cuando existan escrituras admin).
+
+### Microplan D — Operación/observabilidad
+1. Añadir filtros por fecha y orden estable para cierres en `useAdminOverview` (ideal: `orderBy(metadata.referenceDate desc)` + `limit`).
+2. Definir KPIs reales y fuente (evitar depender de “muestras” si necesitamos exactitud).
+3. Registrar eventos administrativos (auditoría) cuando se agreguen mutaciones.
