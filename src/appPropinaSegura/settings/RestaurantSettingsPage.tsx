@@ -60,8 +60,14 @@ const RestaurantSettingsPage = () => {
             // 4. Redirigir a setup para crear nuevo restaurante
             // Usar window.location para forzar recarga completa
             window.location.href = "/setup"
-        } catch (deleteError: any) {
-            setError(`No se pudo borrar el restaurante: ${deleteError.message || "Error desconocido"}. Intenta nuevamente o contacta soporte.`)
+        } catch (deleteError: unknown) {
+            const message =
+                deleteError instanceof Error
+                    ? deleteError.message
+                    : typeof deleteError === "string"
+                        ? deleteError
+                        : "Error desconocido"
+            setError(`No se pudo borrar el restaurante: ${message}. Intenta nuevamente o contacta soporte.`)
             
             setIsDeleting(false)
         }

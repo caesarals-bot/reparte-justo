@@ -81,12 +81,10 @@ const StaffAsistenciaCard = ({
         name: `${baseName}.deduccion_descripcion`,
     })
 
-    const montoController = showMontoIndividual
-        ? useController({
-              control,
-              name: `${baseName}.montoIndividual`,
-          })
-        : null
+    const montoController = useController({
+        control,
+        name: `${baseName}.montoIndividual`,
+    })
 
     const ajustes = useWatch({ control, name: baseName })
     const hasAdjustments = Boolean(
@@ -138,7 +136,7 @@ const StaffAsistenciaCard = ({
                         </div>
                     </div>
 
-                    {showMontoIndividual && montoController ? (
+                    {showMontoIndividual ? (
                         <div className="grid gap-3 sm:grid-cols-2">
                             <div className="space-y-1">
                                 <Label htmlFor={`${baseName}-monto`}>Monto venta ($)</Label>

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button"
+import { Link } from "react-router"
 
 const HeroPage = () => {
     return (
@@ -46,8 +47,10 @@ const HeroPage = () => {
                     Todo queda documentado para total confianza.
                 </p>
                 <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-center md:justify-start md:gap-4">
-                    <Button size="lg" className="w-full text-base sm:w-auto sm:text-lg">
-                        Empezar Gratis
+                    <Button size="lg" className="w-full text-base sm:w-auto sm:text-lg" asChild>
+                        <Link to="/auth/register" aria-label="Ir al registro" tabIndex={0}>
+                            Empezar Gratis
+                        </Link>
                     </Button>
                     <Button
                         variant="outline"

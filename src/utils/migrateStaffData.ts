@@ -10,6 +10,10 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 
+type StaffMigrationResult =
+  | { success: true; migratedData: { serviceStaffCount: number; supportStaffCount: number } }
+  | { success: false; error: string }
+
 export async function migrateStaffData(uid: string, restaurantId: string) {
   try {
     // 1. Leer datos del documento del UID
@@ -18,7 +22,7 @@ export async function migrateStaffData(uid: string, restaurantId: string) {
 
     if (!uidSnapshot.exists()) {
       console.error('❌ No se encontró el documento del UID');
-      return { success: false, error: 'Documento UID no encontrado' };
+      return { success: false, error: 'Documento UID no encontrado' } satisfies StaffMigrationResult;
     }
 
     const uidData = uidSnapshot.data();
@@ -29,7 +33,7 @@ export async function migrateStaffData(uid: string, restaurantId: string) {
 
     if (!restaurantSnapshot.exists()) {
       console.error('❌ No se encontró el documento del restaurante');
-      return { success: false, error: 'Documento restaurante no encontrado' };
+      return { success: false, error: 'Documento restaurante no encontrado' } satisfies StaffMigrationResult;
     }
 
     // 3. Copiar datos al documento del restaurante
@@ -48,23 +52,27 @@ export async function migrateStaffData(uid: string, restaurantId: string) {
 
     await setDoc(restaurantDocRef, dataToMigrate, { merge: true });
     
-    return { 
-      success: true, 
+    return {
+      success: true,
       migratedData: {
         serviceStaffCount: dataToMigrate.serviceStaff.length,
         supportStaffCount: dataToMigrate.supportStaff.length,
-      }
-    };
+      },
+    } satisfies StaffMigrationResult;
 
   } catch (error) {
     console.error('\n❌ Error durante la migración:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    } satisfies StaffMigrationResult;
   }
 }
 
 // Exponer función globalmente para uso en consola
 if (typeof window !== 'undefined') {
-  (window as any).migrateStaffData = async () => {
+  const typedWindow = window as Window & { migrateStaffData?: () => Promise<StaffMigrationResult> }
+  typedWindow.migrateStaffData = async () => {
     const uid = 'xTbuyXF7C5NqBIPQj6FBYukMBFc2';
     const restaurantId = 'rest_xTbuyXF7C5NqBIPQj6FBYukMBFc2_1764900961881';
     return await migrateStaffData(uid, restaurantId);

@@ -4,7 +4,7 @@
  */
 
 import { useState, type FormEvent } from "react"
-import { doc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore"
+import { doc, setDoc, serverTimestamp, Timestamp, type FieldValue } from "firebase/firestore"
 import { db } from "@/firebase/config"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
@@ -65,7 +65,12 @@ export const InviteUserModal = ({
     try {
       // Crear invitación en Firestore
       const invitationId = `inv_${restaurantId}_${Date.now()}`
-      const invitationData: CreateInvitationInput & { status: "pending"; createdAt: any; expiresAt: any; invitationId: string } = {
+      const invitationData: CreateInvitationInput & {
+        status: "pending"
+        createdAt: FieldValue
+        expiresAt: Timestamp
+        invitationId: string
+      } = {
         invitationId,
         restaurantId,
         restaurantName,
