@@ -50,7 +50,7 @@ const baseInputClass =
 const MAX_STAFF_EDITORS = 1
 
 const InitialSetupPage = () => {
-    const { displayName, email, uid, refreshUserRoles } = useAuth()
+    const { displayName, email, uid, refreshUserRoles, userRoles } = useAuth()
     const navigate = useNavigate()
     const [restaurantId, setRestaurantId] = useState<string | null>(null)
     const [canAccessPersonal, setCanAccessPersonal] = useState(false)
@@ -410,16 +410,25 @@ const InitialSetupPage = () => {
 
             let rolesWereUpdated = true
 
-            // Si es un nuevo restaurante, actualizar los roles del usuario
-            if (!hasExistingConfig) {
+            const userHasRoleForRestaurant = Boolean(
+                userRoles?.restaurantRoles?.[resolvedRestaurantId]?.includes("closure_editor"),
+            )
+
+            const shouldAssignBootstrapRole = !userHasRoleForRestaurant
+
+            // Si el usuario aún no tiene rol/primaryRestaurant para este restaurante, intentar asignarlo
+            if (shouldAssignBootstrapRole) {
                 try {
                     const userReference = doc(db, "users", uid)
 
                     let userDocReady = false
-                    for (let attempt = 0; attempt < 6; attempt += 1) {
+                    let userDocPrimaryRestaurant: string | null = null
+                    for (let attempt = 0; attempt < 15; attempt += 1) {
                         const snapshot = await getDoc(userReference)
                         if (snapshot.exists()) {
                             userDocReady = true
+                            const data = snapshot.data() as { primaryRestaurant?: string | null } | undefined
+                            userDocPrimaryRestaurant = data?.primaryRestaurant ?? null
                             break
                         }
                         await new Promise((resolve) => setTimeout(resolve, 600))
@@ -433,7 +442,7 @@ const InitialSetupPage = () => {
                         userReference,
                         {
                             restaurantRoles: { [resolvedRestaurantId]: ["closure_editor"] },
-                            primaryRestaurant: resolvedRestaurantId,
+                            ...(userDocPrimaryRestaurant ? {} : { primaryRestaurant: resolvedRestaurantId }),
                             updatedAt: timestamp,
                         },
                         { merge: true },
@@ -448,6 +457,8 @@ const InitialSetupPage = () => {
                 }
             }
 
+            // El restaurante puede haber quedado creado/actualizado incluso si los roles fallaron.
+            // Marcamos que existe configuración, pero permitimos reintentar roles en próximos guardados.
             setHasExistingConfig(true)
 
             if (!rolesWereUpdated) {
