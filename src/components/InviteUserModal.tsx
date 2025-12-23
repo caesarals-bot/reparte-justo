@@ -1,10 +1,11 @@
 /**
  * Modal para invitar usuarios a un restaurante
  * Solo disponible para closure_editor
+ * Solo permite invitar rol closure_editor (máximo 2 por restaurante)
  */
 
-import { useState, type FormEvent } from "react"
-import { doc, setDoc, serverTimestamp, Timestamp, type FieldValue } from "firebase/firestore"
+import { useState, useEffect, type FormEvent } from "react"
+import { doc, setDoc, serverTimestamp, Timestamp, collection, query, where, getDocs, type FieldValue } from "firebase/firestore"
 import { db } from "@/firebase/config"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
@@ -17,15 +18,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Mail, UserPlus } from "lucide-react"
-import type { RestaurantRole } from "@/types/roles"
+import { Mail, UserPlus, AlertTriangle } from "lucide-react"
 import type { CreateInvitationInput } from "@/types/invitation"
+
+const MAX_CLOSURE_EDITORS = 2
 
 type InviteUserModalProps = {
   isOpen: boolean
   onClose: () => void
   restaurantId: string
   restaurantName: string
+  currentClosureEditorCount?: number
 }
 
 export const InviteUserModal = ({
@@ -33,20 +36,49 @@ export const InviteUserModal = ({
   onClose,
   restaurantId,
   restaurantName,
+  currentClosureEditorCount = 1,
 }: InviteUserModalProps) => {
   const { user } = useAuth()
   const [email, setEmail] = useState("")
-  const [role, setRole] = useState<RestaurantRole | "">("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [pendingInvitationsCount, setPendingInvitationsCount] = useState(0)
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState(false)
+
+  const totalEditors = currentClosureEditorCount + pendingInvitationsCount
+  const canInvite = totalEditors < MAX_CLOSURE_EDITORS
+
+  useEffect(() => {
+    if (isOpen && restaurantId) {
+      loadPendingInvitations()
+    }
+  }, [isOpen, restaurantId])
+
+  const loadPendingInvitations = async () => {
+    setIsLoadingInvitations(true)
+    try {
+      const invitationsQuery = query(
+        collection(db, "invitations"),
+        where("restaurantId", "==", restaurantId),
+        where("status", "==", "pending"),
+        where("role", "==", "closure_editor")
+      )
+      const snapshot = await getDocs(invitationsQuery)
+      setPendingInvitationsCount(snapshot.size)
+    } catch (err) {
+      console.error("Error al cargar invitaciones pendientes:", err)
+    } finally {
+      setIsLoadingInvitations(false)
+    }
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (!email || !role) {
-      setError("Completa todos los campos")
+    if (!email) {
+      setError("Ingresa un correo electrónico")
       return
     }
 
@@ -57,6 +89,11 @@ export const InviteUserModal = ({
 
     if (!user) {
       setError("Debes estar autenticado")
+      return
+    }
+
+    if (!canInvite) {
+      setError("Ya se alcanzó el límite de editores para este restaurante")
       return
     }
 
@@ -75,24 +112,19 @@ export const InviteUserModal = ({
         restaurantId,
         restaurantName,
         invitedEmail: email.trim().toLowerCase(),
-        role: role as RestaurantRole,
+        role: "closure_editor",
         invitedByUid: user.uid,
         invitedByEmail: user.email || "",
         invitedByName: user.displayName,
         status: "pending",
         createdAt: serverTimestamp(),
-        // Expira en 7 días
         expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
       }
 
       await setDoc(doc(db, "invitations", invitationId), invitationData)
 
-      // TODO: Enviar email de invitación usando Cloud Function
-      // await sendInvitationEmail(email, invitationId, restaurantName)
-
       setSuccess(true)
       setEmail("")
-      setRole("")
 
       setTimeout(() => {
         setSuccess(false)
@@ -109,7 +141,6 @@ export const InviteUserModal = ({
   const handleClose = () => {
     if (!isSubmitting) {
       setEmail("")
-      setRole("")
       setError(null)
       setSuccess(false)
       onClose()
@@ -122,22 +153,56 @@ export const InviteUserModal = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Invitar usuario
+            Invitar editor
           </DialogTitle>
           <DialogDescription>
-            Envía una invitación por correo para que otro usuario se una a{" "}
+            Invita a otro usuario para que pueda gestionar cierres y staff en{" "}
             <strong>{restaurantName}</strong>.
           </DialogDescription>
         </DialogHeader>
 
-        {success ? (
+        {!canInvite && !isLoadingInvitations ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    Límite alcanzado
+                  </p>
+                  <p className="text-sm text-amber-600 dark:text-amber-300 mt-1">
+                    Este restaurante ya tiene el máximo de 2 editores permitidos
+                    {pendingInvitationsCount > 0 && ` (${pendingInvitationsCount} invitación pendiente)`}.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={handleClose}>
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : success ? (
           <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-4 text-center">
             <p className="text-sm font-medium text-green-700 dark:text-green-400">
               ✓ Invitación enviada exitosamente
             </p>
+            <p className="text-xs text-green-600 dark:text-green-300 mt-1">
+              El usuario recibirá un enlace para aceptar la invitación.
+            </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Rol:</strong> Gestor Principal (closure_editor)
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Podrá crear/editar cierres, gestionar staff y configuración.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="inviteEmail">
                 Correo electrónico del usuario
@@ -151,33 +216,10 @@ export const InviteUserModal = ({
                   className="w-full rounded-md border border-input bg-background pl-10 pr-4 py-2 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isLoadingInvitations}
                   required
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="inviteRole">Rol a asignar</Label>
-              <select
-                id="inviteRole"
-                className="w-full rounded-md border border-input bg-background px-4 py-2 text-sm shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary"
-                value={role}
-                onChange={(e) => setRole(e.target.value as RestaurantRole | "")}
-                disabled={isSubmitting}
-                required
-              >
-                <option value="">Selecciona un rol</option>
-                <option value="closure_editor">
-                  Gestor Principal (Crear/editar cierres, gestionar staff)
-                </option>
-                <option value="liquidator">
-                  Liquidador (Crear liquidaciones)
-                </option>
-                <option value="restaurant_viewer">
-                  Visualizador (Solo lectura)
-                </option>
-              </select>
             </div>
 
             {error && (
