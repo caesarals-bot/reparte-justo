@@ -13,9 +13,11 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Plus, Trash2 } from "lucide-react"
 import { useNavigate } from "react-router"
-import { deleteField, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
+import { doc, getDoc } from "firebase/firestore"
 import { useAuth } from "@/context/AuthContext"
-import { db } from "@/firebase/config"
+import { auth, db } from "@/firebase/config"
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://us-central1-reparte-justo.cloudfunctions.net"
 
 import type {
     SettlementMode,
@@ -50,7 +52,7 @@ const baseInputClass =
 const MAX_STAFF_EDITORS = 1
 
 const InitialSetupPage = () => {
-    const { displayName, email, uid, refreshUserRoles, userRoles } = useAuth()
+    const { displayName, email, uid, refreshUserRoles } = useAuth()
     const navigate = useNavigate()
     const [restaurantId, setRestaurantId] = useState<string | null>(null)
     const [canAccessPersonal, setCanAccessPersonal] = useState(false)
@@ -66,7 +68,7 @@ const InitialSetupPage = () => {
     const [restaurantForm, setRestaurantForm] = useState<RestaurantFormValues>(defaultRestaurantForm)
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
-    const [hasExistingConfig, setHasExistingConfig] = useState(false)
+    const [, setHasExistingConfig] = useState(false)
     const [restaurantNameExists, setRestaurantNameExists] = useState(false)
     const [activeTab, setActiveTab] = useState<"restaurante" | "personal">("restaurante")
     const {
@@ -370,108 +372,66 @@ const InitialSetupPage = () => {
 
         try {
             const resolvedRestaurantId = restaurantId ?? uid
-            const restaurantReference = doc(db, "restaurants", resolvedRestaurantId)
-            const timestamp = serverTimestamp()
-            const payload: Record<string, unknown> = {
+
+            // Obtener ID token para autenticación
+            const currentUser = auth.currentUser
+            if (!currentUser) {
+                throw new Error("No hay usuario autenticado")
+            }
+            const idToken = await currentUser.getIdToken()
+
+            // Preparar payload para Cloud Function
+            const bootstrapPayload = {
+                uid,
+                restaurantId: resolvedRestaurantId,
+                restaurantName: trimmedRestaurantName || restaurantForm.restaurantName,
                 responsibleName: responsibleName.trim() || null,
                 settlementMode,
                 additionalDeductions: additionalDeductions.map(mapAdditionalDeductionForStorage),
                 serviceStaff: serviceStaff.map(mapStaffMemberForStorage),
                 supportStaff: supportStaff.map(mapStaffMemberForStorage),
-                updatedAt: timestamp,
                 staffEditors,
-                setupCompleted: true, // Marcar setup como completado
-            }
-            
-            // Solo actualizar restaurantName si no existe previamente (no se registró en el signup)
-            if (!restaurantNameExists && trimmedRestaurantName) {
-                payload.restaurantName = trimmedRestaurantName
-            }
-
-            if (!hasExistingConfig) {
-                payload.createdAt = timestamp
-                payload.ownerId = uid // Requerido por las reglas de Firestore
-            }
-
-            if (settlementMode === "pool") {
-                payload.poolConfig = {
-                    kitchenPercentage: parseNumberInput(poolConfig.kitchenPercentage),
-                    transbankPercentage: parseNumberInput(poolConfig.transbankPercentage),
-                }
-                payload.directConfig = deleteField()
-            } else {
-                payload.directConfig = {
-                    directWaiterPercentage: parseNumberInput(directConfig.directWaiterPercentage),
-                }
-                payload.poolConfig = deleteField()
+                ...(settlementMode === "pool"
+                    ? {
+                          poolConfig: {
+                              kitchenPercentage: parseNumberInput(poolConfig.kitchenPercentage),
+                              transbankPercentage: parseNumberInput(poolConfig.transbankPercentage),
+                          },
+                      }
+                    : {
+                          directConfig: {
+                              directWaiterPercentage: parseNumberInput(directConfig.directWaiterPercentage),
+                          },
+                      }),
             }
 
-            await setDoc(restaurantReference, payload, { merge: true })
+            // Llamar a Cloud Function
+            const response = await fetch(`${API_BASE_URL}/bootstrapOnboarding`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${idToken}`,
+                },
+                body: JSON.stringify(bootstrapPayload),
+            })
 
-            let rolesWereUpdated = true
+            const result = await response.json()
 
-            const userHasRoleForRestaurant = Boolean(
-                userRoles?.restaurantRoles?.[resolvedRestaurantId]?.includes("closure_editor"),
-            )
-
-            const shouldAssignBootstrapRole = !userHasRoleForRestaurant
-
-            // Si el usuario aún no tiene rol/primaryRestaurant para este restaurante, intentar asignarlo
-            if (shouldAssignBootstrapRole) {
-                try {
-                    const userReference = doc(db, "users", uid)
-
-                    let userDocReady = false
-                    let userDocPrimaryRestaurant: string | null = null
-                    for (let attempt = 0; attempt < 15; attempt += 1) {
-                        const snapshot = await getDoc(userReference)
-                        if (snapshot.exists()) {
-                            userDocReady = true
-                            const data = snapshot.data() as { primaryRestaurant?: string | null } | undefined
-                            userDocPrimaryRestaurant = data?.primaryRestaurant ?? null
-                            break
-                        }
-                        await new Promise((resolve) => setTimeout(resolve, 600))
-                    }
-
-                    if (!userDocReady) {
-                        throw new Error("USER_PROFILE_NOT_READY")
-                    }
-
-                    await setDoc(
-                        userReference,
-                        {
-                            restaurantRoles: { [resolvedRestaurantId]: ["closure_editor"] },
-                            ...(userDocPrimaryRestaurant ? {} : { primaryRestaurant: resolvedRestaurantId }),
-                            updatedAt: timestamp,
-                        },
-                        { merge: true },
-                    )
-
-                    // Refrescar roles en el contexto para que la app reconozca los nuevos permisos
-                    await refreshUserRoles()
-                    localStorage.removeItem("rj_pending_restaurant_name")
-                } catch (error) {
-                    rolesWereUpdated = false
-                    console.error("Error al activar permisos del usuario", error)
-                }
+            if (!response.ok) {
+                console.error("Bootstrap error:", result)
+                throw new Error(result.message || "Error al configurar el restaurante")
             }
 
-            // El restaurante puede haber quedado creado/actualizado incluso si los roles fallaron.
-            // Marcamos que existe configuración, pero permitimos reintentar roles en próximos guardados.
+            // Refrescar roles en el contexto para que la app reconozca los nuevos permisos
+            await refreshUserRoles()
+            localStorage.removeItem("rj_pending_restaurant_name")
             setHasExistingConfig(true)
-
-            if (!rolesWereUpdated) {
-                setSaveError(
-                    "Guardamos tu configuración, pero aún estamos activando tus permisos. Espera unos segundos y vuelve a presionar Guardar para continuar.",
-                )
-                return
-            }
 
             navigate("/cierre")
         } catch (error) {
             console.error("Error al guardar la configuración del restaurante", error)
-            setSaveError("No pudimos guardar la configuración. Intenta nuevamente en unos segundos.")
+            const errorMessage = error instanceof Error ? error.message : "Error desconocido"
+            setSaveError(`No pudimos guardar la configuración: ${errorMessage}`)
         } finally {
             setIsSaving(false)
         }

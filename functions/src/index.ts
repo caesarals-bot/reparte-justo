@@ -5,6 +5,7 @@ import { guardarCierreDiarioHandler } from "./handlers/guardarCierreDiario"
 import { liquidarPeriodoHandler } from "./handlers/liquidarPeriodo"
 import { eliminarCierreDiarioHandler } from "./handlers/eliminarCierreDiario"
 import { contactSubmitHandler, RESEND_FROM, RESEND_KEY, RESEND_TO, TURNSTILE_SECRET } from "./handlers/contactSubmit"
+import { bootstrapOnboardingHandler } from "./handlers/bootstrapOnboarding"
 
 // Triggers
 export { onUserCreate } from "./triggers/onUserCreate"
@@ -12,6 +13,8 @@ export { onUserCreate } from "./triggers/onUserCreate"
 const allowedOrigins = new Set([
     "http://localhost:5173",
     "https://repartejusto.netlify.app",
+    "https://repartejusto.xyz",
+    "https://www.repartejusto.xyz",
 ])
 
 const resolveOrigin = (incomingOrigin: string | undefined) => {
@@ -150,6 +153,46 @@ export const liquidarPeriodo = functions
         }
     })
 
+/**
+ * Bootstrap Onboarding
+ * Crea restaurante + asigna closure_editor en una sola operación.
+ * Requiere autenticación (ID token en header Authorization).
+ */
+export const bootstrapOnboarding = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res): Promise<void> => {
+        functions.logger.info("bootstrapOnboarding request", { method: req.method, origin: req.headers.origin })
+
+        setCorsHeaders(req, res)
+        if (handlePreflight(req, res)) {
+            return
+        }
+
+        try {
+            // Verificar autenticación
+            const authHeader = req.headers.authorization
+            if (!authHeader?.startsWith("Bearer ")) {
+                res.status(401).json({
+                    code: "UNAUTHORIZED",
+                    message: "Se requiere autenticación.",
+                })
+                return
+            }
+
+            const idToken = authHeader.split("Bearer ")[1]
+            const { getAuth } = await import("firebase-admin/auth")
+            const decodedToken = await getAuth().verifyIdToken(idToken)
+            const callerUid = decodedToken.uid
+
+            const result = await bootstrapOnboardingHandler(req.body, callerUid)
+            res.status(200).json(result)
+        } catch (error) {
+            const { status, body } = mapHandlerError(error)
+            safeLogError("bootstrapOnboarding error", error)
+            res.status(status).json(body)
+        }
+    })
+
 const mapHandlerError = (error: unknown): { status: number; body: Record<string, unknown> } => {
     if (error instanceof ZodError) {
         return {
@@ -247,6 +290,27 @@ const mapHandlerError = (error: unknown): { status: number; body: Record<string,
                 body: {
                     code: normalizedCode,
                     message: "Debes enviar referenceDateKey para continuar.",
+                },
+            }
+        }
+
+        // Bootstrap onboarding errors
+        if (normalizedCode.startsWith("UNAUTHORIZED")) {
+            return {
+                status: 403,
+                body: {
+                    code: "UNAUTHORIZED",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "No tienes permisos para esta acción.",
+                },
+            }
+        }
+
+        if (normalizedCode.startsWith("INVALID_INPUT")) {
+            return {
+                status: 400,
+                body: {
+                    code: "INVALID_INPUT",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Datos de entrada inválidos.",
                 },
             }
         }

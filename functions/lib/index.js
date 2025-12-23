@@ -33,19 +33,22 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.contactSubmit = exports.guardarCierreDiario = exports.onUserCreate = void 0;
+exports.bootstrapOnboarding = exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.contactSubmit = exports.guardarCierreDiario = exports.onUserCreate = void 0;
 const functions = __importStar(require("firebase-functions/v1"));
 const zod_1 = require("zod");
 const guardarCierreDiario_1 = require("./handlers/guardarCierreDiario");
 const liquidarPeriodo_1 = require("./handlers/liquidarPeriodo");
 const eliminarCierreDiario_1 = require("./handlers/eliminarCierreDiario");
 const contactSubmit_1 = require("./handlers/contactSubmit");
+const bootstrapOnboarding_1 = require("./handlers/bootstrapOnboarding");
 // Triggers
 var onUserCreate_1 = require("./triggers/onUserCreate");
 Object.defineProperty(exports, "onUserCreate", { enumerable: true, get: function () { return onUserCreate_1.onUserCreate; } });
 const allowedOrigins = new Set([
     "http://localhost:5173",
     "https://repartejusto.netlify.app",
+    "https://repartejusto.xyz",
+    "https://www.repartejusto.xyz",
 ]);
 const resolveOrigin = (incomingOrigin) => {
     if (!incomingOrigin) {
@@ -167,6 +170,42 @@ exports.liquidarPeriodo = functions
         res.status(status).json(body);
     }
 });
+/**
+ * Bootstrap Onboarding
+ * Crea restaurante + asigna closure_editor en una sola operación.
+ * Requiere autenticación (ID token en header Authorization).
+ */
+exports.bootstrapOnboarding = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res) => {
+    functions.logger.info("bootstrapOnboarding request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
+    if (handlePreflight(req, res)) {
+        return;
+    }
+    try {
+        // Verificar autenticación
+        const authHeader = req.headers.authorization;
+        if (!authHeader?.startsWith("Bearer ")) {
+            res.status(401).json({
+                code: "UNAUTHORIZED",
+                message: "Se requiere autenticación.",
+            });
+            return;
+        }
+        const idToken = authHeader.split("Bearer ")[1];
+        const { getAuth } = await Promise.resolve().then(() => __importStar(require("firebase-admin/auth")));
+        const decodedToken = await getAuth().verifyIdToken(idToken);
+        const callerUid = decodedToken.uid;
+        const result = await (0, bootstrapOnboarding_1.bootstrapOnboardingHandler)(req.body, callerUid);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        const { status, body } = mapHandlerError(error);
+        safeLogError("bootstrapOnboarding error", error);
+        res.status(status).json(body);
+    }
+});
 const mapHandlerError = (error) => {
     if (error instanceof zod_1.ZodError) {
         return {
@@ -257,6 +296,25 @@ const mapHandlerError = (error) => {
                 body: {
                     code: normalizedCode,
                     message: "Debes enviar referenceDateKey para continuar.",
+                },
+            };
+        }
+        // Bootstrap onboarding errors
+        if (normalizedCode.startsWith("UNAUTHORIZED")) {
+            return {
+                status: 403,
+                body: {
+                    code: "UNAUTHORIZED",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "No tienes permisos para esta acción.",
+                },
+            };
+        }
+        if (normalizedCode.startsWith("INVALID_INPUT")) {
+            return {
+                status: 400,
+                body: {
+                    code: "INVALID_INPUT",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Datos de entrada inválidos.",
                 },
             };
         }
