@@ -15,6 +15,7 @@ import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth"
 import { auth, db, googleProvider } from "@/firebase/config"
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
 import { useAuth } from "@/context/AuthContext"
+import { useTurnstile } from "@/hooks/useTurnstile"
 
 type LoginFormValues = {
     email: string
@@ -31,6 +32,10 @@ const LoginPage = () => {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const navigate = useNavigate()
     const { isAuthenticated, isLoading, userRoles } = useAuth()
+    
+    const { containerRef: turnstileRef, isVerified: isTurnstileVerified } = useTurnstile()
+    const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || ""
+    const requireTurnstile = Boolean(turnstileSiteKey)
 
     useEffect(() => {
         if (!isLoading && isAuthenticated && userRoles) {
@@ -147,6 +152,12 @@ const LoginPage = () => {
             return
         }
 
+        // Validar Turnstile si está configurado
+        if (requireTurnstile && !isTurnstileVerified) {
+            setFormMessage("Completa la verificación de seguridad.")
+            return
+        }
+
         setFieldErrors({})
         setIsSubmitting(true)
         setFormMessage(null)
@@ -249,11 +260,17 @@ const LoginPage = () => {
                             )}
                         </div>
 
+                        {requireTurnstile && (
+                            <div className="flex justify-center">
+                                <div ref={turnstileRef} />
+                            </div>
+                        )}
+
                         <Button
                             type="submit"
                             className="w-full py-3 text-base"
                             tabIndex={0}
-                            disabled={isSubmitting || isLoading || isGoogleLoading}
+                            disabled={isSubmitting || isLoading || isGoogleLoading || (requireTurnstile && !isTurnstileVerified)}
                         >
                             {isSubmitting || isLoading ? (
                                 <span className="inline-flex items-center justify-center gap-2">

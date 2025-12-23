@@ -14,6 +14,7 @@ import { Link, useNavigate } from "react-router"
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithPopup, updateProfile } from "firebase/auth"
 import { auth, googleProvider } from "@/firebase/config"
 import { useAuth } from "@/context/AuthContext"
+import { useTurnstile } from "@/hooks/useTurnstile"
 
 type RegisterFormValues = {
     name: string
@@ -39,6 +40,10 @@ const RegisterPage = () => {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const navigate = useNavigate()
     const { isAuthenticated, isLoading, userRoles } = useAuth()
+    
+    const { containerRef: turnstileRef, isVerified: isTurnstileVerified } = useTurnstile()
+    const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || ""
+    const requireTurnstile = Boolean(turnstileSiteKey)
 
     useEffect(() => {
         if (!isLoading && isAuthenticated && userRoles) {
@@ -155,6 +160,12 @@ const RegisterPage = () => {
         if (Object.keys(nextErrors).length > 0) {
             setFieldErrors(nextErrors)
             setFormMessage(null)
+            return
+        }
+
+        // Validar Turnstile si está configurado
+        if (requireTurnstile && !isTurnstileVerified) {
+            setFormMessage("Completa la verificación de seguridad.")
             return
         }
 
@@ -344,11 +355,17 @@ const RegisterPage = () => {
                             )}
                         </div>
 
+                        {requireTurnstile && (
+                            <div className="flex justify-center">
+                                <div ref={turnstileRef} />
+                            </div>
+                        )}
+
                         <Button
                             type="submit"
                             className="w-full py-3 text-base"
                             tabIndex={0}
-                            disabled={isSubmitting || isLoading || isGoogleLoading}
+                            disabled={isSubmitting || isLoading || isGoogleLoading || (requireTurnstile && !isTurnstileVerified)}
                         >
                             {isSubmitting || isLoading ? (
                                 <span className="inline-flex items-center justify-center gap-2">
