@@ -6,6 +6,7 @@ import { liquidarPeriodoHandler } from "./handlers/liquidarPeriodo"
 import { eliminarCierreDiarioHandler } from "./handlers/eliminarCierreDiario"
 import { contactSubmitHandler, RESEND_FROM, RESEND_KEY, RESEND_TO, TURNSTILE_SECRET } from "./handlers/contactSubmit"
 import { bootstrapOnboardingHandler } from "./handlers/bootstrapOnboarding"
+import { acceptInvitationHandler, rejectInvitationHandler } from "./handlers/acceptInvitation"
 
 // Triggers
 export { onUserCreate } from "./triggers/onUserCreate"
@@ -193,6 +194,85 @@ export const bootstrapOnboarding = functions
         }
     })
 
+/**
+ * Accept Invitation
+ * Permite a un usuario aceptar una invitación y recibir el rol closure_editor.
+ * Valida límite de 2 closure_editor por restaurante.
+ */
+export const acceptInvitation = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res): Promise<void> => {
+        functions.logger.info("acceptInvitation request", { method: req.method, origin: req.headers.origin })
+
+        setCorsHeaders(req, res)
+        if (handlePreflight(req, res)) {
+            return
+        }
+
+        try {
+            const authHeader = req.headers.authorization
+            if (!authHeader?.startsWith("Bearer ")) {
+                res.status(401).json({
+                    code: "UNAUTHORIZED",
+                    message: "Se requiere autenticación.",
+                })
+                return
+            }
+
+            const idToken = authHeader.split("Bearer ")[1]
+            const { getAuth } = await import("firebase-admin/auth")
+            const decodedToken = await getAuth().verifyIdToken(idToken)
+            const callerUid = decodedToken.uid
+            const callerEmail = decodedToken.email
+
+            const result = await acceptInvitationHandler(req.body, callerUid, callerEmail)
+            res.status(200).json(result)
+        } catch (error) {
+            const { status, body } = mapHandlerError(error)
+            safeLogError("acceptInvitation error", error)
+            res.status(status).json(body)
+        }
+    })
+
+/**
+ * Reject Invitation
+ * Permite a un usuario rechazar una invitación.
+ */
+export const rejectInvitation = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res): Promise<void> => {
+        functions.logger.info("rejectInvitation request", { method: req.method, origin: req.headers.origin })
+
+        setCorsHeaders(req, res)
+        if (handlePreflight(req, res)) {
+            return
+        }
+
+        try {
+            const authHeader = req.headers.authorization
+            if (!authHeader?.startsWith("Bearer ")) {
+                res.status(401).json({
+                    code: "UNAUTHORIZED",
+                    message: "Se requiere autenticación.",
+                })
+                return
+            }
+
+            const idToken = authHeader.split("Bearer ")[1]
+            const { getAuth } = await import("firebase-admin/auth")
+            const decodedToken = await getAuth().verifyIdToken(idToken)
+            const callerUid = decodedToken.uid
+            const callerEmail = decodedToken.email
+
+            const result = await rejectInvitationHandler(req.body, callerUid, callerEmail)
+            res.status(200).json(result)
+        } catch (error) {
+            const { status, body } = mapHandlerError(error)
+            safeLogError("rejectInvitation error", error)
+            res.status(status).json(body)
+        }
+    })
+
 const mapHandlerError = (error: unknown): { status: number; body: Record<string, unknown> } => {
     if (error instanceof ZodError) {
         return {
@@ -311,6 +391,67 @@ const mapHandlerError = (error: unknown): { status: number; body: Record<string,
                 body: {
                     code: "INVALID_INPUT",
                     message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Datos de entrada inválidos.",
+                },
+            }
+        }
+
+        // Invitation errors
+        if (normalizedCode.startsWith("NOT_FOUND")) {
+            return {
+                status: 404,
+                body: {
+                    code: "NOT_FOUND",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Recurso no encontrado.",
+                },
+            }
+        }
+
+        if (normalizedCode.startsWith("INVALID_STATE")) {
+            return {
+                status: 409,
+                body: {
+                    code: "INVALID_STATE",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Estado inválido.",
+                },
+            }
+        }
+
+        if (normalizedCode.startsWith("EXPIRED")) {
+            return {
+                status: 410,
+                body: {
+                    code: "EXPIRED",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "El recurso ha expirado.",
+                },
+            }
+        }
+
+        if (normalizedCode.startsWith("LIMIT_REACHED")) {
+            return {
+                status: 409,
+                body: {
+                    code: "LIMIT_REACHED",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Se alcanzó el límite permitido.",
+                },
+            }
+        }
+
+        if (normalizedCode.startsWith("ALREADY_HAS_ROLE")) {
+            return {
+                status: 409,
+                body: {
+                    code: "ALREADY_HAS_ROLE",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Ya tienes este rol.",
+                },
+            }
+        }
+
+        if (normalizedCode.startsWith("INVALID_ROLE")) {
+            return {
+                status: 400,
+                body: {
+                    code: "INVALID_ROLE",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Rol inválido.",
                 },
             }
         }

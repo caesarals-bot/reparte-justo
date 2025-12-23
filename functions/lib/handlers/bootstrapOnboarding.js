@@ -56,7 +56,7 @@ const bootstrapOnboardingHandler = async (input, callerUid) => {
             restaurantData.poolConfig = poolConfig;
             restaurantData.directConfig = firestore_1.FieldValue.delete();
         }
-        else if (settlementMode === "direct" && directConfig) {
+        else if (settlementMode === "directa" && directConfig) {
             restaurantData.directConfig = directConfig;
             restaurantData.poolConfig = firestore_1.FieldValue.delete();
         }

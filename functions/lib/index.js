@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.bootstrapOnboarding = exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.contactSubmit = exports.guardarCierreDiario = exports.onUserCreate = void 0;
+exports.rejectInvitation = exports.acceptInvitation = exports.bootstrapOnboarding = exports.liquidarPeriodo = exports.eliminarCierreDiario = exports.contactSubmit = exports.guardarCierreDiario = exports.onUserCreate = void 0;
 const functions = __importStar(require("firebase-functions/v1"));
 const zod_1 = require("zod");
 const guardarCierreDiario_1 = require("./handlers/guardarCierreDiario");
@@ -41,6 +41,7 @@ const liquidarPeriodo_1 = require("./handlers/liquidarPeriodo");
 const eliminarCierreDiario_1 = require("./handlers/eliminarCierreDiario");
 const contactSubmit_1 = require("./handlers/contactSubmit");
 const bootstrapOnboarding_1 = require("./handlers/bootstrapOnboarding");
+const acceptInvitation_1 = require("./handlers/acceptInvitation");
 // Triggers
 var onUserCreate_1 = require("./triggers/onUserCreate");
 Object.defineProperty(exports, "onUserCreate", { enumerable: true, get: function () { return onUserCreate_1.onUserCreate; } });
@@ -206,6 +207,77 @@ exports.bootstrapOnboarding = functions
         res.status(status).json(body);
     }
 });
+/**
+ * Accept Invitation
+ * Permite a un usuario aceptar una invitación y recibir el rol closure_editor.
+ * Valida límite de 2 closure_editor por restaurante.
+ */
+exports.acceptInvitation = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res) => {
+    functions.logger.info("acceptInvitation request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
+    if (handlePreflight(req, res)) {
+        return;
+    }
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader?.startsWith("Bearer ")) {
+            res.status(401).json({
+                code: "UNAUTHORIZED",
+                message: "Se requiere autenticación.",
+            });
+            return;
+        }
+        const idToken = authHeader.split("Bearer ")[1];
+        const { getAuth } = await Promise.resolve().then(() => __importStar(require("firebase-admin/auth")));
+        const decodedToken = await getAuth().verifyIdToken(idToken);
+        const callerUid = decodedToken.uid;
+        const callerEmail = decodedToken.email;
+        const result = await (0, acceptInvitation_1.acceptInvitationHandler)(req.body, callerUid, callerEmail);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        const { status, body } = mapHandlerError(error);
+        safeLogError("acceptInvitation error", error);
+        res.status(status).json(body);
+    }
+});
+/**
+ * Reject Invitation
+ * Permite a un usuario rechazar una invitación.
+ */
+exports.rejectInvitation = functions
+    .region("us-central1")
+    .https.onRequest(async (req, res) => {
+    functions.logger.info("rejectInvitation request", { method: req.method, origin: req.headers.origin });
+    setCorsHeaders(req, res);
+    if (handlePreflight(req, res)) {
+        return;
+    }
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader?.startsWith("Bearer ")) {
+            res.status(401).json({
+                code: "UNAUTHORIZED",
+                message: "Se requiere autenticación.",
+            });
+            return;
+        }
+        const idToken = authHeader.split("Bearer ")[1];
+        const { getAuth } = await Promise.resolve().then(() => __importStar(require("firebase-admin/auth")));
+        const decodedToken = await getAuth().verifyIdToken(idToken);
+        const callerUid = decodedToken.uid;
+        const callerEmail = decodedToken.email;
+        const result = await (0, acceptInvitation_1.rejectInvitationHandler)(req.body, callerUid, callerEmail);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        const { status, body } = mapHandlerError(error);
+        safeLogError("rejectInvitation error", error);
+        res.status(status).json(body);
+    }
+});
 const mapHandlerError = (error) => {
     if (error instanceof zod_1.ZodError) {
         return {
@@ -315,6 +387,61 @@ const mapHandlerError = (error) => {
                 body: {
                     code: "INVALID_INPUT",
                     message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Datos de entrada inválidos.",
+                },
+            };
+        }
+        // Invitation errors
+        if (normalizedCode.startsWith("NOT_FOUND")) {
+            return {
+                status: 404,
+                body: {
+                    code: "NOT_FOUND",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Recurso no encontrado.",
+                },
+            };
+        }
+        if (normalizedCode.startsWith("INVALID_STATE")) {
+            return {
+                status: 409,
+                body: {
+                    code: "INVALID_STATE",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Estado inválido.",
+                },
+            };
+        }
+        if (normalizedCode.startsWith("EXPIRED")) {
+            return {
+                status: 410,
+                body: {
+                    code: "EXPIRED",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "El recurso ha expirado.",
+                },
+            };
+        }
+        if (normalizedCode.startsWith("LIMIT_REACHED")) {
+            return {
+                status: 409,
+                body: {
+                    code: "LIMIT_REACHED",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Se alcanzó el límite permitido.",
+                },
+            };
+        }
+        if (normalizedCode.startsWith("ALREADY_HAS_ROLE")) {
+            return {
+                status: 409,
+                body: {
+                    code: "ALREADY_HAS_ROLE",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Ya tienes este rol.",
+                },
+            };
+        }
+        if (normalizedCode.startsWith("INVALID_ROLE")) {
+            return {
+                status: 400,
+                body: {
+                    code: "INVALID_ROLE",
+                    message: rawCode.includes(":") ? rawCode.split(": ")[1] : "Rol inválido.",
                 },
             };
         }
