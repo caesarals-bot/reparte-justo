@@ -1,17 +1,20 @@
 /**
  * Página para aceptar o rechazar invitaciones a restaurantes
  * Ruta: /invite/:invitationId
+ * Usa Cloud Functions para aceptar/rechazar (valida límite de 2 closure_editor)
  */
 
 import { useEffect, useState } from "react"
 import { useParams, useNavigate, Link } from "react-router"
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
-import { db } from "@/firebase/config"
+import { doc, getDoc } from "firebase/firestore"
+import { auth, db } from "@/firebase/config"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Check, X, Clock, Building2, UserCheck, Loader2 } from "lucide-react"
 import type { InvitationDocument } from "@/types/invitation"
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://us-central1-reparte-justo.cloudfunctions.net"
 
 const AcceptInvitationPage = () => {
   const { invitationId } = useParams()
@@ -82,39 +85,46 @@ const AcceptInvitationPage = () => {
     setIsProcessing(true)
 
     try {
-      // Actualizar documento del usuario para agregar el rol
-      const userDocRef = doc(db, "users", user.uid)
-      const userDoc = await getDoc(userDocRef)
-
-      if (userDoc.exists()) {
-        const userData = userDoc.data()
-        const currentRestaurantRoles = userData.restaurantRoles || {}
-
-        // Agregar el nuevo rol al restaurante
-        await updateDoc(userDocRef, {
-          restaurantRoles: {
-            ...currentRestaurantRoles,
-            [invitation.restaurantId]: [
-              ...(currentRestaurantRoles[invitation.restaurantId] || []),
-              invitation.role,
-            ],
-          },
-        })
+      // Obtener ID token para autenticación
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        throw new Error("No hay usuario autenticado")
       }
+      const idToken = await currentUser.getIdToken()
 
-      // Actualizar invitación como aceptada
-      await updateDoc(doc(db, "invitations", invitationId), {
-        status: "accepted",
-        acceptedAt: serverTimestamp(),
-        invitedUserId: user.uid,
+      // Llamar a Cloud Function para aceptar invitación
+      const response = await fetch(`${API_BASE_URL}/acceptInvitation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ invitationId }),
       })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        // Manejar errores específicos
+        if (result.code === "LIMIT_REACHED") {
+          setError("Este restaurante ya tiene el máximo de editores permitidos (2)")
+        } else if (result.code === "ALREADY_HAS_ROLE") {
+          setError("Ya tienes permisos de editor en este restaurante")
+        } else if (result.code === "EXPIRED") {
+          setError("Esta invitación ha expirado")
+        } else {
+          setError(result.message || "No se pudo aceptar la invitación")
+        }
+        setIsProcessing(false)
+        return
+      }
 
       // Refrescar roles del usuario
       await refreshUserRoles()
 
       // Redirigir al dashboard
       setTimeout(() => {
-        navigate("/dashboard")
+        navigate("/cierre")
       }, 1500)
     } catch (err) {
       console.error("Error al aceptar invitación:", err)
@@ -124,15 +134,35 @@ const AcceptInvitationPage = () => {
   }
 
   const handleReject = async () => {
-    if (!invitationId) return
+    if (!user || !invitationId) return
 
     setIsProcessing(true)
 
     try {
-      await updateDoc(doc(db, "invitations", invitationId), {
-        status: "rejected",
-        rejectedAt: serverTimestamp(),
+      // Obtener ID token para autenticación
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        throw new Error("No hay usuario autenticado")
+      }
+      const idToken = await currentUser.getIdToken()
+
+      // Llamar a Cloud Function para rechazar invitación
+      const response = await fetch(`${API_BASE_URL}/rejectInvitation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ invitationId }),
       })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.message || "No se pudo rechazar la invitación")
+        setIsProcessing(false)
+        return
+      }
 
       setTimeout(() => {
         navigate("/")
