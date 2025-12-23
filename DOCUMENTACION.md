@@ -501,7 +501,22 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
 ### Corrección aplicada (diciembre 2025)
 - `RegisterPage` deja de intentar escribir/crear `users/{uid}` desde el frontend.
 - `InitialSetupPage` ahora espera/reintenta hasta que `users/{uid}` exista antes de escribir roles.
-  - si el doc aún no está listo, se aborta el guardado de permisos y se muestra el mensaje de “permisos activándose”.
+  - Se aumentó la espera a **15 intentos** con **600ms** (≈9s).
+  - Si el doc aún no está listo, se guarda la configuración del restaurante pero se muestra el mensaje de “permisos activándose” y se permite reintentar.
+- `InitialSetupPage` permite **reintentar la asignación de rol** incluso si el restaurante ya quedó configurado (`hasExistingConfig=true`).
+  - Condición: si el usuario aún no tiene `restaurantRoles[restaurantId]` con `closure_editor`, se vuelve a intentar el `setDoc(users/{uid}, { merge: true })`.
+- Commit de referencia:
+  - `main`: `f0cd288` ("Fix: allow setup to retry role assignment")
+
+### Checklist de validación en producción (móvil)
+1. Registrar usuario (email/contraseña) y llegar a `/setup`.
+2. Completar configuración y presionar **Guardar**.
+3. Si aparece el mensaje de permisos activándose:
+   - Esperar 5-10 segundos.
+   - Presionar **Guardar** nuevamente (debería reintentar roles sin bloquear por `hasExistingConfig`).
+4. Confirmar resultado:
+   - Navega a `/cierre`.
+   - En Firestore `users/{uid}.restaurantRoles[restaurantId]` incluye `closure_editor`.
 
 ### Recomendación futura (robustez)
 - Mover el bootstrap a una Cloud Function dedicada (ej. `bootstrapOnboarding`) que cree restaurante + asigne roles en una sola operación con Admin SDK.
