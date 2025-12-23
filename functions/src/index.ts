@@ -185,9 +185,21 @@ export const bootstrapOnboarding = functions
             const decodedToken = await getAuth().verifyIdToken(idToken)
             const callerUid = decodedToken.uid
 
+            functions.logger.info("bootstrapOnboarding calling handler", { 
+                callerUid, 
+                bodyKeys: Object.keys(req.body || {}),
+                uid: req.body?.uid,
+                restaurantId: req.body?.restaurantId,
+            })
+
             const result = await bootstrapOnboardingHandler(req.body, callerUid)
             res.status(200).json(result)
         } catch (error) {
+            functions.logger.error("bootstrapOnboarding FULL ERROR", {
+                errorName: error instanceof Error ? error.name : "unknown",
+                errorMessage: error instanceof Error ? error.message : String(error),
+                errorStack: error instanceof Error ? error.stack : undefined,
+            })
             const { status, body } = mapHandlerError(error)
             safeLogError("bootstrapOnboarding error", error)
             res.status(status).json(body)

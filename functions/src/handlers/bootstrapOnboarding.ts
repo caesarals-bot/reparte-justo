@@ -126,10 +126,16 @@ export const bootstrapOnboardingHandler = async (
         // Configuración según modo
         if (settlementMode === "pool" && poolConfig) {
             restaurantData.poolConfig = poolConfig
-            restaurantData.directConfig = FieldValue.delete()
+            // Solo usar delete() en update, no en set
+            if (restaurantExists) {
+                restaurantData.directConfig = FieldValue.delete()
+            }
         } else if (settlementMode === "directa" && directConfig) {
             restaurantData.directConfig = directConfig
-            restaurantData.poolConfig = FieldValue.delete()
+            // Solo usar delete() en update, no en set
+            if (restaurantExists) {
+                restaurantData.poolConfig = FieldValue.delete()
+            }
         }
 
         // Solo agregar campos de creación si es nuevo

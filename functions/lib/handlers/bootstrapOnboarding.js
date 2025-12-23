@@ -54,11 +54,17 @@ const bootstrapOnboardingHandler = async (input, callerUid) => {
         // Configuración según modo
         if (settlementMode === "pool" && poolConfig) {
             restaurantData.poolConfig = poolConfig;
-            restaurantData.directConfig = firestore_1.FieldValue.delete();
+            // Solo usar delete() en update, no en set
+            if (restaurantExists) {
+                restaurantData.directConfig = firestore_1.FieldValue.delete();
+            }
         }
         else if (settlementMode === "directa" && directConfig) {
             restaurantData.directConfig = directConfig;
-            restaurantData.poolConfig = firestore_1.FieldValue.delete();
+            // Solo usar delete() en update, no en set
+            if (restaurantExists) {
+                restaurantData.poolConfig = firestore_1.FieldValue.delete();
+            }
         }
         // Solo agregar campos de creación si es nuevo
         if (!restaurantExists) {
