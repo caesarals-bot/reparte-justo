@@ -25,14 +25,14 @@ import {
   TableRow,
   TableCaption,
 } from "@/components/ui/table"
-import type { AdminRestaurant } from "@/data/admin"
+import type { AdminRestaurantOverview } from "../hooks/useAdminOverview"
 import { type AdminSectionProps } from "./section-types"
 
 type AdminRestaurantsProps = AdminSectionProps & {
-  restaurants: AdminRestaurant[]
+  restaurants: AdminRestaurantOverview[]
 }
 
-const statusStyles: Record<AdminRestaurant["status"], { label: string; className: string }> = {
+const statusStyles: Record<AdminRestaurantOverview["status"], { label: string; className: string }> = {
   activo: {
     label: "Activo",
     className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
@@ -43,7 +43,7 @@ const statusStyles: Record<AdminRestaurant["status"], { label: string; className
   },
 }
 
-const modeLabels: Record<AdminRestaurant["mode"], string> = {
+const modeLabels: Record<AdminRestaurantOverview["mode"], string> = {
   pool: "Pocillo",
   directa: "Venta directa",
 }

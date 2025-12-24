@@ -23,14 +23,14 @@ import {
   TableCaption,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { AdminUserGroups, AdminUser } from "@/data/admin"
+import type { AdminUserGroups, AdminUserData, AdminUserStatus } from "../hooks/useAdminUsers"
 import { type AdminSectionProps } from "./section-types"
 
 type AdminUsersProps = AdminSectionProps & {
   users: AdminUserGroups
 }
 
-const statusStyles: Record<AdminUser["status"], { label: string; className: string }> = {
+const statusStyles: Record<AdminUserStatus, { label: string; className: string }> = {
   activo: {
     label: "Activo",
     className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
@@ -48,7 +48,7 @@ const statusStyles: Record<AdminUser["status"], { label: string; className: stri
 const AdminUsers = ({ sectionId, users }: AdminUsersProps) => {
   const headingId = sectionId ? `${sectionId}-heading` : undefined
 
-  const renderTable = (groupUsers: AdminUser[]) => {
+  const renderTable = (groupUsers: AdminUserData[]) => {
     if (groupUsers.length === 0) {
       return (
         <p className="px-6 py-6 text-sm text-muted-foreground">
