@@ -324,7 +324,17 @@ ReparteJusto es una aplicación frontend construida con React, TypeScript y Vite
   - Días transcurridos sin liquidar (`daysWithoutSettlement`).
   - Conteo de cierres pendientes (`pendingClosures`).
   - Nombre/correo de contacto si existe en la configuración inicial.
-- Próximo paso (pendiente): reutilizar esta misma data para las secciones "Restaurantes" y "Usuarios"; hoy siguen mostrando contenido mock.
+
+### Estado actualizado · 23/12/2025
+
+- ✅ **Admin/Restaurantes** (`/admin/restaurants`) ahora usa datos reales desde Firestore (misma base de `useAdminOverview`).
+- ✅ **Admin/Usuarios** (`/admin/users`) ahora lista usuarios reales desde Firestore (colección `/users`).
+- ✅ **Visión general** (`/admin/overview`) se ajustó para mostrar un resumen de restaurantes (en vez de listar cierres/eventos globales), con CTA a "Ver todos los restaurantes".
+- ✅ **Reglas Firestore**: se separó permiso de lectura de usuarios en `get` y `list` para soportar queries administrativas sobre `/users`.
+
+### Pendientes
+
+- ⏳ **Invitaciones**: por ahora se crea el link, pero falta el envío automático de correo (email) con el enlace de aceptación.
 
 > Próximo turno: capturar evidencias visuales y QA final antes de despliegue.
 
