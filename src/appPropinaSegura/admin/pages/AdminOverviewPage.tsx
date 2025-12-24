@@ -3,7 +3,7 @@ import AdminOverview from "../components/AdminOverview"
 import { useAdminOverview } from "../hooks/useAdminOverview"
 
 const AdminOverviewPage = () => {
-    const { heroStats, metrics, events, restaurants, isLoading, error, refresh } = useAdminOverview()
+    const { heroStats, metrics, restaurants, isLoading, error, refresh } = useAdminOverview()
 
     const totalRestaurants = restaurants.length
     const staffMetric = metrics.find((metric) => metric.id === "staff")
@@ -50,7 +50,7 @@ const AdminOverviewPage = () => {
                 ) : null}
             </header>
 
-            <AdminOverview sectionId="overview" metrics={metrics} events={events} />
+            <AdminOverview sectionId="overview" metrics={metrics} restaurants={restaurants} />
         </section>
     )
 }

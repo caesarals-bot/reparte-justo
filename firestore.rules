@@ -94,11 +94,15 @@ service cloud.firestore {
     // Documentos de usuarios con roles y permisos
     // ═══════════════════════════════════════════════════════════════
     match /users/{userId} {
-      // LEER: Solo el propio usuario o administradores del sitio
-      allow read: if isAuthenticated() && (
+      // GET: El propio usuario puede leer su documento, admins pueden leer cualquiera
+      allow get: if isAuthenticated() && (
         request.auth.uid == userId ||
         hasAnySiteRole(['super_admin', 'admin', 'support'])
       );
+      
+      // LIST: Solo admins pueden hacer queries sobre la colección completa
+      allow list: if isAuthenticated() && 
+        hasAnySiteRole(['super_admin', 'admin', 'support']);
       
       // ACTUALIZAR: El propio usuario puede actualizar campos limitados
       // Solo puede modificar: displayName, photoURL, lastActivity, lastLogin

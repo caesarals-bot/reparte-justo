@@ -19,21 +19,27 @@ import {
   TableRow,
   TableCaption,
 } from "@/components/ui/table"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import type { AdminEvent, AdminMetric } from "@/data/admin"
+import type { AdminMetric } from "@/data/admin"
+import type { AdminRestaurantOverview } from "../hooks/useAdminOverview"
 import { type AdminSectionProps } from "./section-types"
+import { Link } from "react-router"
 
 type AdminOverviewProps = AdminSectionProps & {
   metrics: AdminMetric[]
-  events: AdminEvent[]
+  restaurants: AdminRestaurantOverview[]
 }
 
-const AdminOverview = ({ sectionId, metrics, events }: AdminOverviewProps) => {
+const AdminOverview = ({ sectionId, metrics, restaurants }: AdminOverviewProps) => {
   const headingId = sectionId ? `${sectionId}-heading` : undefined
   const highlightedMetrics = metrics.slice(0, 3)
-  const pendingEvents = events.filter((event) => event.status === "pendiente").length
-  const inProgressEvents = events.filter((event) => event.status === "en_progreso").length
-  const completedEvents = events.filter((event) => event.status === "completado").length
+  
+  // Estadísticas de restaurantes
+  const totalRestaurants = restaurants.length
+  const restaurantsWithPending = restaurants.filter((r) => r.pendingClosures > 0).length
+  const restaurantsUpToDate = totalRestaurants - restaurantsWithPending
+  
+  // Top 5 restaurantes para mostrar
+  const topRestaurants = restaurants.slice(0, 5)
 
   const getTrendPillClass = (trend: AdminMetric["trend"]) => {
     if (trend === "up") {
@@ -59,36 +65,6 @@ const AdminOverview = ({ sectionId, metrics, events }: AdminOverviewProps) => {
     return <Minus className="h-4 w-4" aria-hidden />
   }
 
-  const getStatusBadgeStyles = (status: AdminEvent["status"]) => {
-    if (status === "completado") {
-      return {
-        label: "Completado",
-        className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
-      }
-    }
-
-    if (status === "en_progreso") {
-      return {
-        label: "En progreso",
-        className: "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400",
-      }
-    }
-
-    return {
-      label: "Pendiente",
-      className: "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400",
-    }
-  }
-
-  const getEventInitials = (actor: string) => {
-    if (!actor?.trim()) {
-      return "?"
-    }
-
-    const [first = "", second = ""] = actor.split(" ")
-    return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase()
-  }
-
   return (
     <section id={sectionId} aria-labelledby={headingId} className="space-y-8">
       <Card className="border border-white/10 bg-linear-to-br from-card/90 via-card/80 to-background/90 text-white shadow-[0_25px_60px_rgba(3,6,23,0.5)]">
@@ -112,19 +88,19 @@ const AdminOverview = ({ sectionId, metrics, events }: AdminOverviewProps) => {
             </div>
           ))}
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">Estado de eventos</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/60">Restaurantes</p>
             <dl className="mt-2 space-y-1 text-sm text-white">
               <div className="flex items-center justify-between">
-                <dt className="text-white/70">Pendientes</dt>
-                <dd className="font-semibold">{pendingEvents}</dd>
+                <dt className="text-white/70">Total</dt>
+                <dd className="font-semibold">{totalRestaurants}</dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-white/70">En progreso</dt>
-                <dd className="font-semibold">{inProgressEvents}</dd>
+                <dt className="text-white/70">Con pendientes</dt>
+                <dd className="font-semibold">{restaurantsWithPending}</dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-white/70">Completados</dt>
-                <dd className="font-semibold">{completedEvents}</dd>
+                <dt className="text-white/70">Al día</dt>
+                <dd className="font-semibold">{restaurantsUpToDate}</dd>
               </div>
             </dl>
           </div>
@@ -176,53 +152,45 @@ const AdminOverview = ({ sectionId, metrics, events }: AdminOverviewProps) => {
 
         <Card className="h-full">
           <CardHeader className="border-b">
-            <CardTitle>Actividad reciente</CardTitle>
-            <CardDescription>Eventos importantes registrados en los últimos cierres.</CardDescription>
+            <CardTitle>Restaurantes recientes</CardTitle>
+            <CardDescription>Últimos restaurantes registrados en la plataforma.</CardDescription>
           </CardHeader>
           <CardContent className="px-0">
-            {events.length === 0 ? (
+            {topRestaurants.length === 0 ? (
               <p className="px-6 py-6 text-sm text-muted-foreground">
-                Aún no hay actividad registrada. Comienza realizando cierres diarios para ver actualizaciones aquí.
+                Aún no hay restaurantes registrados.
               </p>
             ) : (
-              <Table>
-                <TableCaption className="px-6">Últimas acciones del panel administrativo.</TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="px-6">Evento</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Responsable</TableHead>
-                    <TableHead className="text-right">Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {events.map((event) => {
-                    const { label, className } = getStatusBadgeStyles(event.status)
-
-                    return (
-                      <TableRow key={event.id}>
-                        <TableCell className="px-6 text-sm font-medium text-foreground">{event.title}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{event.date}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="size-7">
-                              <AvatarFallback className="text-[11px] font-semibold uppercase">
-                                {getEventInitials(event.actor)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium text-foreground">{event.actor}</span>
-                          </div>
-                        </TableCell>
+              <>
+                <Table>
+                  <TableCaption className="px-6">Mostrando {topRestaurants.length} de {totalRestaurants} restaurantes.</TableCaption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="px-6">Restaurante</TableHead>
+                      <TableHead>Staff</TableHead>
+                      <TableHead className="text-right">Pendientes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topRestaurants.map((restaurant) => (
+                      <TableRow key={restaurant.id}>
+                        <TableCell className="px-6 text-sm font-medium text-foreground">{restaurant.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{restaurant.staffCount} personas</TableCell>
                         <TableCell className="text-right">
-                          <Badge variant="outline" className={className}>
-                            {label}
+                          <Badge variant={restaurant.pendingClosures > 0 ? "destructive" : "secondary"}>
+                            {restaurant.pendingClosures}
                           </Badge>
                         </TableCell>
                       </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="px-6 py-4">
+                  <Button asChild variant="outline" size="sm" className="w-full">
+                    <Link to="/admin/restaurants">Ver todos los restaurantes</Link>
+                  </Button>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
