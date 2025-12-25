@@ -384,6 +384,7 @@ const DashboardPage = () => {
             liquidacionMode={liquidacionMode}
             pendingData={pendingData}
             pendingHistoricalData={pendingHistoricalData}
+            historicalSettlements={historicalSettlements}
         />
     )
 }

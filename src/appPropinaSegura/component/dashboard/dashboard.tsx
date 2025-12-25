@@ -11,15 +11,18 @@ import { PaymentGroupCard } from "./payment-group-card"
 import { DateRangePicker } from "./date-range-picker"
 import { HistoricalSettlement } from "./historical-settlement"
 import type { DashboardPaymentGroup, DashboardSettlement } from "@/data/dashboard"
+import StaffPayoutChart from "./charts/StaffPayoutChart"
+import LiquidationTrendChart from "./charts/LiquidationTrendChart"
 
 type DashboardProps = {
   restaurantName: string
   liquidacionMode: "pool" | "directa"
   pendingData: DashboardPaymentGroup[]
   pendingHistoricalData: DashboardSettlement[]
+  historicalSettlements: DashboardSettlement[]
 }
 
-export function Dashboard({ restaurantName, liquidacionMode, pendingData, pendingHistoricalData }: DashboardProps) {
+export function Dashboard({ restaurantName, liquidacionMode, pendingData, pendingHistoricalData, historicalSettlements }: DashboardProps) {
   const navigate = useNavigate()
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -31,6 +34,21 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, pendin
 
   const totalPending = distributionGroups.reduce((sum, group) => sum + group.totalAmount, 0)
   const totalDescuentos = deductionGroups.reduce((sum, group) => sum + group.totalAmount, 0)
+
+  const topMembers = distributionGroups
+    .flatMap((group) => group.breakdown.map((member) => ({
+      name: member.name,
+      amount: member.amount,
+      group: group.groupName,
+    })))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 8)
+
+  const trendData = historicalSettlements.slice(0, 8).map((settlement) => ({
+    label: settlement.dateRange,
+    total: settlement.totalRepartido,
+    deductions: settlement.totalDescuentos,
+  }))
 
   const handleSettlement = () => {
     navigate("/dashboard/liquidacion")
@@ -130,6 +148,33 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, pendin
                 {deductionGroups.map((group) => (
                   <PaymentGroupCard key={group.groupName} group={group} variant="compact" />
                 ))}
+              </div>
+            ) : null}
+
+            {(topMembers.length || trendData.length) ? (
+              <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                {topMembers.length ? (
+                  <Card className="border border-white/10 bg-white/5 text-white">
+                    <CardContent className="space-y-4 p-4 sm:p-6">
+                      <div>
+                        <h3 className="text-lg font-semibold">Distribución por integrante (top 8)</h3>
+                        <p className="text-sm text-white/70">Muestra quién concentra mayor propina en los cierres pendientes.</p>
+                      </div>
+                      <StaffPayoutChart data={topMembers} />
+                    </CardContent>
+                  </Card>
+                ) : null}
+                {trendData.length ? (
+                  <Card className="border border-white/10 bg-white/5 text-white">
+                    <CardContent className="space-y-4 p-4 sm:p-6">
+                      <div>
+                        <h3 className="text-lg font-semibold">Evolución por liquidación</h3>
+                        <p className="text-sm text-white/70">Comparativo de total repartido y descuentos en las últimas liquidaciones.</p>
+                      </div>
+                      <LiquidationTrendChart data={trendData} />
+                    </CardContent>
+                  </Card>
+                ) : null}
               </div>
             ) : null}
 
