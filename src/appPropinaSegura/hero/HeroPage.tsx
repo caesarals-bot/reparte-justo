@@ -56,8 +56,11 @@ const HeroPage = () => {
                         variant="outline"
                         size="lg"
                         className="w-full text-base sm:w-auto sm:text-lg"
+                        asChild
                     >
-                        Ver Demo
+                        <Link to="/demo" aria-label="Ver demo" tabIndex={0}>
+                            Ver Demo
+                        </Link>
                     </Button>
                 </div>
             </div>

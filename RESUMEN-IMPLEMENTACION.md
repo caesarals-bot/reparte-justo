@@ -201,6 +201,16 @@ Pantalla para usuarios que se registraron pero aún no tienen roles asignados.
 
 ---
 
+## 🌐 SEO y Página Demo (24 dic 2025)
+
+- Configurado `lang="es"` y título base descriptivo en `index.html`.
+- Nuevo componente `Seo` (metadatos nativos React 19 + JSON-LD) usado en landing y demo.
+- Landing ahora expone JSON-LD `SoftwareApplication` y `Organization`, OG/Twitter y canonical.
+- Sección de características con ancla `#features` para enlazado interno.
+- Nueva ruta `/demo` con CTA desde héroe, navbar y footer; copy para agendar demo y probar gratis.
+
+---
+
 ## 🚀 Próximos Pasos
 
 ### Pendientes de implementación

@@ -17,6 +17,14 @@ const Footer = () => {
                         Características
                     </a>
                     <Link
+                        to="/demo"
+                        className="transition hover:text-primary"
+                        aria-label="Ver demo"
+                        tabIndex={0}
+                    >
+                        Demo
+                    </Link>
+                    <Link
                         to="/about"
                         className="transition hover:text-primary"
                         aria-label="Ir a quiénes somos"
