@@ -1,12 +1,28 @@
 import { Link } from "react-router"
 import Seo from "@/components/Seo"
 import { Button } from "@/components/ui/button"
+import StaffPayoutChart from "@/appPropinaSegura/component/dashboard/charts/StaffPayoutChart"
+import LiquidationTrendChart from "@/appPropinaSegura/component/dashboard/charts/LiquidationTrendChart"
 
 const DemoPage = () => {
     const title = "Demo en vivo | ReparteJusto"
     const description =
         "Agenda una demo personalizada para ver cómo repartir propinas con transparencia: setup, ponderaciones y reportes en minutos."
     const canonicalUrl = "https://repartejusto.com/demo"
+
+    const staffChartData = [
+        { name: "Victor", amount: 38000, group: "Pool Garzones" },
+        { name: "Eucaris", amount: 38000, group: "Pool Garzones" },
+        { name: "Jimmy", amount: 19000, group: "Pool Garzones" },
+        { name: "Cocina", amount: 14000, group: "Pool Cocina" },
+    ]
+
+    const trendChartData = [
+        { label: "Cierre del 6 dic 2025", total: 95000, deductions: 5000 },
+        { label: "Cierre del 4 dic 2025", total: 100000, deductions: 5000 },
+        { label: "Cierre del 1 dic 2025", total: 100000, deductions: 5000 },
+        { label: "Cierre del 28 nov 2025", total: 80000, deductions: 4000 },
+    ]
 
     return (
         <>
@@ -99,6 +115,34 @@ const DemoPage = () => {
                             <p className="text-xs text-muted-foreground">
                                 Durante la demo te compartimos la grabación y un checklist para que tu equipo pruebe sin fricción.
                             </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="bg-background py-14">
+                <div className="container mx-auto grid gap-6 px-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-border bg-card/80 shadow-xl">
+                        <div className="space-y-2 border-b border-border px-5 py-4">
+                            <h3 className="text-lg font-semibold text-foreground">Distribución por integrante (demo)</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Vista de cómo se reparte la propina entre integrantes en un cierre típico.
+                            </p>
+                        </div>
+                        <div className="px-3 pb-5 pt-4">
+                            <StaffPayoutChart data={staffChartData} />
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-card/80 shadow-xl">
+                        <div className="space-y-2 border-b border-border px-5 py-4">
+                            <h3 className="text-lg font-semibold text-foreground">Evolución por liquidación (demo)</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Tendencia de montos repartidos y descuentos en las últimas liquidaciones.
+                            </p>
+                        </div>
+                        <div className="px-3 pb-5 pt-4">
+                            <LiquidationTrendChart data={trendChartData} />
                         </div>
                     </div>
                 </div>
