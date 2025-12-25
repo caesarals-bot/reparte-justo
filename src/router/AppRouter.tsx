@@ -1,27 +1,29 @@
+import { lazy } from "react"
 import { createBrowserRouter } from "react-router"
-import LayoutPage from "../appPropinaSegura/home/layout/LayoutPage"
-import LandingPage from "../appPropinaSegura/home/LandingPage"
-import LoginPage from "@/auth/LoginPage"
-import RegisterPage from "@/auth/RegisterPage"
-import ResetPasswordPage from "@/auth/ResetPasswordPage"
-import PendingPage from "@/pages/PendingPage"
-import AcceptInvitationPage from "@/pages/AcceptInvitationPage"
 import { ProtectedRoute } from "@/router/ProtectedRoute"
-import InitialSetupPage from "../appPropinaSegura/setup/InitialSetupPage"
-import CierreDiarioPage from "@/appPropinaSegura/cierre/CierreDiarioPage"
-import DashboardPage from "@/appPropinaSegura/dashboard/DashboardPage"
-import ClosureDetailPage from "@/appPropinaSegura/dashboard/ClosureDetailPage"
-import LiquidacionPage from "@/appPropinaSegura/dashboard/LiquidacionPage"
-import PaidSettlementsPage from "@/appPropinaSegura/dashboard/PaidSettlementsPage"
-import StaffManagementPage from "@/appPropinaSegura/staff/StaffManagementPage"
-import RestaurantSettingsPage from "@/appPropinaSegura/settings/RestaurantSettingsPage"
-import AdminLayout from "@/appPropinaSegura/admin/components/AdminLayout"
-import AdminOverviewPage from "@/appPropinaSegura/admin/pages/AdminOverviewPage"
-import AdminRestaurantsPage from "@/appPropinaSegura/admin/pages/AdminRestaurantsPage"
-import AdminUsersPage from "@/appPropinaSegura/admin/pages/AdminUsersPage"
-import ContactPage from "@/appPropinaSegura/contact/ContactPage"
-import AboutPage from "@/appPropinaSegura/about/AboutPage"
-import DemoPage from "@/appPropinaSegura/demo/DemoPage"
+
+const LayoutPage = lazy(() => import("../appPropinaSegura/home/layout/LayoutPage"))
+const LandingPage = lazy(() => import("../appPropinaSegura/home/LandingPage"))
+const LoginPage = lazy(() => import("@/auth/LoginPage"))
+const RegisterPage = lazy(() => import("@/auth/RegisterPage"))
+const ResetPasswordPage = lazy(() => import("@/auth/ResetPasswordPage"))
+const PendingPage = lazy(() => import("@/pages/PendingPage"))
+const AcceptInvitationPage = lazy(() => import("@/pages/AcceptInvitationPage"))
+const InitialSetupPage = lazy(() => import("../appPropinaSegura/setup/InitialSetupPage"))
+const CierreDiarioPage = lazy(() => import("@/appPropinaSegura/cierre/CierreDiarioPage"))
+const DashboardPage = lazy(() => import("@/appPropinaSegura/dashboard/DashboardPage"))
+const ClosureDetailPage = lazy(() => import("@/appPropinaSegura/dashboard/ClosureDetailPage"))
+const LiquidacionPage = lazy(() => import("@/appPropinaSegura/dashboard/LiquidacionPage"))
+const PaidSettlementsPage = lazy(() => import("@/appPropinaSegura/dashboard/PaidSettlementsPage"))
+const StaffManagementPage = lazy(() => import("@/appPropinaSegura/staff/StaffManagementPage"))
+const RestaurantSettingsPage = lazy(() => import("@/appPropinaSegura/settings/RestaurantSettingsPage"))
+const AdminLayout = lazy(() => import("@/appPropinaSegura/admin/components/AdminLayout"))
+const AdminOverviewPage = lazy(() => import("@/appPropinaSegura/admin/pages/AdminOverviewPage"))
+const AdminRestaurantsPage = lazy(() => import("@/appPropinaSegura/admin/pages/AdminRestaurantsPage"))
+const AdminUsersPage = lazy(() => import("@/appPropinaSegura/admin/pages/AdminUsersPage"))
+const ContactPage = lazy(() => import("@/appPropinaSegura/contact/ContactPage"))
+const AboutPage = lazy(() => import("@/appPropinaSegura/about/AboutPage"))
+const DemoPage = lazy(() => import("@/appPropinaSegura/demo/DemoPage"))
 
 const AppRouter = createBrowserRouter([
     {
