@@ -37,5 +37,14 @@ export default defineConfig({
       },
     },
     chunkSizeWarningLimit: 1000, // Increase warning limit temporarily
+    cssCodeSplit: true, // Enable CSS code splitting
+  },
+  css: {
+    devSourcemap: false, // Disable CSS sourcemaps in production
+    preprocessorOptions: {
+      scss: {
+        additionalData: `@import "tailwindcss";`,
+      },
+    },
   },
 })
