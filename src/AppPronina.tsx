@@ -3,9 +3,11 @@ import { RouterProvider } from "react-router"
 import AppRouter from "./router/AppRouter"
 import { AuthProvider } from "@/context/AuthContext"
 import LoadingScreen from "@/components/LoadingScreen"
+import { useServiceWorker } from "@/hooks/useServiceWorker"
 
 function AppPropina() {
-
+  // Inicializar Service Worker
+  useServiceWorker()
 
   return (
     <AuthProvider>
