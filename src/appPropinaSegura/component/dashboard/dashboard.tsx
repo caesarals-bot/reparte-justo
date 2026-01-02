@@ -1,18 +1,19 @@
 "use client"
 
+import { Suspense, lazy } from "react"
 import { useState } from "react"
 import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
-import { FileTextIcon, CheckCircle2Icon, AlertCircleIcon, Users, EyeIcon } from "lucide-react"
+import { FileTextIcon, CheckCircle2Icon, AlertCircleIcon, Users, EyeIcon, Loader2 } from "lucide-react"
 import { PaymentGroupCard } from "./payment-group-card"
 import { DateRangePicker } from "./date-range-picker"
 import { HistoricalSettlement } from "./historical-settlement"
 import type { DashboardPaymentGroup, DashboardSettlement } from "@/data/dashboard"
 import StaffPayoutChart from "./charts/StaffPayoutChart"
-import LiquidationTrendChart from "./charts/LiquidationTrendChart"
+const LiquidationTrendChart = lazy(() => import("./charts/LiquidationTrendChart"))
 
 type DashboardProps = {
   restaurantName: string
@@ -171,7 +172,13 @@ export function Dashboard({ restaurantName, liquidacionMode, pendingData, pendin
                         <h3 className="text-lg font-semibold">Evolución por liquidación</h3>
                         <p className="text-sm text-white/70">Comparativo de total repartido y descuentos en las últimas liquidaciones.</p>
                       </div>
-                      <LiquidationTrendChart data={trendData} />
+                      <Suspense fallback={
+                        <div className="flex h-72 w-full items-center justify-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary/60" />
+                        </div>
+                      }>
+                        <LiquidationTrendChart data={trendData} />
+                      </Suspense>
                     </CardContent>
                   </Card>
                 ) : null}
