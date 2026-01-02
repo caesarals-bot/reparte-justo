@@ -14,37 +14,74 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunks
-          'react-vendor': ['react', 'react-dom', 'react-router'],
-          'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-          'ui-vendor': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-select',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-dropdown-menu',
-            'lucide-react'
-          ],
-          // Chart libraries (heavy)
-          'charts-vendor': ['recharts'],
+        manualChunks: (id) => {
+          // React core
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            return 'react-vendor'
+          }
+          
+          // Firebase - separar por módulo para mejor tree shaking
+          if (id.includes('firebase')) {
+            if (id.includes('auth')) return 'firebase-auth'
+            if (id.includes('firestore')) return 'firebase-firestore'
+            return 'firebase-core'
+          }
+          
+          // Radix UI - separar por componente para tree shaking
+          if (id.includes('@radix-ui')) {
+            if (id.includes('dialog')) return 'radix-dialog'
+            if (id.includes('select')) return 'radix-select'
+            if (id.includes('tabs')) return 'radix-tabs'
+            if (id.includes('dropdown')) return 'radix-dropdown'
+            return 'radix-ui'
+          }
+          
+          // Chart libraries - mantener separado
+          if (id.includes('recharts')) {
+            return 'charts-vendor'
+          }
+          
           // Form libraries
-          'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          if (id.includes('react-hook-form') || id.includes('@hookform/resolvers') || id.includes('zod')) {
+            return 'form-vendor'
+          }
+          
           // Date utilities
-          'date-vendor': ['date-fns', 'react-day-picker'],
-          // PDF generation
-          'pdf-vendor': ['pdf-lib'],
+          if (id.includes('date-fns') || id.includes('react-day-picker')) {
+            return 'date-vendor'
+          }
+          
+          // PDF generation - lazy load
+          if (id.includes('pdf-lib')) {
+            return 'pdf-vendor'
+          }
+          
+          // Icons
+          if (id.includes('lucide-react')) {
+            return 'icons-vendor'
+          }
+          
+          // UI components shadcn
+          if (id.includes('class-variance-authority') || id.includes('clsx') || id.includes('tailwind-merge')) {
+            return 'ui-utils'
+          }
         },
       },
     },
-    chunkSizeWarningLimit: 1000, // Increase warning limit temporarily
-    cssCodeSplit: true, // Enable CSS code splitting
+    chunkSizeWarningLimit: 800, // Reducir warning limit
+    cssCodeSplit: true,
+    minify: 'esbuild', // Más rápido que terser
+    target: 'es2020', // Target moderno para mejor optimización
   },
   css: {
-    devSourcemap: false, // Disable CSS sourcemaps in production
-    preprocessorOptions: {
-      scss: {
-        additionalData: `@import "tailwindcss";`,
-      },
-    },
+    devSourcemap: false,
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'firebase/auth',
+      'firebase/firestore',
+    ],
   },
 })

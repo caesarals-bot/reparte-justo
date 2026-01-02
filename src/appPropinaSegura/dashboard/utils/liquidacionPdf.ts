@@ -1,5 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
-
+// Dynamic import para pdf-lib - solo se carga cuando se necesita generar PDF
 import type { LiquidacionGeneralExpenseSummary, LiquidacionMemberSummary } from "./closureCalculations"
 
 type LiquidacionTotalsSnapshot = {
@@ -56,6 +55,9 @@ export const generateLiquidacionPdf = async ({
     responsibleName,
     generatedAt = new Date(),
 }: GenerateLiquidacionPdfArgs) => {
+    // Dynamic import de pdf-lib solo cuando se necesita generar PDF
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+    
     const pdfDoc = await PDFDocument.create()
     let page = pdfDoc.addPage()
     const { height } = page.getSize()

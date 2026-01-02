@@ -13,7 +13,7 @@ import { DateRangePicker } from "./date-range-picker"
 import { HistoricalSettlement } from "./historical-settlement"
 import type { DashboardPaymentGroup, DashboardSettlement } from "@/data/dashboard"
 import StaffPayoutChart from "./charts/StaffPayoutChart"
-const LiquidationTrendChart = lazy(() => import("./charts/LiquidationTrendChart"))
+const LiquidationTrendChart = lazy(() => import("./charts/LiquidationTrendChartLite"))
 
 type DashboardProps = {
   restaurantName: string
