@@ -28,6 +28,26 @@ const NavBar = () => {
     const navigate = useNavigate()
     const location = useLocation()
 
+    // Estilos inline para elementos críticos
+    const headerStyles = {
+        position: 'sticky' as const,
+        top: 0,
+        zIndex: 50,
+        width: '100%',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        background: 'linear-gradient(to right,rgba(15,23,42,0.9),rgba(30,41,59,0.8),rgba(15,23,42,0.9))',
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 10px 35px rgba(8,15,40,0.55)'
+    }
+
+    const containerStyles = {
+        display: 'flex',
+        height: '72px',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 1rem'
+    }
+
     // Verificar si el usuario tiene roles administrativos
     const isAdmin = hasSiteRole("super_admin") || hasSiteRole("admin") || hasSiteRole("support") || hasSiteRole("viewer")
 
@@ -139,13 +159,6 @@ const NavBar = () => {
         return location.pathname.startsWith(path)
     }
 
-    const desktopLinkClassName = (path: string) =>
-        `group relative text-base font-semibold tracking-wide text-white/80 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-[2px] after:rounded-full after:bg-white after:opacity-0 after:transition ${
-            isActivePath(path)
-                ? "text-white after:opacity-100"
-                : "hover:text-white hover:after:opacity-100"
-        }`
-
     useEffect(() => {
         if (typeof window === "undefined") {
             return
@@ -199,22 +212,22 @@ const NavBar = () => {
     }, [isMenuOpen])
 
     return (
-        <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-linear-to-r from-slate-950/90 via-slate-900/80 to-slate-950/90 backdrop-blur-xl shadow-[0_10px_35px_rgba(8,15,40,0.55)]">
-            <div className="container mx-auto flex h-[72px] items-center justify-between px-4">
+        <header className="header-container" style={headerStyles}>
+            <div className="container" style={containerStyles}>
                 <Link
                     to="/"
-                    className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white"
+                    className="logo-link"
                     aria-label="Ir al inicio"
                     tabIndex={0}
                 >
-                    <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-bold text-slate-900">RJ</span>
-                    <span className="text-xl font-bold text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.35)]">
+                    <span className="logo-badge">RJ</span>
+                    <span className="logo-text">
                         ReparteJusto
                     </span>
                 </Link>
-                <nav className="hidden items-center gap-6 md:flex">
+                <nav className="nav-desktop">
                     {visibleNavLinks.map((link) => (
-                        <Link key={link.path} to={link.path} className={desktopLinkClassName(link.path)} tabIndex={0}>
+                        <Link key={link.path} to={link.path} className="nav-link" tabIndex={0}>
                             {link.label}
                         </Link>
                     ))}
@@ -275,7 +288,7 @@ const NavBar = () => {
                     onClick={handleToggleMenu}
                     aria-label={isMenuOpen ? "Cerrar menú" : "Abrir menú"}
                     aria-expanded={isMenuOpen}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white shadow-lg shadow-black/30 transition hover:border-primary/60 md:hidden"
+                    className="nav-mobile-btn"
                     tabIndex={0}
                 >
                     {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
