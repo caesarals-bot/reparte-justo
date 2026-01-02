@@ -49,30 +49,22 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          // Firebase - unificar para evitar conflictos
+          // Firebase - mantener separado
           'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           
-          // Chart libraries - separar
-          'charts-vendor': ['recharts'],
+          // UI components grandes
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-dropdown-menu'],
           
-          // Form libraries
+          // Forms y validación
           'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
           
-          // Date utilities
-          'date-vendor': ['date-fns', 'react-day-picker'],
-          
-          // PDF generation
+          // PDF - lazy load
           'pdf-vendor': ['pdf-lib'],
-          
-          // UI components shadcn
-          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-dropdown-menu'],
-          'ui-utils': ['class-variance-authority', 'clsx', 'tailwind-merge'],
-          'icons-vendor': ['lucide-react'],
         },
       },
     },
-    chunkSizeWarningLimit: 800,
-    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1000,
+    cssCodeSplit: false, // Deshabilitar para reducir requests
     minify: 'esbuild',
     target: 'es2020',
   },
