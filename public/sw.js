@@ -43,7 +43,6 @@ const cacheFirst = async (request) => {
         }
         return networkResponse
     } catch (error) {
-        console.log('Cache First failed, serving from cache if available')
         return caches.match(request)
     }
 }
@@ -58,7 +57,6 @@ const networkFirst = async (request) => {
         }
         return networkResponse
     } catch (error) {
-        console.log('Network First failed, serving from cache if available')
         const cachedResponse = await caches.match(request)
         return cachedResponse || new Response('Offline', { status: 503 })
     }
@@ -107,16 +105,12 @@ const getStrategy = (request) => {
 
 // Evento de instalación - Precache crítico
 self.addEventListener('install', (event) => {
-    console.log('Service Worker: Installing...')
-
     event.waitUntil(
         caches.open(STATIC_CACHE_NAME)
             .then((cache) => {
-                console.log('Service Worker: Caching static assets')
                 return cache.addAll(STATIC_ASSETS)
             })
             .then(() => {
-                console.log('Service Worker: Static assets cached')
                 return self.skipWaiting()
             })
     )
@@ -124,8 +118,6 @@ self.addEventListener('install', (event) => {
 
 // Evento de activación - Limpieza de caches antiguos
 self.addEventListener('activate', (event) => {
-    console.log('Service Worker: Activating...')
-
     event.waitUntil(
         (async () => {
             const cacheNames = await caches.keys()
@@ -134,12 +126,10 @@ self.addEventListener('activate', (event) => {
                     if (cacheName !== STATIC_CACHE_NAME &&
                         cacheName !== DYNAMIC_CACHE_NAME &&
                         cacheName !== CACHE_NAME) {
-                        console.log('Service Worker: Deleting old cache', cacheName)
                         return caches.delete(cacheName)
                     }
                 })
             )
-            console.log('Service Worker: Activated')
             return self.clients.claim()
         })()
     )
@@ -164,20 +154,16 @@ self.addEventListener('fetch', (event) => {
 
 // Background Sync para datos offline
 self.addEventListener('sync', (event) => {
-    console.log('Service Worker: Background Sync', event.tag)
-
     if (event.tag === 'background-sync') {
         event.waitUntil(
             // Implementar lógica de sync cuando sea necesario
-            console.log('Service Worker: Syncing offline data')
+            Promise.resolve()
         )
     }
 })
 
 // Push notifications (futuro)
 self.addEventListener('push', (event) => {
-    console.log('Service Worker: Push received')
-
     // Implementar notificaciones push cuando sea necesario
     const options = {
         body: event.data.text(),
@@ -189,6 +175,3 @@ self.addEventListener('push', (event) => {
         self.registration.showNotification('ReparteJusto', options)
     )
 })
-
-// Console de debugging
-console.log('Service Worker: Loaded')
