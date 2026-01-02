@@ -48,57 +48,26 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // React core
-          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-            return 'react-vendor'
-          }
+        manualChunks: {
+          // Firebase - unificar para evitar conflictos
+          'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           
-          // Firebase - separar por módulo para mejor tree shaking
-          if (id.includes('firebase')) {
-            if (id.includes('auth')) return 'firebase-auth'
-            if (id.includes('firestore')) return 'firebase-firestore'
-            return 'firebase-core'
-          }
-          
-          // Radix UI - separar por componente para tree shaking
-          if (id.includes('@radix-ui')) {
-            if (id.includes('dialog')) return 'radix-dialog'
-            if (id.includes('select')) return 'radix-select'
-            if (id.includes('tabs')) return 'radix-tabs'
-            if (id.includes('dropdown')) return 'radix-dropdown'
-            return 'radix-ui'
-          }
-          
-          // Chart libraries - mantener separado
-          if (id.includes('recharts')) {
-            return 'charts-vendor'
-          }
+          // Chart libraries - separar
+          'charts-vendor': ['recharts'],
           
           // Form libraries
-          if (id.includes('react-hook-form') || id.includes('@hookform/resolvers') || id.includes('zod')) {
-            return 'form-vendor'
-          }
+          'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
           
           // Date utilities
-          if (id.includes('date-fns') || id.includes('react-day-picker')) {
-            return 'date-vendor'
-          }
+          'date-vendor': ['date-fns', 'react-day-picker'],
           
-          // PDF generation - lazy load
-          if (id.includes('pdf-lib')) {
-            return 'pdf-vendor'
-          }
-          
-          // Icons
-          if (id.includes('lucide-react')) {
-            return 'icons-vendor'
-          }
+          // PDF generation
+          'pdf-vendor': ['pdf-lib'],
           
           // UI components shadcn
-          if (id.includes('class-variance-authority') || id.includes('clsx') || id.includes('tailwind-merge')) {
-            return 'ui-utils'
-          }
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-dropdown-menu'],
+          'ui-utils': ['class-variance-authority', 'clsx', 'tailwind-merge'],
+          'icons-vendor': ['lucide-react'],
         },
       },
     },

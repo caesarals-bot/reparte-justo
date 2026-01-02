@@ -11,14 +11,8 @@ const STATIC_ASSETS = [
     '/src/index.css',
     '/vite.svg',
     // Chunks críticos del bundle
-    '/assets/index-DgQTJFJW.js',
+    '/assets/index-9oJ9BLAR.js',
     '/assets/index-N00228rG.css',
-    // Vendor chunks esenciales
-    '/assets/react-vendor-DCg3l0ga.js',
-    '/assets/firebase-core-BANzZ0st.js',
-    '/assets/firebase-auth-IrAncr0z.js',
-    '/assets/firebase-firestore-Bcyg0u8a.js',
-    '/assets/ui-utils-Sp7XtC9M.js',
 ]
 
 // Assets dinámicos con estrategia diferente
