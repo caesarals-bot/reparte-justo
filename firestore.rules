@@ -311,6 +311,34 @@ service cloud.firestore {
     }
     
     // ═══════════════════════════════════════════════════════════════
+    // FAQ SYSTEM - Preguntas Frecuentes
+    // ═══════════════════════════════════════════════════════════════
+    
+    // FAQ Categories - Solo admin puede modificar
+    match /faqCategories/{categoryId} {
+      allow read: if true; // Todos pueden leer categorías
+      allow write: if isAuthenticated(); // Temporal: cualquier usuario autenticado puede escribir
+      allow delete: if isAuthenticated(); // Temporal: cualquier usuario autenticado puede eliminar
+    }
+    
+    // FAQs - Lectura pública, escritura por roles
+    match /faqs/{faqId} {
+      // Lectura: todos pueden leer FAQs activos
+      allow read: if true; // Temporal: todos pueden leer (para testing)
+      
+      // Escritura: usuarios autenticados (temporal para testing)
+      allow write: if isAuthenticated();
+      
+      // Eliminación: usuarios autenticados (temporal para testing)
+      allow delete: if isAuthenticated();
+      
+      // Analytics updates: usuarios autenticados
+      allow update: if isAuthenticated() && 
+        request.resource.data.keys().hasAll(['views', 'helpful', 'notHelpful']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views', 'helpful', 'notHelpful']);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
     // BLOQUEO GENERAL: Todo lo demás está bloqueado por defecto
     // ═══════════════════════════════════════════════════════════════
     // Cualquier colección no especificada arriba está completamente bloqueada

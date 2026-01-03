@@ -10,20 +10,24 @@ const ResetPasswordPage = lazy(() => import("@/auth/ResetPasswordPage"))
 const PendingPage = lazy(() => import("@/pages/PendingPage"))
 const AcceptInvitationPage = lazy(() => import("@/pages/AcceptInvitationPage"))
 const InitialSetupPage = lazy(() => import("../appPropinaSegura/setup/InitialSetupPage"))
-const CierreDiarioPage = lazy(() => import("@/appPropinaSegura/cierre/CierreDiarioPage"))
-const DashboardPage = lazy(() => import("@/appPropinaSegura/dashboard/DashboardPage"))
-const ClosureDetailPage = lazy(() => import("@/appPropinaSegura/dashboard/ClosureDetailPage"))
-const LiquidacionPage = lazy(() => import("@/appPropinaSegura/dashboard/LiquidacionPage"))
-const PaidSettlementsPage = lazy(() => import("@/appPropinaSegura/dashboard/PaidSettlementsPage"))
-const StaffManagementPage = lazy(() => import("@/appPropinaSegura/staff/StaffManagementPage"))
-const RestaurantSettingsPage = lazy(() => import("@/appPropinaSegura/settings/RestaurantSettingsPage"))
-const AdminLayout = lazy(() => import("@/appPropinaSegura/admin/components/AdminLayout"))
-const AdminOverviewPage = lazy(() => import("@/appPropinaSegura/admin/pages/AdminOverviewPage"))
-const AdminRestaurantsPage = lazy(() => import("@/appPropinaSegura/admin/pages/AdminRestaurantsPage"))
-const AdminUsersPage = lazy(() => import("@/appPropinaSegura/admin/pages/AdminUsersPage"))
-const ContactPage = lazy(() => import("@/appPropinaSegura/contact/ContactPage"))
-const AboutPage = lazy(() => import("@/appPropinaSegura/about/AboutPage"))
-const DemoPage = lazy(() => import("@/appPropinaSegura/demo/DemoPage"))
+const CierreDiarioPage = lazy(() => import("../appPropinaSegura/cierre/CierreDiarioPage"))
+const DashboardPage = lazy(() => import("../appPropinaSegura/dashboard/DashboardPage"))
+const ClosureDetailPage = lazy(() => import("../appPropinaSegura/dashboard/ClosureDetailPage"))
+const LiquidacionPage = lazy(() => import("../appPropinaSegura/dashboard/LiquidacionPage"))
+const PaidSettlementsPage = lazy(() => import("../appPropinaSegura/dashboard/PaidSettlementsPage"))
+const StaffManagementPage = lazy(() => import("../appPropinaSegura/staff/StaffManagementPage"))
+const RestaurantSettingsPage = lazy(() => import("../appPropinaSegura/settings/RestaurantSettingsPage"))
+const AdminLayout = lazy(() => import("../appPropinaSegura/admin/components/AdminLayout"))
+const AdminOverviewPage = lazy(() => import("../appPropinaSegura/admin/pages/AdminOverviewPage"))
+const AdminRestaurantsPage = lazy(() => import("../appPropinaSegura/admin/pages/AdminRestaurantsPage"))
+const AdminUsersPage = lazy(() => import("../appPropinaSegura/admin/pages/AdminUsersPage"))
+const ContactPage = lazy(() => import("../appPropinaSegura/contact/ContactPage"))
+const AboutPage = lazy(() => import("../appPropinaSegura/about/AboutPage"))
+const DemoPage = lazy(() => import("../appPropinaSegura/demo/DemoPage"))
+
+// FAQ Components
+const FAQPage = lazy(() => import("@/components/faq/FAQPage-simple").then(module => ({ default: module.FAQPage })))
+const FAQManagement = lazy(() => import("@/admin/faq/FAQManagement-simple").then(module => ({ default: module.FAQManagement })))
 
 const AppRouter = createBrowserRouter([
     {
@@ -110,6 +114,10 @@ const AppRouter = createBrowserRouter([
                     </ProtectedRoute>
                 ),
             },
+            {
+                path: "faq",
+                element: <FAQPage />,
+            },
         ],
     },
     {
@@ -135,6 +143,10 @@ const AppRouter = createBrowserRouter([
             {
                 path: "users",
                 element: <AdminUsersPage />,
+            },
+            {
+                path: "faq",
+                element: <FAQManagement />,
             },
         ],
     },

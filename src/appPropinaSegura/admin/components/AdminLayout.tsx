@@ -1,7 +1,7 @@
 import { Fragment, useMemo } from "react"
 import { Outlet, Link, useLocation, Navigate } from "react-router"
 import type { LucideIcon } from "lucide-react"
-import { Building2, Gauge, Users, Menu, Loader2 } from "lucide-react"
+import { Building2, Gauge, Users, Menu, Loader2, HelpCircle } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -46,6 +46,13 @@ const adminSections: AdminNavigationItem[] = [
     description: "Administradores y operadores",
     icon: Users,
     to: "/admin/users",
+  },
+  {
+    id: "faq",
+    label: "FAQ",
+    description: "Gestión de preguntas frecuentes",
+    icon: HelpCircle,
+    to: "/admin/faq",
   },
 ]
 
@@ -154,8 +161,8 @@ const AdminLayout = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 py-8 sm:px-6 lg:flex-row lg:gap-10 lg:px-10 lg:py-12">
-        <aside className="hidden lg:block lg:w-64 xl:w-72 lg:border-r lg:border-white/10 lg:pr-8">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 py-8 sm:px-6 md:flex-row md:gap-10 lg:px-10 lg:py-12">
+        <aside className="block w-full md:w-64 xl:w-72 md:border-r md:border-white/10 md:pr-8">
           <div className="sticky top-20 flex flex-col gap-6">
             {renderUserCard()}
             <div className="flex flex-col gap-1">
