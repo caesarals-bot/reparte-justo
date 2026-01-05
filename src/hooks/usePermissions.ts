@@ -29,12 +29,13 @@ import {
 type Permission = RestaurantPermission | AdminPermission
 
 export const usePermissions = (restaurantId?: string) => {
-  const { userRoles } = useAuth()
+  try {
+    const { userRoles } = useAuth()
 
-  /**
-   * Verifica si el usuario tiene un permiso específico
-   */
-  const hasPermission = useMemo(() => {
+    /**
+     * Verifica si el usuario tiene un permiso específico
+     */
+    const hasPermission = useMemo(() => {
     return (permission: Permission): boolean => {
       if (!userRoles) return false
 
@@ -196,5 +197,21 @@ export const usePermissions = (restaurantId?: string) => {
     getHighestRole,
     canAccessRestaurant,
     accessibleRestaurants,
+  }
+  } catch (error) {
+    // Si useAuth falla (contexto no disponible), retornar valores seguros
+    console.warn("usePermissions: Contexto de autenticación no disponible", error)
+    return {
+      hasPermission: () => false,
+      hasSiteRole: () => false,
+      hasRestaurantRole: () => false,
+      getRestaurantRoles: () => [],
+      hasAnyRole: () => false,
+      isOwner: () => false,
+      hasOperationalRoles: () => false,
+      getHighestRole: () => null,
+      canAccessRestaurant: () => false,
+      accessibleRestaurants: [],
+    }
   }
 }

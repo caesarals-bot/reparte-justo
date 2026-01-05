@@ -47,7 +47,7 @@ const StaffPayoutChart = ({ data }: StaffPayoutChartProps) => {
 
     return (
         <div className="h-72 w-full">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 12, left: 12, bottom: 8 }}>
                     <XAxis type="number" tickFormatter={formatCurrency} axisLine={false} tickLine={false} fontSize={11} />
                     <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={120} fontSize={12} />

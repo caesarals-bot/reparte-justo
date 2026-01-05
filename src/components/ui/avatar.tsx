@@ -7,45 +7,79 @@ function Avatar({
   className,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Root>) {
-  return (
-    <AvatarPrimitive.Root
-      data-slot="avatar"
-      className={cn(
+  try {
+    return (
+      <AvatarPrimitive.Root
+        data-slot="avatar"
+        className={cn(
+          "relative flex size-8 shrink-0 overflow-hidden rounded-full",
+          className
+        )}
+        {...props}
+      />
+    )
+  } catch (error) {
+    // Fallback si React no está disponible
+    console.warn("Avatar: React context not available", error)
+    return React.createElement('div', {
+      'data-slot': "avatar",
+      className: cn(
         "relative flex size-8 shrink-0 overflow-hidden rounded-full",
         className
-      )}
-      {...props}
-    />
-  )
+      ),
+      ...props
+    })
+  }
 }
 
 function AvatarImage({
   className,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
-  return (
-    <AvatarPrimitive.Image
-      data-slot="avatar-image"
-      className={cn("aspect-square size-full", className)}
-      {...props}
-    />
-  )
+  try {
+    return (
+      <AvatarPrimitive.Image
+        data-slot="avatar-image"
+        className={cn("aspect-square size-full", className)}
+        {...props}
+      />
+    )
+  } catch (error) {
+    console.warn("AvatarImage: React context not available", error)
+    return React.createElement('img', {
+      'data-slot': "avatar-image",
+      className: cn("aspect-square size-full", className),
+      ...props
+    })
+  }
 }
 
 function AvatarFallback({
   className,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Fallback>) {
-  return (
-    <AvatarPrimitive.Fallback
-      data-slot="avatar-fallback"
-      className={cn(
+  try {
+    return (
+      <AvatarPrimitive.Fallback
+        data-slot="avatar-fallback"
+        className={cn(
+          "bg-muted flex size-full items-center justify-center rounded-full",
+          className
+        )}
+        {...props}
+      />
+    )
+  } catch (error) {
+    console.warn("AvatarFallback: React context not available", error)
+    return React.createElement('span', {
+      'data-slot': "avatar-fallback",
+      className: cn(
         "bg-muted flex size-full items-center justify-center rounded-full",
         className
-      )}
-      {...props}
-    />
-  )
+      ),
+      ...props
+    })
+  }
 }
 
 export { Avatar, AvatarImage, AvatarFallback }

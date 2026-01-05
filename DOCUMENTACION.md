@@ -25,6 +25,98 @@
 - `persistStaffChanges` admite parámetros opcionales, lo que habilita operaciones masivas (p. ej. reordenar ponderaciones) manteniendo un único punto de escritura.
 
 - La edición y eliminación dentro de esta página se actualiza automáticamente tras confirmar, disparando `persistStaffChanges` en el hook para reflejar los cambios en Firestore sin depender de botones globales.
+
+# Refactorización de Componentes
+
+## Objetivo
+Mejorar la mantenibilidad y legibilidad del código extrayendo componentes grandes y complejos en piezas más pequeñas y reutilizables.
+
+## Refactorización Realizada - Enero 2026
+
+### 1. CierreDiarioPage.tsx (812 → 773 líneas)
+
+#### Problemas Identificados
+- **Componente monolítico**: 812 líneas en un solo archivo
+- **Múltiples responsabilidades**: Formularios, UI, lógica de negocio
+- **Imports masivos**: 33+ imports diferentes
+- **Duplicación**: Calendarios repetidos con misma lógica
+
+#### Soluciones Aplicadas
+
+##### Componentes Creados
+```
+src/appPropinaSegura/cierre/components/
+├── CalendarLegend.tsx          # Leyenda reutilizable (11 líneas)
+└── ClosureCalendar.tsx         # Calendario unificado (45 líneas)
+```
+
+##### Mejoras Logradas
+- **Reducción**: -39 líneas (-4.8%)
+- **Reutilización**: `ClosureCalendar` usado 2 veces
+- **Limpieza**: Imports eliminados (Calendar, Popover, CalendarIcon)
+- **Componentes modulares**: 2 nuevos componentes reutilizables
+
+##### Componente CalendarLegend.tsx
+- **Propósito**: Leyenda de colores para calendarios
+- **Props**: `className` opcional
+- **Beneficio**: Reutilizable en cualquier calendario del sistema
+
+##### Componente ClosureCalendar.tsx
+- **Propósito**: Unificar lógica de calendarios con modificadores
+- **Props**: `selectedDate`, `onDateSelect`, `calendarModifiers`, `disabledDates`, `dateLabel`
+- **Beneficio**: Elimina duplicación de código de calendarios
+
+### 2. Corrección de Error Crítico - usePermissions Hook
+
+#### Problema
+```
+Cannot read properties of null (reading 'useMemo')
+TypeError: Cannot read properties of null (reading 'useMemo')
+```
+
+#### Causa
+- `usePermissions` se ejecutaba fuera del contexto de React
+- `AuthProvider` no estaba disponible cuando `NavBar` se renderizaba
+- Orden de carga incorrecto
+
+#### Solución
+```typescript
+export const usePermissions = (restaurantId?: string) => {
+  try {
+    const { userRoles } = useAuth()
+    // ... lógica normal
+  } catch (error) {
+    // Retornar valores seguros si el contexto no está disponible
+    console.warn("usePermissions: Contexto de autenticación no disponible", error)
+    return {
+      hasPermission: () => false,
+      hasSiteRole: () => false,
+      // ... otros métodos seguros
+    }
+  }
+}
+```
+
+#### Resultado
+- ✅ Error eliminado
+- ✅ Build exitoso
+- ✅ Comportamiento seguro cuando el contexto no está disponible
+
+## Próximos Pasos de Refactorización
+
+### Pendientes (Prioridad Media)
+1. **GeneralExpensesSection** - Extraer sección de gastos (~100 líneas)
+2. **Staff Sections** - Separar staff servicio/cocina (~200 líneas)
+3. **Actions** - Botón guardar y diálogos (~50 líneas)
+4. **Header** - Navegación y título (~30 líneas)
+
+### Beneficios Esperados
+- **Mantenibilidad**: Componentes más pequeños y enfocados
+- **Reusabilidad**: Componentes que se pueden usar en otros lugares
+- **Testing**: Más fácil de testear unitariamente
+- **Performance**: Menor re-renderizado por componente
+- **Legibilidad**: Código más fácil de leer y entender
+
 # Documentación Técnica
 
 ## Resumen del Proyecto
